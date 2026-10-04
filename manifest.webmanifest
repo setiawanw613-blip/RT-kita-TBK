@@ -1,0 +1,17 @@
+{
+  "name": "RT Kita",
+  "short_name": "RT Kita",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f6fa",
+  "theme_color": "#1267c9",
+  "description": "Aplikasi layanan dan administrasi RT",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

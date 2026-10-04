@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: rt-kita
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: SESSION_SECRET
+        generateValue: true
+    disk:
+      name: rt-kita-data
+      mountPath: /var/data
+      sizeGB: 1
