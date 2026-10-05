@@ -561,6 +561,52 @@ function wargaHome(){
     </div>
   `);
 }
+async function iuranAdmin(){
+  try{
+    const data=await api("/api/iuran");
+
+    let html=`
+      <div class="card">
+        <h2>💳 Iuran Warga</h2>
+        <p class="muted">Data iuran warga Taman Bali Kahuripan</p>
+      </div>
+    `;
+
+    if(!Array.isArray(data) || data.length===0){
+      html+=`
+        <div class="card">
+          <p>Belum ada data iuran warga.</p>
+        </div>
+      `;
+    }else{
+      html+=`<div class="card">`;
+
+      data.forEach(item=>{
+        html+=`
+          <div class="row">
+            <b>Warga ID: ${item.warga_id || "-"}</b>
+            <div>Bulan: ${item.bulan || "-"}</div>
+            <div>Total: ${rupiah(item.total_amount || 0)}</div>
+            <div>Status: <span class="badge">${item.status || "Belum Lunas"}</span></div>
+          </div>
+        `;
+      });
+
+      html+=`</div>`;
+    }
+
+    html+=`
+      <button class="btn secondary" onclick="adminHome()">
+        Kembali ke Dashboard
+      </button>
+    `;
+
+    layout("Iuran Warga",html);
+
+  }catch(e){
+    alert(e.message || "Gagal mengambil data iuran");
+  }
+}
 
 function iuranWarga(){
   const security=15000;
