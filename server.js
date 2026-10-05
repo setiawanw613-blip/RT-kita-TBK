@@ -1,173 +1,494 @@
-const express=require("express");
-const session=require("express-session");
-const bcrypt=require("bcryptjs");
-const Database=require("better-sqlite3");
-const path=require("path");
+const express = require("express");
+const path = require("path");
+const crypto = require("crypto");
 
-const app=express();
-const DATA_DIR=process.env.DATA_DIR || ".";
-const fs=require("fs");
-fs.mkdirSync(DATA_DIR,{recursive:true});
-const db=new Database(path.join(DATA_DIR,"rt_kita.db"));
-db.pragma("journal_mode = WAL");
+const app = express();
+
 app.use(express.json());
-app.use(express.urlencoded({extended:true}));
-app.set("trust proxy", 1);
-app.use(session({
-  secret:process.env.SESSION_SECRET || "ganti-rahasia-rt-ini",
-  resave:false, saveUninitialized:false,
-  cookie:{httpOnly:true,sameSite:"lax",secure:process.env.NODE_ENV==="production",maxAge:1000*60*60*8}
-}));
+app.use(express.urlencoded({ extended: true }));
 
-db.exec(`
-CREATE TABLE IF NOT EXISTS users(
- id INTEGER PRIMARY KEY AUTOINCREMENT,
- username TEXT UNIQUE NOT NULL,
- password_hash TEXT NOT NULL,
- role TEXT NOT NULL CHECK(role IN ('admin','warga')),
- resident_id INTEGER,
- created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS residents(
- id INTEGER PRIMARY KEY AUTOINCREMENT,
- nik TEXT UNIQUE,
- no_kk TEXT,
- nama TEXT NOT NULL,
- alamat TEXT,
- no_hp TEXT,
- status TEXT DEFAULT 'Aktif',
- created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS announcements(
- id INTEGER PRIMARY KEY AUTOINCREMENT,
- title TEXT NOT NULL,
- content TEXT NOT NULL,
- created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS complaints(
- id INTEGER PRIMARY KEY AUTOINCREMENT,
- resident_id INTEGER,
- title TEXT NOT NULL,
- content TEXT NOT NULL,
- status TEXT DEFAULT 'Baru',
- created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS letters(
- id INTEGER PRIMARY KEY AUTOINCREMENT,
- resident_id INTEGER,
- type TEXT NOT NULL,
- purpose TEXT,
- status TEXT DEFAULT 'Diajukan',
- created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-CREATE TABLE IF NOT EXISTS cash(
- id INTEGER PRIMARY KEY AUTOINCREMENT,
- type TEXT NOT NULL,
- description TEXT NOT NULL,
- amount INTEGER NOT NULL,
- created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-`);
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-function seed(){
- const count=db.prepare("SELECT COUNT(*) c FROM users").get().c;
- if(count===0){
-   const hash=bcrypt.hashSync("admin123",10);
-   db.prepare("INSERT INTO users(username,password_hash,role) VALUES(?,?,?)").run("admin",hash,"admin");
- }
- const rc=db.prepare("SELECT COUNT(*) c FROM residents").get().c;
- if(rc===0){
-   const ins=db.prepare("INSERT INTO residents(nik,no_kk,nama,alamat,no_hp) VALUES(?,?,?,?,?)");
-   ins.run("3200000000000001","3200000000000001","Budi Setiawan","RT 01 / RW 05","081234567890");
-   ins.run("3200000000000002","3200000000000002","Siti Aminah","RT 01 / RW 05","081234567891");
-   ins.run("3200000000000003","3200000000000003","Andi Saputra","RT 01 / RW 05","081234567892");
- }
- const ac=db.prepare("SELECT COUNT(*) c FROM announcements").get().c;
- if(ac===0) db.prepare("INSERT INTO announcements(title,content) VALUES(?,?)").run("Kerja Bakti Lingkungan","Kerja bakti Minggu pukul 07.00 WIB. Mohon warga membawa alat kebersihan.");
+const ADMIN_USER = process.env.ADMIN_USER || "admin";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+
+if (!SUPABASE_URL || !SUPABASE_KEY) {
+  console.error("SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY belum diatur.");
 }
-seed();
 
-function auth(req,res,next){ if(!req.session.user) return res.status(401).json({error:"Belum login"}); next(); }
-function admin(req,res,next){ if(!req.session.user || req.session.user.role!=="admin") return res.status(403).json({error:"Khusus Ketua RT"}); next(); }
+function supabase(pathname, options = {}) {
+  return fetch(`${SUPABASE_URL}/rest/v1/${pathname}`, {
+    ...options,
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    }
+  });
+}
 
-app.post("/api/login",(req,res)=>{
- const {username,password}=req.body;
- const u=db.prepare("SELECT * FROM users WHERE username=?").get(username);
- if(!u || !bcrypt.compareSync(password,u.password_hash)) return res.status(401).json({error:"Username atau password salah"});
- req.session.user={id:u.id,username:u.username,role:u.role,resident_id:u.resident_id};
- res.json({user:req.session.user});
-});
-app.post("/api/logout",(req,res)=>req.session.destroy(()=>res.json({ok:true})));
-app.get("/api/me",(req,res)=>res.json({user:req.session.user||null}));
+const SECRET = process.env.SESSION_SECRET || "rt-kita-rahasia";
 
-app.get("/api/dashboard",auth,(req,res)=>{
- const residents=db.prepare("SELECT COUNT(*) c FROM residents WHERE status='Aktif'").get().c;
- const letters=db.prepare("SELECT COUNT(*) c FROM letters WHERE status='Diajukan'").get().c;
- const complaints=db.prepare("SELECT COUNT(*) c FROM complaints WHERE status='Baru'").get().c;
- const kasIn=db.prepare("SELECT COALESCE(SUM(amount),0) s FROM cash WHERE type='Masuk'").get().s;
- const kasOut=db.prepare("SELECT COALESCE(SUM(amount),0) s FROM cash WHERE type='Keluar'").get().s;
- res.json({residents,letters,complaints,balance:kasIn-kasOut});
+function makeToken(user) {
+  const data = Buffer.from(JSON.stringify(user)).toString("base64url");
+  const sig = crypto
+    .createHmac("sha256", SECRET)
+    .update(data)
+    .digest("base64url");
+
+  return `${data}.${sig}`;
+}
+
+function readToken(req) {
+  const cookie = req.headers.cookie || "";
+  const found = cookie
+    .split(";")
+    .map(x => x.trim())
+    .find(x => x.startsWith("rt_token="));
+
+  if (!found) return null;
+
+  const token = decodeURIComponent(found.substring("rt_token=".length));
+  const parts = token.split(".");
+
+  if (parts.length !== 2) return null;
+
+  const [data, sig] = parts;
+
+  const expected = crypto
+    .createHmac("sha256", SECRET)
+    .update(data)
+    .digest("base64url");
+
+  if (sig !== expected) return null;
+
+  try {
+    return JSON.parse(Buffer.from(data, "base64url").toString());
+  } catch {
+    return null;
+  }
+}
+
+function auth(req, res, next) {
+  const user = readToken(req);
+
+  if (!user) {
+    return res.status(401).json({ error: "Belum login" });
+  }
+
+  req.user = user;
+  next();
+}
+
+function admin(req, res, next) {
+  const user = readToken(req);
+
+  if (!user || user.role !== "admin") {
+    return res.status(403).json({ error: "Khusus Ketua RT" });
+  }
+
+  req.user = user;
+  next();
+}
+
+app.post("/api/login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (
+    username !== ADMIN_USER ||
+    password !== ADMIN_PASSWORD
+  ) {
+    return res.status(401).json({
+      error: "Username atau password salah"
+    });
+  }
+
+  const user = {
+    username: ADMIN_USER,
+    role: "admin"
+  };
+
+  const token = makeToken(user);
+
+  res.setHeader(
+    "Set-Cookie",
+    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=28800`
+  );
+
+  res.json({ user });
 });
 
-app.get("/api/residents",admin,(req,res)=>res.json(db.prepare("SELECT * FROM residents ORDER BY nama").all()));
-app.post("/api/residents",admin,(req,res)=>{
- const {nik,no_kk,nama,alamat,no_hp,status="Aktif"}=req.body;
- if(!nama) return res.status(400).json({error:"Nama wajib diisi"});
- const r=db.prepare("INSERT INTO residents(nik,no_kk,nama,alamat,no_hp,status) VALUES(?,?,?,?,?,?)").run(nik||null,no_kk||null,nama,alamat||"",no_hp||"",status);
- res.json({id:r.lastInsertRowid});
-});
-app.put("/api/residents/:id",admin,(req,res)=>{
- const {nik,no_kk,nama,alamat,no_hp,status}=req.body;
- db.prepare("UPDATE residents SET nik=?,no_kk=?,nama=?,alamat=?,no_hp=?,status=? WHERE id=?").run(nik,no_kk,nama,alamat,no_hp,status,req.params.id);
- res.json({ok:true});
+app.post("/api/logout", (req, res) => {
+  res.setHeader(
+    "Set-Cookie",
+    "rt_token=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0"
+  );
+
+  res.json({ ok: true });
 });
 
-app.get("/api/my-data",auth,(req,res)=>{
- if(req.session.user.role!=="warga") return res.status(403).json({error:"Bukan akun warga"});
- res.json(db.prepare("SELECT * FROM residents WHERE id=?").get(req.session.user.resident_id));
-});
-app.get("/api/announcements",auth,(req,res)=>res.json(db.prepare("SELECT * FROM announcements ORDER BY id DESC").all()));
-app.post("/api/announcements",admin,(req,res)=>{
- const {title,content}=req.body;
- db.prepare("INSERT INTO announcements(title,content) VALUES(?,?)").run(title,content);
- res.json({ok:true});
-});
-app.get("/api/complaints",auth,(req,res)=>{
- if(req.session.user.role==="admin") return res.json(db.prepare("SELECT c.*,r.nama FROM complaints c LEFT JOIN residents r ON r.id=c.resident_id ORDER BY c.id DESC").all());
- res.json(db.prepare("SELECT * FROM complaints WHERE resident_id=? ORDER BY id DESC").all(req.session.user.resident_id));
-});
-app.post("/api/complaints",auth,(req,res)=>{
- if(req.session.user.role!=="warga") return res.status(403).json({error:"Hanya warga"});
- const {title,content}=req.body;
- db.prepare("INSERT INTO complaints(resident_id,title,content) VALUES(?,?,?)").run(req.session.user.resident_id,title,content);
- res.json({ok:true});
-});
-app.patch("/api/complaints/:id",admin,(req,res)=>{
- db.prepare("UPDATE complaints SET status=? WHERE id=?").run(req.body.status,req.params.id); res.json({ok:true});
-});
-app.get("/api/letters",auth,(req,res)=>{
- if(req.session.user.role==="admin") return res.json(db.prepare("SELECT l.*,r.nama FROM letters l LEFT JOIN residents r ON r.id=l.resident_id ORDER BY l.id DESC").all());
- res.json(db.prepare("SELECT * FROM letters WHERE resident_id=? ORDER BY id DESC").all(req.session.user.resident_id));
-});
-app.post("/api/letters",auth,(req,res)=>{
- if(req.session.user.role!=="warga") return res.status(403).json({error:"Hanya warga"});
- const {type,purpose}=req.body;
- db.prepare("INSERT INTO letters(resident_id,type,purpose) VALUES(?,?,?)").run(req.session.user.resident_id,type,purpose||"");
- res.json({ok:true});
-});
-app.patch("/api/letters/:id",admin,(req,res)=>{
- db.prepare("UPDATE letters SET status=? WHERE id=?").run(req.body.status,req.params.id); res.json({ok:true});
-});
-app.get("/api/cash",auth,(req,res)=>res.json(db.prepare("SELECT * FROM cash ORDER BY id DESC").all()));
-app.post("/api/cash",admin,(req,res)=>{
- const {type,description,amount}=req.body;
- db.prepare("INSERT INTO cash(type,description,amount) VALUES(?,?,?)").run(type,description,Number(amount));
- res.json({ok:true});
+app.get("/api/me", (req, res) => {
+  res.json({ user: readToken(req) });
 });
 
-app.use(express.static(path.join(__dirname,"public")));
-app.get("/health",(req,res)=>res.json({ok:true,app:"RT Kita"}));
-app.get("*",(req,res)=>res.sendFile(path.join(__dirname,"public","index.html")));
+app.get("/api/dashboard", auth, async (req, res) => {
+  try {
+    const wargaResponse = await supabase(
+      "warga?select=id&status_warga=eq.Aktif"
+    );
 
-const PORT=process.env.PORT||3000;
-app.listen(PORT,()=>console.log(`RT Kita berjalan di http://localhost:${PORT}`));
+    const warga = wargaResponse.ok
+      ? await wargaResponse.json()
+      : [];
+
+    const suratResponse = await supabase(
+      "pengajuan_surat?select=id&status=eq.Diajukan"
+    );
+
+    const surat = suratResponse.ok
+      ? await suratResponse.json()
+      : [];
+
+    const kasResponse = await supabase(
+      "kas_rt?select=*"
+    );
+
+    const kas = kasResponse.ok
+      ? await kasResponse.json()
+      : [];
+
+    let balance = 0;
+
+    for (const item of kas) {
+      const jumlah = Number(
+        item.jumlah ||
+        item.amount ||
+        item.nominal ||
+        0
+      );
+
+      const jenis = String(
+        item.jenis ||
+        item.type ||
+        item.tipe ||
+        ""
+      ).toLowerCase();
+
+      if (
+        jenis.includes("masuk") ||
+        jenis.includes("pemasukan")
+      ) {
+        balance += jumlah;
+      } else {
+        balance -= jumlah;
+      }
+    }
+
+    res.json({
+      residents: warga.length,
+      letters: surat.length,
+      complaints: 0,
+      balance
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Gagal mengambil dashboard"
+    });
+  }
+});
+
+app.get("/api/residents", admin, async (req, res) => {
+  try {
+    const response = await supabase(
+      "warga?select=*&order=nama_lengkap.asc"
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(500).json({
+        error: "Gagal mengambil data warga",
+        detail: data
+      });
+    }
+
+    const result = data.map(w => ({
+      id: w.id,
+      nik: w.nik,
+      no_kk: w.no_kk,
+      nama: w.nama_lengkap,
+      alamat: w.alamat,
+      no_hp: w.no_hp,
+      status: w.status_warga
+    }));
+
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Gagal mengambil data warga"
+    });
+  }
+});
+
+app.post("/api/residents", admin, async (req, res) => {
+  try {
+    const {
+      nik,
+      no_kk,
+      nama,
+      alamat,
+      no_hp,
+      status = "Aktif"
+    } = req.body;
+
+    if (!nama) {
+      return res.status(400).json({
+        error: "Nama wajib diisi"
+      });
+    }
+
+    const response = await supabase("warga", {
+      method: "POST",
+      headers: {
+        Prefer: "return=representation"
+      },
+      body: JSON.stringify({
+        nik: nik || null,
+        no_kk: no_kk || null,
+        nama_lengkap: nama,
+        alamat: alamat || "",
+        no_hp: no_hp || "",
+        status_warga: status
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(400).json({
+        error: "Gagal menambah warga",
+        detail: data
+      });
+    }
+
+    res.json({
+      ok: true,
+      data
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Gagal menambah warga"
+    });
+  }
+});
+
+app.put("/api/residents/:id", admin, async (req, res) => {
+  try {
+    const {
+      nik,
+      no_kk,
+      nama,
+      alamat,
+      no_hp,
+      status
+    } = req.body;
+
+    const response = await supabase(
+      `warga?id=eq.${encodeURIComponent(req.params.id)}`,
+      {
+        method: "PATCH",
+        headers: {
+          Prefer: "return=representation"
+        },
+        body: JSON.stringify({
+          nik,
+          no_kk,
+          nama_lengkap: nama,
+          alamat,
+          no_hp,
+          status_warga: status
+        })
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(400).json({
+        error: "Gagal memperbarui warga",
+        detail: data
+      });
+    }
+
+    res.json({
+      ok: true,
+      data
+    });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({
+      error: "Gagal memperbarui warga"
+    });
+  }
+});
+
+app.get("/api/announcements", auth, async (req, res) => {
+  try {
+    const response = await supabase(
+      "pengumuman?select=*&order=id.desc"
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(500).json({
+        error: "Gagal mengambil pengumuman",
+        detail: data
+      });
+    }
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({
+      error: "Gagal mengambil pengumuman"
+    });
+  }
+});
+
+app.post("/api/announcements", admin, async (req, res) => {
+  try {
+    const { title, content } = req.body;
+
+    const response = await supabase("pengumuman", {
+      method: "POST",
+      body: JSON.stringify({
+        title,
+        content
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(400).json({
+        error: "Gagal membuat pengumuman",
+        detail: data
+      });
+    }
+
+    res.json({ ok: true, data });
+  } catch (error) {
+    res.status(500).json({
+      error: "Gagal membuat pengumuman"
+    });
+  }
+});
+
+app.get("/api/letters", auth, async (req, res) => {
+  try {
+    const response = await supabase(
+      "pengajuan_surat?select=*&order=id.desc"
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(500).json({
+        error: "Gagal mengambil pengajuan surat",
+        detail: data
+      });
+    }
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({
+      error: "Gagal mengambil surat"
+    });
+  }
+});
+
+app.get("/api/cash", auth, async (req, res) => {
+  try {
+    const response = await supabase(
+      "kas_rt?select=*&order=id.desc"
+    );
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(500).json({
+        error: "Gagal mengambil kas RT",
+        detail: data
+      });
+    }
+
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({
+      error: "Gagal mengambil kas RT"
+    });
+  }
+});
+
+app.post("/api/cash", admin, async (req, res) => {
+  try {
+    const {
+      type,
+      description,
+      amount
+    } = req.body;
+
+    const response = await supabase("kas_rt", {
+      method: "POST",
+      body: JSON.stringify({
+        jenis: type,
+        keterangan: description,
+        jumlah: Number(amount)
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(400).json({
+        error: "Gagal menyimpan kas",
+        detail: data
+      });
+    }
+
+    res.json({
+      ok: true,
+      data
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: "Gagal menyimpan kas"
+    });
+  }
+});
+
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("/health", (req, res) => {
+  res.json({
+    ok: true,
+    app: "RT Kita"
+  });
+});
+
+app.get("*", (req, res) => {
+  res.sendFile(
+    path.join(__dirname, "index.html")
+  );
+});
+
+module.exports = app;
