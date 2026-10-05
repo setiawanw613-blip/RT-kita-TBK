@@ -608,59 +608,76 @@ async function iuranAdmin(){
   }
 }
 
-function iuranWarga(){
+  async function iuranWarga(){
   const security=15000;
   const sampah=15000;
   const kasRt=5000;
   const total=security+sampah+kasRt;
 
-  layout("Iuran Warga",`
-    <div class="card">
-      <h2>💳 Iuran Warga</h2>
-      <p class="muted">
-        Iuran rutin warga Taman Bali Kahuripan
-      </p>
+  try{
+    const data=await api("/api/my-iuran");
 
-      <div class="row">
-        <b>🛡️ Security</b>
-        <div style="margin-top:5px">${rupiah(security)} / bulan</div>
-        <div style="margin-top:6px">
-          <span class="badge">Belum dibayar</span>
+    const item=Array.isArray(data) && data.length
+      ? data[0]
+      : null;
+
+    const status=item?.status || "Belum Lunas";
+
+    layout("Iuran Warga",`
+      <div class="card">
+        <h2>💳 Iuran Warga</h2>
+        <p class="muted">
+          Iuran rutin warga Taman Bali Kahuripan
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <b>🛡️ Security</b>
+          <div>${rupiah(security)} / bulan</div>
+          <div style="margin-top:6px">
+            <span class="badge">${status}</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <b>🗑️ Sampah</b>
+          <div>${rupiah(sampah)} / bulan</div>
+          <div style="margin-top:6px">
+            <span class="badge">${status}</span>
+          </div>
+        </div>
+
+        <div class="row">
+          <b>💰 Kas RT</b>
+          <div>${rupiah(kasRt)} / bulan</div>
+          <div style="margin-top:6px">
+            <span class="badge">${status}</span>
+          </div>
         </div>
       </div>
 
-      <div class="row">
-        <b>🗑️ Sampah</b>
-        <div style="margin-top:5px">${rupiah(sampah)} / bulan</div>
-        <div style="margin-top:6px">
-          <span class="badge">Belum dibayar</span>
+      <div class="card">
+        <h3>Total Iuran per Bulan</h3>
+        <div style="font-size:28px;font-weight:800;color:#1267c9">
+          ${rupiah(total)}
         </div>
+
+        <p class="muted">
+          Security Rp15.000 + Sampah Rp15.000 + Kas RT Rp5.000.
+        </p>
       </div>
 
-      <div class="row">
-        <b>💰 Kas RT</b>
-        <div style="margin-top:5px">${rupiah(kasRt)} / bulan</div>
-        <div style="margin-top:6px">
-          <span class="badge">Belum dibayar</span>
-        </div>
-      </div>
-    </div>
+      <button class="btn secondary" onclick="wargaHome()">
+        Kembali ke Dashboard
+      </button>
+    `);
 
-    <div class="card">
-      <h3>Total Iuran per Bulan</h3>
-      <div style="font-size:28px;font-weight:800;color:#1267c9">
-        ${rupiah(total)}
-      </div>
-      <p class="muted">
-        Total terdiri dari Security Rp15.000 + Sampah Rp15.000 + Kas RT Rp5.000.
-      </p>
-    </div>
-
-    <button class="btn secondary" onclick="wargaHome()">
-      Kembali ke Dashboard
-    </button>
-  `);
+  }catch(e){
+    alert(e.message || "Gagal mengambil data iuran");
+  }
 }
+
 
 async function myData(){
   layout("Data Saya",`
