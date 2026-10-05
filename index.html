@@ -201,10 +201,6 @@ async function logout(){
   loginPage();
 }
 
-/* =========================
-   KETUA RT
-========================= */
-
 async function adminHome(){
   layout("Dashboard Ketua RT",`
     <div class="card">
@@ -532,14 +528,15 @@ async function saveAnnouncement(){
   }
 }
 
-/* =========================
-   WARGA
-========================= */
-
 function wargaHome(){
   layout("Portal Warga",`
     <div class="card">
       <h2>Halo, ${esc(currentUser?.nama||"Warga")} 👋</h2>
+
+      <p style="color:#1267c9;font-weight:700">
+        Warga Taman Bali Kahuripan
+      </p>
+
       <p class="muted">Selamat datang di aplikasi RT Kita.</p>
     </div>
 
@@ -742,4 +739,4 @@ async function announcementsWarga(){
 boot();
 </script>
 </body>
-  </html>
+</html>
