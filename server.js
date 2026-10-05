@@ -33,6 +33,7 @@ const SECRET = process.env.SESSION_SECRET || "rt-kita-rahasia";
 
 function makeToken(user) {
   const data = Buffer.from(JSON.stringify(user)).toString("base64url");
+
   const sig = crypto
     .createHmac("sha256", SECRET)
     .update(data)
@@ -43,6 +44,7 @@ function makeToken(user) {
 
 function readToken(req) {
   const cookie = req.headers.cookie || "";
+
   const found = cookie
     .split(";")
     .map(x => x.trim())
@@ -50,7 +52,10 @@ function readToken(req) {
 
   if (!found) return null;
 
-  const token = decodeURIComponent(found.substring("rt_token=".length));
+  const token = decodeURIComponent(
+    found.substring("rt_token=".length)
+  );
+
   const parts = token.split(".");
 
   if (parts.length !== 2) return null;
@@ -65,7 +70,9 @@ function readToken(req) {
   if (sig !== expected) return null;
 
   try {
-    return JSON.parse(Buffer.from(data, "base64url").toString());
+    return JSON.parse(
+      Buffer.from(data, "base64url").toString()
+    );
   } catch {
     return null;
   }
@@ -75,7 +82,9 @@ function auth(req, res, next) {
   const user = readToken(req);
 
   if (!user) {
-    return res.status(401).json({ error: "Belum login" });
+    return res.status(401).json({
+      error: "Belum login"
+    });
   }
 
   req.user = user;
@@ -86,7 +95,9 @@ function admin(req, res, next) {
   const user = readToken(req);
 
   if (!user || user.role !== "admin") {
-    return res.status(403).json({ error: "Khusus Ketua RT" });
+    return res.status(403).json({
+      error: "Khusus Ketua RT"
+    });
   }
 
   req.user = user;
@@ -130,7 +141,9 @@ app.post("/api/logout", (req, res) => {
 });
 
 app.get("/api/me", (req, res) => {
-  res.json({ user: readToken(req) });
+  res.json({
+    user: readToken(req)
+  });
 });
 
 app.get("/api/dashboard", auth, async (req, res) => {
@@ -385,7 +398,10 @@ app.post("/api/announcements", admin, async (req, res) => {
       });
     }
 
-    res.json({ ok: true, data });
+    res.json({
+      ok: true,
+      data
+    });
   } catch (error) {
     res.status(500).json({
       error: "Gagal membuat pengumuman"
