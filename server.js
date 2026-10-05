@@ -52,7 +52,6 @@ async function supabaseRequest(table, options = {}) {
 
   if (!response.ok) {
     console.error("SUPABASE ERROR:", response.status, data);
-
     throw new Error(
       typeof data === "object"
         ? JSON.stringify(data)
@@ -66,58 +65,152 @@ async function supabaseRequest(table, options = {}) {
 function getToken(req) {
   const cookie = req.headers.cookie || "";
   const match = cookie.match(/rt_token=([^;]+)/);
-
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-function requireLogin(req, res, next) {
+function getSession(req) {
   const token = getToken(req);
+  return token ? sessions.get(token) : null;
+}
 
-  if (!token || !sessions.has(token)) {
+function requireLogin(req, res, next) {
+  const session = getSession(req);
+
+  if (!session) {
     return res.status(401).json({
       ok: false,
       message: "Belum login"
     });
   }
 
+  req.session = session;
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  const session = getSession(req);
+
+  if (!session || session.role !== "admin") {
+    return res.status(403).json({
+      ok: false,
+      message: "Akses khusus Ketua RT"
+    });
+  }
+
+  req.session = session;
+  next();
+}
+
+function requireWarga(req, res, next) {
+  const session = getSession(req);
+
+  if (!session || session.role !== "warga") {
+    return res.status(403).json({
+      ok: false,
+      message: "Akses khusus warga"
+    });
+  }
+
+  req.session = session;
   next();
 }
 
 /* LOGIN */
-app.post("/api/login", (req, res) => {
-  const { username, password } = req.body;
+app.post("/api/login", async (req, res) => {
+  try {
+    const { username, password, role } = req.body;
 
-  if (
-    username !== ADMIN_USER ||
-    password !== ADMIN_PASSWORD
-  ) {
-    return res.status(401).json({
-      ok: false,
-      message: "Username atau password salah"
-    });
-  }
+    if (role === "warga") {
+      if (!username || !password) {
+        return res.status(400).json({
+          ok: false,
+          message: "NIK dan No. KK wajib diisi"
+        });
+      }
 
-  const token = crypto.randomBytes(32).toString("hex");
+      const data = await supabaseRequest("warga", {
+        query:
+          `select=id,nik,no_kk,nama_lengkap,alamat,no_hp,status_warga` +
+          `&nik=eq.${encodeURIComponent(username)}` +
+          `&no_kk=eq.${encodeURIComponent(password)}` +
+          `&limit=1`
+      });
 
-  sessions.set(token, {
-    username,
-    role: "admin",
-    createdAt: Date.now()
-  });
+      if (!Array.isArray(data) || !data.length) {
+        return res.status(401).json({
+          ok: false,
+          message: "NIK atau No. KK salah"
+        });
+      }
 
-  res.setHeader(
-    "Set-Cookie",
-    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
-  );
+      const warga = data[0];
+      const token = crypto.randomBytes(32).toString("hex");
 
-  res.json({
-    ok: true,
-    user: {
+      sessions.set(token, {
+        id: warga.id,
+        wargaId: warga.id,
+        username: warga.nik,
+        role: "warga",
+        nama: warga.nama_lengkap,
+        createdAt: Date.now()
+      });
+
+      res.setHeader(
+        "Set-Cookie",
+        `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
+      );
+
+      return res.json({
+        ok: true,
+        user: {
+          id: warga.id,
+          username: warga.nik,
+          nama: warga.nama_lengkap,
+          role: "warga"
+        }
+      });
+    }
+
+    if (
+      username !== ADMIN_USER ||
+      password !== ADMIN_PASSWORD
+    ) {
+      return res.status(401).json({
+        ok: false,
+        message: "Username atau password salah"
+      });
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+
+    sessions.set(token, {
       id: "admin",
       username,
-      role: "admin"
-    }
-  });
+      role: "admin",
+      createdAt: Date.now()
+    });
+
+    res.setHeader(
+      "Set-Cookie",
+      `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
+    );
+
+    res.json({
+      ok: true,
+      user: {
+        id: "admin",
+        username,
+        role: "admin"
+      }
+    });
+  } catch (error) {
+    console.error("LOGIN ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal masuk aplikasi"
+    });
+  }
 });
 
 /* LOGOUT */
@@ -138,21 +231,19 @@ app.post("/api/logout", (req, res) => {
 
 /* CEK LOGIN */
 app.get("/api/me", requireLogin, (req, res) => {
-  const token = getToken(req);
-  const session = sessions.get(token);
-
   res.json({
     ok: true,
     user: {
-      id: "admin",
-      username: session.username,
-      role: "admin"
+      id: req.session.id,
+      username: req.session.username,
+      nama: req.session.nama || "",
+      role: req.session.role
     }
   });
 });
 
-/* DASHBOARD */
-app.get("/api/dashboard", requireLogin, async (req, res) => {
+/* DASHBOARD KETUA RT */
+app.get("/api/dashboard", requireAdmin, async (req, res) => {
   try {
     const warga = await supabaseRequest("warga", {
       query: "select=id&limit=1000"
@@ -171,10 +262,11 @@ app.get("/api/dashboard", requireLogin, async (req, res) => {
     if (Array.isArray(kas)) {
       for (const item of kas) {
         const jumlah = Number(item.jumlah) || 0;
+        const jenis = String(item.jenis || "").toLowerCase();
 
         if (
-          String(item.jenis || "").toLowerCase() ===
-          "pengeluaran"
+          jenis === "keluar" ||
+          jenis === "pengeluaran"
         ) {
           balance -= jumlah;
         } else {
@@ -199,8 +291,8 @@ app.get("/api/dashboard", requireLogin, async (req, res) => {
   }
 });
 
-/* DATA WARGA */
-app.get("/api/residents", requireLogin, async (req, res) => {
+/* DATA WARGA - KETUA RT */
+app.get("/api/residents", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("warga", {
       query:
@@ -226,7 +318,7 @@ app.get("/api/residents", requireLogin, async (req, res) => {
 });
 
 /* TAMBAH WARGA */
-app.post("/api/residents", requireLogin, async (req, res) => {
+app.post("/api/residents", requireAdmin, async (req, res) => {
   try {
     const {
       nama,
@@ -236,12 +328,19 @@ app.post("/api/residents", requireLogin, async (req, res) => {
       no_hp
     } = req.body;
 
+    if (!nama || !nik || !no_kk) {
+      return res.status(400).json({
+        ok: false,
+        message: "Nama, NIK, dan No. KK wajib diisi"
+      });
+    }
+
     const data = await supabaseRequest("warga", {
       method: "POST",
       body: {
-        nama_lengkap: nama || "",
-        nik: nik || "",
-        no_kk: no_kk || "",
+        nama_lengkap: nama,
+        nik,
+        no_kk,
         alamat: alamat || "",
         no_hp: no_hp || ""
       }
@@ -266,12 +365,14 @@ app.post("/api/residents", requireLogin, async (req, res) => {
   }
 });
 
-/* DATA WARGA SENDIRI */
-app.get("/api/my-data", requireLogin, async (req, res) => {
+/* DATA SAYA - WARGA */
+app.get("/api/my-data", requireWarga, async (req, res) => {
   try {
     const data = await supabaseRequest("warga", {
       query:
-        "select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_warga,created_at&limit=1"
+        `select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_warga,created_at` +
+        `&id=eq.${encodeURIComponent(req.session.wargaId)}` +
+        `&limit=1`
     });
 
     const row = Array.isArray(data) ? data[0] : data;
@@ -289,13 +390,13 @@ app.get("/api/my-data", requireLogin, async (req, res) => {
 
     res.status(500).json({
       ok: false,
-      message: "Gagal mengambil data"
+      message: "Gagal mengambil data warga"
     });
   }
 });
 
-/* KAS */
-app.get("/api/cash", requireLogin, async (req, res) => {
+/* KAS - KETUA RT */
+app.get("/api/cash", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("kas_rt", {
       query:
@@ -323,7 +424,7 @@ app.get("/api/cash", requireLogin, async (req, res) => {
 });
 
 /* TAMBAH KAS */
-app.post("/api/cash", requireLogin, async (req, res) => {
+app.post("/api/cash", requireAdmin, async (req, res) => {
   try {
     const {
       type,
@@ -331,10 +432,15 @@ app.post("/api/cash", requireLogin, async (req, res) => {
       amount
     } = req.body;
 
+    const jenis =
+      String(type || "").toLowerCase() === "keluar"
+        ? "keluar"
+        : "masuk";
+
     const data = await supabaseRequest("kas_rt", {
       method: "POST",
       body: {
-        jenis: type || "pemasukan",
+        jenis,
         keterangan: description || "",
         jumlah: Number(amount) || 0
       }
@@ -356,8 +462,8 @@ app.post("/api/cash", requireLogin, async (req, res) => {
   }
 });
 
-/* SURAT */
-app.get("/api/letters", requireLogin, async (req, res) => {
+/* SURAT - KETUA RT */
+app.get("/api/letters", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("pengajuan_surat", {
       query:
@@ -384,19 +490,27 @@ app.get("/api/letters", requireLogin, async (req, res) => {
   }
 });
 
-/* AJUKAN SURAT */
-app.post("/api/letters", requireLogin, async (req, res) => {
+/* AJUKAN SURAT - WARGA */
+app.post("/api/letters", requireWarga, async (req, res) => {
   try {
     const {
       type,
       purpose
     } = req.body;
 
+    if (!type || !purpose) {
+      return res.status(400).json({
+        ok: false,
+        message: "Jenis surat dan keperluan wajib diisi"
+      });
+    }
+
     const data = await supabaseRequest("pengajuan_surat", {
       method: "POST",
       body: {
-        jenis_surat: type || "",
-        keperluan: purpose || "",
+        warga_id: req.session.wargaId,
+        jenis_surat: type,
+        keperluan: purpose,
         status: "diajukan"
       }
     });
@@ -406,13 +520,6 @@ app.post("/api/letters", requireLogin, async (req, res) => {
     res.json({
       ok: true,
       data: row
-        ? {
-            ...row,
-            type: row.jenis_surat,
-            purpose: row.keperluan,
-            nama: ""
-          }
-        : row
     });
   } catch (error) {
     console.error("ADD LETTER ERROR:", error);
@@ -424,7 +531,36 @@ app.post("/api/letters", requireLogin, async (req, res) => {
   }
 });
 
-/* PENGUMUMAN */
+/* SURAT SAYA - WARGA */
+app.get("/api/my-letters", requireWarga, async (req, res) => {
+  try {
+    const data = await supabaseRequest("pengajuan_surat", {
+      query:
+        `select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at` +
+        `&warga_id=eq.${encodeURIComponent(req.session.wargaId)}` +
+        `&order=created_at.desc`
+    });
+
+    const rows = Array.isArray(data)
+      ? data.map(row => ({
+          ...row,
+          type: row.jenis_surat,
+          purpose: row.keperluan
+        }))
+      : [];
+
+    res.json(rows);
+  } catch (error) {
+    console.error("MY LETTERS ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil surat saya"
+    });
+  }
+});
+
+/* PENGUMUMAN - SEMUA YANG LOGIN */
 app.get("/api/announcements", requireLogin, async (req, res) => {
   try {
     const data = await supabaseRequest("pengumuman", {
@@ -453,7 +589,7 @@ app.get("/api/announcements", requireLogin, async (req, res) => {
 });
 
 /* TAMBAH PENGUMUMAN */
-app.post("/api/announcements", requireLogin, async (req, res) => {
+app.post("/api/announcements", requireAdmin, async (req, res) => {
   try {
     const {
       title,
@@ -485,23 +621,31 @@ app.post("/api/announcements", requireLogin, async (req, res) => {
   }
 });
 
-/* PENGADUAN */
-app.get("/api/complaints", requireLogin, (req, res) => {
+/* PENGADUAN - KETUA RT */
+app.get("/api/complaints", requireAdmin, (req, res) => {
   res.json(complaintsMemory);
 });
 
-/* TAMBAH PENGADUAN */
-app.post("/api/complaints", requireLogin, (req, res) => {
+/* PENGADUAN - WARGA */
+app.post("/api/complaints", requireWarga, (req, res) => {
   const {
     title,
     content
   } = req.body;
 
+  if (!title || !content) {
+    return res.status(400).json({
+      ok: false,
+      message: "Judul dan isi pengaduan wajib diisi"
+    });
+  }
+
   const complaint = {
     id: crypto.randomUUID(),
-    title: title || "",
-    content: content || "",
-    nama: "",
+    warga_id: req.session.wargaId,
+    title,
+    content,
+    nama: req.session.nama || "",
     created_at: new Date().toISOString(),
     status: "baru"
   };
