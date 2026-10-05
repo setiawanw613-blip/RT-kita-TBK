@@ -13,97 +13,77 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
-if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY belum diatur.");
-}
+const sessions = new Map();
 
-function supabase(pathname, options = {}) {
-  return fetch(`${SUPABASE_URL}/rest/v1/${pathname}`, {
-    ...options,
+function supabaseRequest(table, options = {}) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error("Supabase belum terhubung");
+  }
+
+  const {
+    method = "GET",
+    query = "",
+    body
+  } = options;
+
+  const url =
+    `${SUPABASE_URL}/rest/v1/${table}` +
+    (query ? `?${query}` : "");
+
+  return fetch(url, {
+    method,
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
       "Content-Type": "application/json",
-      ...(options.headers || {})
+      Prefer: method === "GET"
+        ? "return=representation"
+        : "return=representation"
+    },
+    body: body ? JSON.stringify(body) : undefined
+  }).then(async response => {
+    const text = await response.text();
+
+    let data;
+    try {
+      data = text ? JSON.parse(text) : null;
+    } catch {
+      data = text;
     }
+
+    if (!response.ok) {
+      console.error("SUPABASE ERROR:", response.status, data);
+      throw new Error(
+        typeof data === "object"
+          ? JSON.stringify(data)
+          : String(data)
+      );
+    }
+
+    return data;
   });
 }
 
-const SECRET = process.env.SESSION_SECRET || "rt-kita-rahasia";
-
-function makeToken(user) {
-  const data = Buffer.from(JSON.stringify(user)).toString("base64url");
-
-  const sig = crypto
-    .createHmac("sha256", SECRET)
-    .update(data)
-    .digest("base64url");
-
-  return `${data}.${sig}`;
-}
-
-function readToken(req) {
+function getToken(req) {
   const cookie = req.headers.cookie || "";
-
-  const found = cookie
-    .split(";")
-    .map(x => x.trim())
-    .find(x => x.startsWith("rt_token="));
-
-  if (!found) return null;
-
-  const token = decodeURIComponent(
-    found.substring("rt_token=".length)
-  );
-
-  const parts = token.split(".");
-
-  if (parts.length !== 2) return null;
-
-  const [data, sig] = parts;
-
-  const expected = crypto
-    .createHmac("sha256", SECRET)
-    .update(data)
-    .digest("base64url");
-
-  if (sig !== expected) return null;
-
-  try {
-    return JSON.parse(
-      Buffer.from(data, "base64url").toString()
-    );
-  } catch {
-    return null;
-  }
+  const match = cookie.match(/rt_token=([^;]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
-function auth(req, res, next) {
-  const user = readToken(req);
+function requireLogin(req, res, next) {
+  const token = getToken(req);
 
-  if (!user) {
+  if (!token || !sessions.has(token)) {
     return res.status(401).json({
-      error: "Belum login"
+      ok: false,
+      message: "Belum login"
     });
   }
 
-  req.user = user;
   next();
 }
 
-function admin(req, res, next) {
-  const user = readToken(req);
-
-  if (!user || user.role !== "admin") {
-    return res.status(403).json({
-      error: "Khusus Ketua RT"
-    });
-  }
-
-  req.user = user;
-  next();
-}
-
+/* LOGIN */
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -112,183 +92,129 @@ app.post("/api/login", (req, res) => {
     password !== ADMIN_PASSWORD
   ) {
     return res.status(401).json({
-      error: "Username atau password salah"
+      ok: false,
+      message: "Username atau password salah"
     });
   }
 
-  const user = {
-    username: ADMIN_USER,
-    role: "admin"
-  };
-
-  const token = makeToken(user);
+  const token = crypto.randomBytes(32).toString("hex");
+  sessions.set(token, {
+    username,
+    createdAt: Date.now()
+  });
 
   res.setHeader(
     "Set-Cookie",
-    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=28800`
+    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
   );
 
-  res.json({ user });
+  res.json({
+    ok: true,
+    username
+  });
 });
 
+/* LOGOUT */
 app.post("/api/logout", (req, res) => {
+  const token = getToken(req);
+
+  if (token) {
+    sessions.delete(token);
+  }
+
   res.setHeader(
     "Set-Cookie",
-    "rt_token=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0"
+    "rt_token=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax"
   );
 
   res.json({ ok: true });
 });
 
-app.get("/api/me", (req, res) => {
+/* CEK LOGIN */
+app.get("/api/me", requireLogin, (req, res) => {
   res.json({
-    user: readToken(req)
+    ok: true,
+    username: ADMIN_USER
   });
 });
 
-app.get("/api/dashboard", auth, async (req, res) => {
+/* DASHBOARD */
+app.get("/api/dashboard", requireLogin, async (req, res) => {
   try {
-    const wargaResponse = await supabase(
-      "warga?select=id&status_warga=eq.Aktif"
-    );
+    const warga = await supabaseRequest("warga", {
+      query: "select=id&limit=1000"
+    });
 
-    const warga = wargaResponse.ok
-      ? await wargaResponse.json()
-      : [];
+    const surat = await supabaseRequest("pengajuan_surat", {
+      query: "select=id&limit=1000"
+    });
 
-    const suratResponse = await supabase(
-      "pengajuan_surat?select=id&status=eq.Diajukan"
-    );
+    const kas = await supabaseRequest("kas_rt", {
+      query: "select=jenis,jumlah&limit=1000"
+    });
 
-    const surat = suratResponse.ok
-      ? await suratResponse.json()
-      : [];
+    let saldo = 0;
 
-    const kasResponse = await supabase(
-      "kas_rt?select=*"
-    );
+    if (Array.isArray(kas)) {
+      for (const item of kas) {
+        const jumlah = Number(item.jumlah) || 0;
 
-    const kas = kasResponse.ok
-      ? await kasResponse.json()
-      : [];
-
-    let balance = 0;
-
-    for (const item of kas) {
-      const jumlah = Number(
-        item.jumlah ||
-        item.amount ||
-        item.nominal ||
-        0
-      );
-
-      const jenis = String(
-        item.jenis ||
-        item.type ||
-        item.tipe ||
-        ""
-      ).toLowerCase();
-
-      if (
-        jenis.includes("masuk") ||
-        jenis.includes("pemasukan")
-      ) {
-        balance += jumlah;
-      } else {
-        balance -= jumlah;
+        if (
+          String(item.jenis || "").toLowerCase() === "pengeluaran"
+        ) {
+          saldo -= jumlah;
+        } else {
+          saldo += jumlah;
+        }
       }
     }
 
     res.json({
-      residents: warga.length,
-      letters: surat.length,
-      complaints: 0,
-      balance
+      ok: true,
+      warga: Array.isArray(warga) ? warga.length : 0,
+      surat: Array.isArray(surat) ? surat.length : 0,
+      pengaduan: 0,
+      saldo
     });
   } catch (error) {
     console.error(error);
 
     res.status(500).json({
-      error: "Gagal mengambil dashboard"
+      ok: false,
+      message: "Gagal mengambil dashboard"
     });
   }
 });
 
-app.get("/api/residents", admin, async (req, res) => {
+/* DATA WARGA - AMBIL */
+app.get("/api/residents", requireLogin, async (req, res) => {
   try {
-    const response = await supabase(
-      "warga?select=*&order=nama_lengkap.asc"
-    );
+    const data = await supabaseRequest("warga", {
+      query:
+        "select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_warga,created_at&order=nama_lengkap.asc"
+    });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(500).json({
-        error: "Gagal mengambil data warga",
-        detail: data
-      });
-    }
-
-    const result = data.map(w => ({
-      id: w.id,
-      nik: w.nik,
-      no_kk: w.no_kk,
-      nama: w.nama_lengkap,
-      alamat: w.alamat,
-      no_hp: w.no_hp,
-      status: w.status_warga
-    }));
-
-    res.json(result);
+    res.json({
+      ok: true,
+      data: Array.isArray(data) ? data : []
+    });
   } catch (error) {
-    console.error(error);
+    console.error("RESIDENTS ERROR:", error);
 
     res.status(500).json({
-      error: "Gagal mengambil data warga"
+      ok: false,
+      message: "Gagal mengambil data warga"
     });
   }
 });
 
-app.post("/api/residents", admin, async (req, res) => {
+/* DATA WARGA - TAMBAH */
+app.post("/api/residents", requireLogin, async (req, res) => {
   try {
-    const {
-      nik,
-      no_kk,
-      nama,
-      alamat,
-      no_hp,
-      status = "Aktif"
-    } = req.body;
-
-    if (!nama) {
-      return res.status(400).json({
-        error: "Nama wajib diisi"
-      });
-    }
-
-    const response = await supabase("warga", {
+    const data = await supabaseRequest("warga", {
       method: "POST",
-      headers: {
-        Prefer: "return=representation"
-      },
-      body: JSON.stringify({
-        nik: nik || null,
-        no_kk: no_kk || null,
-        nama_lengkap: nama,
-        alamat: alamat || "",
-        no_hp: no_hp || "",
-        status_warga: status
-      })
+      body: req.body
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(400).json({
-        error: "Gagal menambah warga",
-        detail: data
-      });
-    }
 
     res.json({
       ok: true,
@@ -298,48 +224,22 @@ app.post("/api/residents", admin, async (req, res) => {
     console.error(error);
 
     res.status(500).json({
-      error: "Gagal menambah warga"
+      ok: false,
+      message: "Gagal menambah warga"
     });
   }
 });
 
-app.put("/api/residents/:id", admin, async (req, res) => {
+/* DATA WARGA - EDIT */
+app.put("/api/residents/:id", requireLogin, async (req, res) => {
   try {
-    const {
-      nik,
-      no_kk,
-      nama,
-      alamat,
-      no_hp,
-      status
-    } = req.body;
+    const id = encodeURIComponent(req.params.id);
 
-    const response = await supabase(
-      `warga?id=eq.${encodeURIComponent(req.params.id)}`,
-      {
-        method: "PATCH",
-        headers: {
-          Prefer: "return=representation"
-        },
-        body: JSON.stringify({
-          nik,
-          no_kk,
-          nama_lengkap: nama,
-          alamat,
-          no_hp,
-          status_warga: status
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(400).json({
-        error: "Gagal memperbarui warga",
-        detail: data
-      });
-    }
+    const data = await supabaseRequest("warga", {
+      method: "PATCH",
+      query: `id=eq.${id}`,
+      body: req.body
+    });
 
     res.json({
       ok: true,
@@ -349,162 +249,130 @@ app.put("/api/residents/:id", admin, async (req, res) => {
     console.error(error);
 
     res.status(500).json({
-      error: "Gagal memperbarui warga"
+      ok: false,
+      message: "Gagal mengubah data warga"
     });
   }
 });
 
-app.get("/api/announcements", auth, async (req, res) => {
+/* PENGUMUMAN */
+app.get("/api/announcements", requireLogin, async (req, res) => {
   try {
-    const response = await supabase(
-      "pengumuman?select=*&order=id.desc"
-    );
+    const data = await supabaseRequest("pengumuman", {
+      query: "select=*&order=created_at.desc"
+    });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(500).json({
-        error: "Gagal mengambil pengumuman",
-        detail: data
-      });
-    }
-
-    res.json(data);
+    res.json({
+      ok: true,
+      data: Array.isArray(data) ? data : []
+    });
   } catch (error) {
+    console.error(error);
+
     res.status(500).json({
-      error: "Gagal mengambil pengumuman"
+      ok: false,
+      message: "Gagal mengambil pengumuman"
     });
   }
 });
 
-app.post("/api/announcements", admin, async (req, res) => {
+app.post("/api/announcements", requireLogin, async (req, res) => {
   try {
-    const { title, content } = req.body;
-
-    const response = await supabase("pengumuman", {
+    const data = await supabaseRequest("pengumuman", {
       method: "POST",
-      body: JSON.stringify({
-        title,
-        content
-      })
+      body: req.body
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(400).json({
-        error: "Gagal membuat pengumuman",
-        detail: data
-      });
-    }
 
     res.json({
       ok: true,
       data
     });
   } catch (error) {
+    console.error(error);
+
     res.status(500).json({
-      error: "Gagal membuat pengumuman"
+      ok: false,
+      message: "Gagal membuat pengumuman"
     });
   }
 });
 
-app.get("/api/letters", auth, async (req, res) => {
+/* SURAT */
+app.get("/api/letters", requireLogin, async (req, res) => {
   try {
-    const response = await supabase(
-      "pengajuan_surat?select=*&order=id.desc"
-    );
+    const data = await supabaseRequest("pengajuan_surat", {
+      query: "select=*&order=id.desc"
+    });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(500).json({
-        error: "Gagal mengambil pengajuan surat",
-        detail: data
-      });
-    }
-
-    res.json(data);
+    res.json({
+      ok: true,
+      data: Array.isArray(data) ? data : []
+    });
   } catch (error) {
+    console.error(error);
+
     res.status(500).json({
-      error: "Gagal mengambil surat"
+      ok: false,
+      message: "Gagal mengambil data surat"
     });
   }
 });
 
-app.get("/api/cash", auth, async (req, res) => {
+/* KAS */
+app.get("/api/cash", requireLogin, async (req, res) => {
   try {
-    const response = await supabase(
-      "kas_rt?select=*&order=id.desc"
-    );
+    const data = await supabaseRequest("kas_rt", {
+      query: "select=*&order=id.desc"
+    });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(500).json({
-        error: "Gagal mengambil kas RT",
-        detail: data
-      });
-    }
-
-    res.json(data);
+    res.json({
+      ok: true,
+      data: Array.isArray(data) ? data : []
+    });
   } catch (error) {
+    console.error(error);
+
     res.status(500).json({
-      error: "Gagal mengambil kas RT"
+      ok: false,
+      message: "Gagal mengambil kas"
     });
   }
 });
 
-app.post("/api/cash", admin, async (req, res) => {
+app.post("/api/cash", requireLogin, async (req, res) => {
   try {
-    const {
-      type,
-      description,
-      amount
-    } = req.body;
-
-    const response = await supabase("kas_rt", {
+    const data = await supabaseRequest("kas_rt", {
       method: "POST",
-      body: JSON.stringify({
-        jenis: type,
-        keterangan: description,
-        jumlah: Number(amount)
-      })
+      body: req.body
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(400).json({
-        error: "Gagal menyimpan kas",
-        detail: data
-      });
-    }
 
     res.json({
       ok: true,
       data
     });
   } catch (error) {
+    console.error(error);
+
     res.status(500).json({
-      error: "Gagal menyimpan kas"
+      ok: false,
+      message: "Gagal menyimpan kas"
     });
   }
 });
 
-app.use(express.static(path.join(__dirname, "public")));
-
+/* HEALTH CHECK */
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
-    app: "RT Kita"
+    message: "RT KITA berjalan"
   });
 });
 
-app.get("*", (req, res) => {
-  res.sendFile(
-    path.join(__dirname, "index.html")
-  );
+/* FILE WEBSITE */
+app.use(express.static(__dirname));
+
+app.get(/.*/, (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
 });
 
 module.exports = app;
