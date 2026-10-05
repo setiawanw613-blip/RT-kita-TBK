@@ -14,6 +14,7 @@ const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 const sessions = new Map();
+const complaintsMemory = [];
 
 async function supabaseRequest(table, options = {}) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -42,6 +43,7 @@ async function supabaseRequest(table, options = {}) {
   const text = await response.text();
 
   let data;
+
   try {
     data = text ? JSON.parse(text) : null;
   } catch {
@@ -50,6 +52,7 @@ async function supabaseRequest(table, options = {}) {
 
   if (!response.ok) {
     console.error("SUPABASE ERROR:", response.status, data);
+
     throw new Error(
       typeof data === "object"
         ? JSON.stringify(data)
@@ -63,6 +66,7 @@ async function supabaseRequest(table, options = {}) {
 function getToken(req) {
   const cookie = req.headers.cookie || "";
   const match = cookie.match(/rt_token=([^;]+)/);
+
   return match ? decodeURIComponent(match[1]) : null;
 }
 
@@ -182,7 +186,7 @@ app.get("/api/dashboard", requireLogin, async (req, res) => {
     res.json({
       residents: Array.isArray(warga) ? warga.length : 0,
       letters: Array.isArray(surat) ? surat.length : 0,
-      complaints: 0,
+      complaints: complaintsMemory.length,
       balance
     });
   } catch (error) {
@@ -208,3 +212,319 @@ app.get("/api/residents", requireLogin, async (req, res) => {
           ...row,
           nama: row.nama_lengkap
         }))
+      : [];
+
+    res.json(rows);
+  } catch (error) {
+    console.error("RESIDENTS ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil data warga"
+    });
+  }
+});
+
+/* TAMBAH WARGA */
+app.post("/api/residents", requireLogin, async (req, res) => {
+  try {
+    const {
+      nama,
+      nik,
+      no_kk,
+      alamat,
+      no_hp
+    } = req.body;
+
+    const data = await supabaseRequest("warga", {
+      method: "POST",
+      body: {
+        nama_lengkap: nama || "",
+        nik: nik || "",
+        no_kk: no_kk || "",
+        alamat: alamat || "",
+        no_hp: no_hp || ""
+      }
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    res.json({
+      ok: true,
+      data: {
+        ...row,
+        nama: row?.nama_lengkap
+      }
+    });
+  } catch (error) {
+    console.error("ADD RESIDENT ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal menyimpan data warga"
+    });
+  }
+});
+
+/* DATA WARGA SENDIRI */
+app.get("/api/my-data", requireLogin, async (req, res) => {
+  try {
+    const data = await supabaseRequest("warga", {
+      query:
+        "select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_warga,created_at&limit=1"
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    res.json(
+      row
+        ? {
+            ...row,
+            nama: row.nama_lengkap
+          }
+        : null
+    );
+  } catch (error) {
+    console.error("MY DATA ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil data"
+    });
+  }
+});
+
+/* KAS */
+app.get("/api/cash", requireLogin, async (req, res) => {
+  try {
+    const data = await supabaseRequest("kas_rt", {
+      query:
+        "select=id,tanggal,jenis,keterangan,jumlah,created_at&order=created_at.desc"
+    });
+
+    const rows = Array.isArray(data)
+      ? data.map(row => ({
+          ...row,
+          description: row.keterangan,
+          type: row.jenis,
+          amount: row.jumlah
+        }))
+      : [];
+
+    res.json(rows);
+  } catch (error) {
+    console.error("CASH ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil data kas"
+    });
+  }
+});
+
+/* TAMBAH KAS */
+app.post("/api/cash", requireLogin, async (req, res) => {
+  try {
+    const {
+      type,
+      description,
+      amount
+    } = req.body;
+
+    const data = await supabaseRequest("kas_rt", {
+      method: "POST",
+      body: {
+        jenis: type || "pemasukan",
+        keterangan: description || "",
+        jumlah: Number(amount) || 0
+      }
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    res.json({
+      ok: true,
+      data: row
+    });
+  } catch (error) {
+    console.error("ADD CASH ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal menyimpan kas"
+    });
+  }
+});
+
+/* SURAT */
+app.get("/api/letters", requireLogin, async (req, res) => {
+  try {
+    const data = await supabaseRequest("pengajuan_surat", {
+      query:
+        "select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at&order=created_at.desc"
+    });
+
+    const rows = Array.isArray(data)
+      ? data.map(row => ({
+          ...row,
+          type: row.jenis_surat,
+          purpose: row.keperluan,
+          nama: ""
+        }))
+      : [];
+
+    res.json(rows);
+  } catch (error) {
+    console.error("LETTERS ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil data surat"
+    });
+  }
+});
+
+/* AJUKAN SURAT */
+app.post("/api/letters", requireLogin, async (req, res) => {
+  try {
+    const {
+      type,
+      purpose
+    } = req.body;
+
+    const data = await supabaseRequest("pengajuan_surat", {
+      method: "POST",
+      body: {
+        jenis_surat: type || "",
+        keperluan: purpose || "",
+        status: "diajukan"
+      }
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    res.json({
+      ok: true,
+      data: row
+        ? {
+            ...row,
+            type: row.jenis_surat,
+            purpose: row.keperluan,
+            nama: ""
+          }
+        : row
+    });
+  } catch (error) {
+    console.error("ADD LETTER ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengajukan surat"
+    });
+  }
+});
+
+/* PENGUMUMAN */
+app.get("/api/announcements", requireLogin, async (req, res) => {
+  try {
+    const data = await supabaseRequest("pengumuman", {
+      query:
+        "select=id,judul,isi,tanggal&order=tanggal.desc"
+    });
+
+    const rows = Array.isArray(data)
+      ? data.map(row => ({
+          ...row,
+          title: row.judul,
+          content: row.isi,
+          created_at: row.tanggal
+        }))
+      : [];
+
+    res.json(rows);
+  } catch (error) {
+    console.error("ANNOUNCEMENTS ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil pengumuman"
+    });
+  }
+});
+
+/* TAMBAH PENGUMUMAN */
+app.post("/api/announcements", requireLogin, async (req, res) => {
+  try {
+    const {
+      title,
+      content
+    } = req.body;
+
+    const data = await supabaseRequest("pengumuman", {
+      method: "POST",
+      body: {
+        judul: title || "",
+        isi: content || "",
+        tanggal: new Date().toISOString()
+      }
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    res.json({
+      ok: true,
+      data: row
+    });
+  } catch (error) {
+    console.error("ADD ANNOUNCEMENT ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal menyimpan pengumuman"
+    });
+  }
+});
+
+/* PENGADUAN */
+app.get("/api/complaints", requireLogin, (req, res) => {
+  res.json(complaintsMemory);
+});
+
+/* TAMBAH PENGADUAN */
+app.post("/api/complaints", requireLogin, (req, res) => {
+  const {
+    title,
+    content
+  } = req.body;
+
+  const complaint = {
+    id: crypto.randomUUID(),
+    title: title || "",
+    content: content || "",
+    nama: "",
+    created_at: new Date().toISOString(),
+    status: "baru"
+  };
+
+  complaintsMemory.unshift(complaint);
+
+  res.json({
+    ok: true,
+    data: complaint
+  });
+});
+
+/* HEALTH CHECK */
+app.get("/health", (req, res) => {
+  res.json({
+    ok: true,
+    message: "RT Kita berjalan"
+  });
+});
+
+/* FILE FRONTEND */
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
+
+module.exports = app;
