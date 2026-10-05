@@ -9,303 +9,313 @@
 
 <style>
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f3f6fa;color:#172334}
-.wrap{max-width:480px;margin:auto;min-height:100vh;background:#fff}
-.login{min-height:100vh;padding:35px 24px;background:linear-gradient(150deg,#0e63c5,#15a47d);color:#fff}
-.logo{font-size:42px}
-.login h1{margin:8px 0}
-.box{background:#fff;color:#172334;border-radius:22px;padding:20px;margin-top:25px;box-shadow:0 15px 40px #0002}
-.input,select,textarea{width:100%;padding:13px;border:1px solid #dce3eb;border-radius:11px;margin:7px 0 12px;font:inherit}
-textarea{min-height:100px}
-button{border:0;border-radius:11px;padding:12px 15px;background:#1267c9;color:#fff;font-weight:700;font-size:14px}
-.full{width:100%}
-.top{background:#1267c9;color:#fff;padding:17px}
-.toprow{display:flex;justify-content:space-between}
-.content{padding:16px 16px 90px}
-.hello{padding:17px;background:#eef6ff;border-radius:16px;margin-bottom:13px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.card{background:#fff;border:1px solid #e6ebf1;border-radius:15px;padding:14px;box-shadow:0 3px 12px #00000008}
-.stat b{font-size:21px;display:block;margin-top:5px}
-.muted{color:#718094;font-size:12px}
-.menus{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.menu{text-align:center;padding:13px 5px;border:1px solid #e4e9ef;border-radius:13px;font-size:12px;background:#fff;cursor:pointer}
-.menu span{display:block;font-size:24px;margin-bottom:5px}
-.row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #edf0f4;font-size:13px}
-.section{margin-top:18px}
-.section h2{font-size:18px}
-.tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(480px,100%);height:65px;background:#fff;border-top:1px solid #e6ebf1;display:flex;justify-content:space-around;align-items:center}
-.tab{text-align:center;font-size:10px;color:#7b8795;cursor:pointer}
-.tab b{display:block;font-size:21px}
-.tab.active{color:#1267c9}
-.pill{display:inline-block;padding:5px 9px;border-radius:20px;background:#eef6ff;color:#1267c9;font-size:11px}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f7fb;color:#172033}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer}
+.wrap{max-width:900px;margin:auto;padding:16px}
+.card{background:#fff;border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px #00000010}
+h1,h2,h3{margin-top:0}
+.logo{text-align:center;margin:35px 0 20px}
+.logo h1{color:#1267c9;margin-bottom:5px}
+.muted{color:#687386}
+label{display:block;font-weight:600;margin:12px 0 6px}
+input,select,textarea{width:100%;padding:12px;border:1px solid #ccd4df;border-radius:10px;background:#fff}
+textarea{min-height:110px;resize:vertical}
+.btn{border:0;border-radius:10px;padding:12px 16px;background:#1267c9;color:white;font-weight:700}
+.btn.secondary{background:#e8eef7;color:#174a82}
+.btn.danger{background:#c62828}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px}
+.stat{padding:16px;border-radius:14px;background:#eef5ff}
+.stat b{display:block;font-size:25px;color:#1267c9}
+.menu{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.menu button{padding:15px;border:1px solid #dbe3ee;border-radius:12px;background:white;text-align:left;font-weight:700}
+.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px}
+.hidden{display:none!important}
+.row{padding:13px 0;border-bottom:1px solid #e8edf3}
+.row:last-child{border-bottom:0}
+.badge{display:inline-block;padding:5px 9px;border-radius:20px;background:#e7f1ff;color:#1267c9;font-size:12px;font-weight:700}
+.bottom{position:sticky;bottom:0;background:white;border-top:1px solid #ddd;padding:9px;display:flex;justify-content:space-around;margin:20px -16px -16px}
+.bottom button{border:0;background:transparent;font-size:12px}
+.error{background:#ffebee;color:#b71c1c;padding:10px;border-radius:10px;margin-bottom:12px}
+.success{background:#e8f5e9;color:#176b20;padding:10px;border-radius:10px;margin-bottom:12px}
 </style>
 </head>
 
 <body>
-<div id="app" class="wrap"></div>
+<div id="app"></div>
 
 <script>
-const A=document.getElementById("app");
+let currentUser=null;
 
-const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({
-"&":"&amp;",
-"<":"&lt;",
-">":"&gt;",
-'"':"&quot;",
-"'":"&#39;"
-}[m]));
-
-async function api(url,opt={}){
-  const r=await fetch(url,{
-    ...opt,
+async function api(url,options={}){
+  const res=await fetch(url,{
+    credentials:"same-origin",
     headers:{
       "Content-Type":"application/json",
-      ...(opt.headers||{})
-    }
+      ...(options.headers||{})
+    },
+    ...options
   });
 
-  const d=await r.json().catch(()=>({}));
+  const text=await res.text();
+  let data=null;
 
-  if(!r.ok) throw Error(d.error||"Terjadi kesalahan");
+  try{data=text?JSON.parse(text):null}
+  catch{data={message:text}}
 
-  return d;
+  if(!res.ok){
+    throw new Error(data?.message||data?.error||"Terjadi kesalahan");
+  }
+
+  return data;
 }
 
-function login(){
-  A.innerHTML=`
-  <div class="login">
-    <div class="logo">🏠</div>
-    <h1>RT Kita</h1>
-    <p>Aplikasi layanan dan administrasi RT.</p>
+function esc(value){
+  return String(value??"").replace(/[&<>"']/g,m=>({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#039;"
+  }[m]));
+}
 
-    <div class="box">
-      <h2>Masuk</h2>
+function rupiah(value){
+  return "Rp "+Number(value||0).toLocaleString("id-ID");
+}
 
+function layout(title,body){
+  document.getElementById("app").innerHTML=`
+    <div class="wrap">
+      <div class="top">
+        <div>
+          <b style="color:#1267c9">RT Kita</b>
+          <div class="muted">${esc(title)}</div>
+        </div>
+        <button class="btn secondary" onclick="logout()">Keluar</button>
+      </div>
+      ${body}
+    </div>`;
+}
+
+function loginPage(error=""){
+  document.getElementById("app").innerHTML=`
+    <div class="wrap">
+      <div class="logo">
+        <h1>RT Kita</h1>
+        <div class="muted">Pelayanan warga digital</div>
+      </div>
+
+      <div class="card">
+        <h2>Masuk</h2>
+
+        ${error?`<div class="error">${esc(error)}</div>`:""}
+
+        <label>Masuk sebagai</label>
+        <select id="role" onchange="changeLoginForm()">
+          <option value="admin">Ketua RT</option>
+          <option value="warga">Warga</option>
+        </select>
+
+        <div id="loginFields"></div>
+
+        <button class="btn" style="width:100%;margin-top:16px"
+          onclick="doLogin()">Masuk aplikasi</button>
+      </div>
+    </div>`;
+
+  changeLoginForm();
+}
+
+function changeLoginForm(){
+  const role=document.getElementById("role")?.value;
+  const box=document.getElementById("loginFields");
+  if(!box)return;
+
+  if(role==="warga"){
+    box.innerHTML=`
+      <label>NIK</label>
+      <input id="username" inputmode="numeric" placeholder="Masukkan NIK">
+
+      <label>No. KK</label>
+      <input id="password" inputmode="numeric" placeholder="Masukkan No. KK">
+    `;
+  }else{
+    box.innerHTML=`
       <label>Username</label>
-      <input id="username" class="input" placeholder="Username">
+      <input id="username" value="admin" autocomplete="username">
 
       <label>Password</label>
-      <input id="password" type="password" class="input" placeholder="Password">
-
-      <button class="full" onclick="doLogin()">Masuk ke Aplikasi</button>
-
-      <p class="muted" style="margin-top:15px">
-        Akun awal Ketua RT: <b>admin</b> / <b>admin123</b>
-      </p>
-    </div>
-  </div>`;
+      <input id="password" type="password" placeholder="Password">
+    `;
+  }
 }
 
 async function doLogin(){
+  const role=document.getElementById("role").value;
+  const username=document.getElementById("username").value.trim();
+  const password=document.getElementById("password").value.trim();
+
+  if(!username||!password){
+    loginPage("Data login wajib diisi");
+    document.getElementById("role").value=role;
+    changeLoginForm();
+    return;
+  }
+
   try{
-    await api("/api/login",{
+    const data=await api("/api/login",{
       method:"POST",
-      body:JSON.stringify({
-        username:username.value,
-        password:password.value
-      })
+      body:JSON.stringify({username,password,role})
     });
 
-    adminHome();
+    currentUser=data.user;
+
+    if(currentUser.role==="warga"){
+      wargaHome();
+    }else{
+      adminHome();
+    }
   }catch(e){
-    alert(e.message);
+    loginPage(e.message);
+    document.getElementById("role").value=role;
+    changeLoginForm();
   }
 }
 
 async function boot(){
   try{
-    const x=await api("/api/me");
+    const data=await api("/api/me");
+    currentUser=data.user;
 
-    if(x.user && x.user.role==="admin"){
-      adminHome();
-    }else{
-      login();
-    }
-  }catch(e){
-    login();
+    if(currentUser.role==="warga") wargaHome();
+    else adminHome();
+  }catch{
+    loginPage();
   }
 }
 
+async function logout(){
+  try{await api("/api/logout",{method:"POST"})}catch{}
+  currentUser=null;
+  loginPage();
+}
+
+/* =========================
+   KETUA RT
+========================= */
+
 async function adminHome(){
+  layout("Dashboard Ketua RT",`
+    <div class="card">
+      <h2>Selamat datang, Ketua RT</h2>
+      <p class="muted">Kelola data dan pelayanan warga dari sini.</p>
+    </div>
+
+    <div id="stats" class="grid">
+      <div class="stat"><span>Warga aktif</span><b>...</b></div>
+      <div class="stat"><span>Surat diajukan</span><b>...</b></div>
+      <div class="stat"><span>Pengaduan baru</span><b>...</b></div>
+      <div class="stat"><span>Saldo kas</span><b>...</b></div>
+    </div>
+
+    <div class="card">
+      <h3>Menu</h3>
+      <div class="menu">
+        <button onclick="residents()">👥 Data Warga</button>
+        <button onclick="cash()">💰 Kas RT</button>
+        <button onclick="letters()">📄 Surat</button>
+        <button onclick="complaints()">📢 Pengaduan</button>
+        <button onclick="announcements()">📣 Pengumuman</button>
+      </div>
+    </div>
+  `);
+
   try{
     const d=await api("/api/dashboard");
 
-    A.innerHTML=`
-    <header class="top">
-      <div class="toprow">
-        <div>
-          <b>🏠 RT 01 / RW 05</b>
-          <div style="font-size:12px;color:#dbeaff">Dashboard Ketua RT</div>
-        </div>
-        <span>🔔 👤</span>
+    document.getElementById("stats").innerHTML=`
+      <div class="stat">
+        <span>Warga aktif</span>
+        <b>${d.residents||0}</b>
       </div>
-    </header>
-
-    <main class="content">
-
-      <div class="hello">
-        <b>Selamat datang, Ketua RT 👋</b>
-        <div class="muted">Kelola data dan layanan warga dari satu tempat.</div>
+      <div class="stat">
+        <span>Surat diajukan</span>
+        <b>${d.letters||0}</b>
       </div>
-
-      <div class="grid">
-        <div class="card stat">
-          👥
-          <b>${d.residents||0}</b>
-          <span class="muted">Warga aktif</span>
-        </div>
-
-        <div class="card stat">
-          📄
-          <b>${d.letters||0}</b>
-          <span class="muted">Surat diajukan</span>
-        </div>
-
-        <div class="card stat">
-          🚨
-          <b>${d.complaints||0}</b>
-          <span class="muted">Pengaduan baru</span>
-        </div>
-
-        <div class="card stat">
-          💰
-          <b>Rp ${Number(d.balance||0).toLocaleString("id-ID")}</b>
-          <span class="muted">Saldo kas</span>
-        </div>
+      <div class="stat">
+        <span>Pengaduan baru</span>
+        <b>${d.complaints||0}</b>
       </div>
-
-      <div class="section">
-        <h2>Menu Utama</h2>
-
-        <div class="menus">
-
-          <div class="menu" onclick="residents()">
-            <span>👥</span>
-            Data Warga
-          </div>
-
-          <div class="menu" onclick="cash()">
-            <span>💰</span>
-            Kas RT
-          </div>
-
-          <div class="menu" onclick="letters()">
-            <span>📄</span>
-            Surat
-          </div>
-
-          <div class="menu" onclick="announcements()">
-            <span>📢</span>
-            Pengumuman
-          </div>
-
-          <div class="menu" onclick="logout()">
-            <span>🚪</span>
-            Keluar
-          </div>
-
-        </div>
+      <div class="stat">
+        <span>Saldo kas</span>
+        <b>${rupiah(d.balance)}</b>
       </div>
-
-      <div class="section">
-        <h2>Informasi</h2>
-
-        <div class="card">
-          Database aplikasi sudah terpisah dari Google Sheets.
-          Data tersimpan di database RT sendiri.
-        </div>
-      </div>
-
-    </main>
-
-    <nav class="tabs">
-      <div class="tab active" onclick="adminHome()">
-        <b>⌂</b>Beranda
-      </div>
-
-      <div class="tab" onclick="residents()">
-        <b>👥</b>Warga
-      </div>
-
-      <div class="tab" onclick="cash()">
-        <b>💰</b>Kas
-      </div>
-
-      <div class="tab" onclick="letters()">
-        <b>📄</b>Surat
-      </div>
-    </nav>`;
-
+    `;
   }catch(e){
-    alert(e.message);
+    document.getElementById("stats").innerHTML=
+      `<div class="error">Gagal memuat dashboard</div>`;
   }
 }
 
 async function residents(){
+  layout("Data Warga",`
+    <div class="card">
+      <button class="btn" onclick="addResident()">+ Tambah data warga</button>
+    </div>
+    <div class="card" id="residentList">Memuat...</div>
+  `);
+
   try{
-    const rows=await api("/api/residents");
+    const data=await api("/api/residents");
+    const box=document.getElementById("residentList");
 
-    A.querySelector("main").innerHTML=`
-      <h2>Data Warga</h2>
+    if(!data.length){
+      box.innerHTML="<p class='muted'>Belum ada data warga</p>";
+      return;
+    }
 
-      <button onclick="addResident()">+ Tambah Warga</button>
-
-      <div class="section">
-        ${
-          rows.length
-          ? rows.map(r=>`
-            <div class="card" style="margin:8px 0">
-              <b>${esc(r.nama)}</b>
-
-              <div class="muted">
-                ${esc(r.alamat||"-")}
-              </div>
-
-              <div class="row">
-                <span>NIK</span>
-                <span>${esc(r.nik||"-")}</span>
-              </div>
-
-              <div class="row">
-                <span>No. HP</span>
-                <span>${esc(r.no_hp||"-")}</span>
-              </div>
-            </div>
-          `).join("")
-          : `<div class="card" style="margin-top:10px">
-              Belum ada data warga.
-            </div>`
-        }
-      </div>`;
+    box.innerHTML=data.map(w=>`
+      <div class="row">
+        <b>${esc(w.nama_lengkap||w.nama)}</b>
+        <div class="muted">NIK: ${esc(w.nik)}</div>
+        <div class="muted">No. KK: ${esc(w.no_kk)}</div>
+        <div class="muted">${esc(w.alamat)}</div>
+        <div class="muted">${esc(w.no_hp)}</div>
+      </div>
+    `).join("");
   }catch(e){
-    alert(e.message);
+    document.getElementById("residentList").innerHTML=
+      `<div class="error">${esc(e.message)}</div>`;
   }
 }
 
 function addResident(){
-  A.querySelector("main").innerHTML=`
-    <h2>Tambah Warga</h2>
-
+  layout("Tambah Data Warga",`
     <div class="card">
+      <label>Nama lengkap</label>
+      <input id="rNama">
 
-      <input id="nama" class="input" placeholder="Nama lengkap">
+      <label>NIK</label>
+      <input id="rNik" inputmode="numeric">
 
-      <input id="nik" class="input" placeholder="NIK">
+      <label>No. KK</label>
+      <input id="rKk" inputmode="numeric">
 
-      <input id="kk" class="input" placeholder="No. KK">
+      <label>Alamat</label>
+      <textarea id="rAlamat"></textarea>
 
-      <input id="alamat" class="input" placeholder="Alamat">
+      <label>No. HP</label>
+      <input id="rHp" inputmode="tel">
 
-      <input id="hp" class="input" placeholder="No. HP">
-
-      <button onclick="saveResident()">Simpan</button>
-
-      <button onclick="adminHome()"
-        style="background:#777">
-        Batal
+      <button class="btn" style="margin-top:16px" onclick="saveResident()">
+        Simpan data warga
       </button>
-
-    </div>`;
+      <button class="btn secondary" style="margin-top:8px" onclick="residents()">
+        Kembali
+      </button>
+    </div>
+  `);
 }
 
 async function saveResident(){
@@ -313,82 +323,74 @@ async function saveResident(){
     await api("/api/residents",{
       method:"POST",
       body:JSON.stringify({
-        nama:nama.value,
-        nik:nik.value,
-        no_kk:kk.value,
-        alamat:alamat.value,
-        no_hp:hp.value
+        nama:document.getElementById("rNama").value.trim(),
+        nik:document.getElementById("rNik").value.trim(),
+        no_kk:document.getElementById("rKk").value.trim(),
+        alamat:document.getElementById("rAlamat").value.trim(),
+        no_hp:document.getElementById("rHp").value.trim()
       })
     });
 
-    alert("Data warga berhasil disimpan.");
-
     residents();
-
+    alert("Data warga berhasil disimpan");
   }catch(e){
     alert(e.message);
   }
 }
 
 async function cash(){
+  layout("Kas RT",`
+    <div class="card">
+      <button class="btn" onclick="addCash()">+ Catat transaksi</button>
+    </div>
+    <div class="card" id="cashList">Memuat...</div>
+  `);
+
   try{
-    const rows=await api("/api/cash");
+    const data=await api("/api/cash");
+    const box=document.getElementById("cashList");
 
-    A.querySelector("main").innerHTML=`
-      <h2>Kas RT</h2>
+    if(!data.length){
+      box.innerHTML="<p class='muted'>Belum ada transaksi</p>";
+      return;
+    }
 
-      <button onclick="addCash()">+ Catat Transaksi</button>
-
-      <div class="section">
-
-      ${
-        rows.length
-        ? rows.map(x=>`
-          <div class="card" style="margin:8px 0">
-
-            <b>${esc(x.keterangan||"-")}</b>
-
-            <div class="muted">
-              ${esc(x.jenis||"-")}
-            </div>
-
-            <strong>
-              Rp ${Number(x.jumlah||0).toLocaleString("id-ID")}
-            </strong>
-
-          </div>
-        `).join("")
-        : `<div class="card" style="margin-top:10px">
-            Belum ada transaksi.
-          </div>`
-      }
-
-      </div>`;
+    box.innerHTML=data.map(x=>`
+      <div class="row">
+        <b>${x.type==="keluar"?"Pengeluaran":"Pemasukan"}</b>
+        <span class="badge">${rupiah(x.amount)}</span>
+        <div>${esc(x.description)}</div>
+      </div>
+    `).join("");
   }catch(e){
-    alert(e.message);
+    document.getElementById("cashList").innerHTML=
+      `<div class="error">${esc(e.message)}</div>`;
   }
 }
 
 function addCash(){
-  A.querySelector("main").innerHTML=`
-    <h2>Transaksi Kas</h2>
-
+  layout("Catat Transaksi Kas",`
     <div class="card">
-
-      <select id="ct" class="input">
-        <option value="Masuk">Masuk</option>
-        <option value="Keluar">Keluar</option>
+      <label>Jenis transaksi</label>
+      <select id="cashType">
+        <option value="masuk">Masuk</option>
+        <option value="keluar">Keluar</option>
       </select>
 
-      <input id="cd" class="input" placeholder="Keterangan">
+      <label>Keterangan</label>
+      <input id="cashDesc">
 
-      <input id="ca" type="number"
-        class="input"
-        placeholder="Jumlah">
+      <label>Jumlah</label>
+      <input id="cashAmount" type="number" inputmode="numeric">
 
-      <button onclick="saveCash()">Simpan</button>
-
-    </div>`;
+      <button class="btn" style="margin-top:16px" onclick="saveCash()">
+        Simpan transaksi
+      </button>
+      <button class="btn secondary" style="margin-top:8px" onclick="cash()">
+        Kembali
+      </button>
+    </div>
+  `);
 }
 
 async function saveCash(){
@@ -396,109 +398,121 @@ async function saveCash(){
     await api("/api/cash",{
       method:"POST",
       body:JSON.stringify({
-        type:ct.value,
-        description:cd.value,
-        amount:ca.value
+        type:document.getElementById("cashType").value,
+        description:document.getElementById("cashDesc").value.trim(),
+        amount:document.getElementById("cashAmount").value
       })
     });
 
-    alert("Transaksi kas berhasil disimpan.");
-
-    adminHome();
-
+    cash();
+    alert("Transaksi berhasil disimpan");
   }catch(e){
     alert(e.message);
   }
 }
 
 async function letters(){
+  layout("Surat Masuk",`
+    <div class="card" id="letterList">Memuat...</div>
+  `);
+
   try{
-    const rows=await api("/api/letters");
+    const data=await api("/api/letters");
+    const box=document.getElementById("letterList");
 
-    A.querySelector("main").innerHTML=`
-      <h2>Pengajuan Surat</h2>
+    if(!data.length){
+      box.innerHTML="<p class='muted'>Belum ada pengajuan surat</p>";
+      return;
+    }
 
-      ${
-        rows.length
-        ? rows.map(x=>`
-          <div class="card" style="margin:8px 0">
-            <b>${esc(x.type||"-")}</b>
-
-            <div>${esc(x.nama||"Warga")}</div>
-
-            <div class="muted">
-              ${esc(x.purpose||"")}
-            </div>
-
-            <span class="pill">
-              ${esc(x.status||"-")}
-            </span>
-          </div>
-        `).join("")
-        : `<div class="card">
-            Belum ada pengajuan surat.
-          </div>`
-      }`;
+    box.innerHTML=data.map(x=>`
+      <div class="row">
+        <b>${esc(x.type||x.jenis_surat)}</b>
+        <div>Warga: ${esc(x.nama||"Warga")}</div>
+        <div>${esc(x.purpose||x.keperluan)}</div>
+        <span class="badge">${esc(x.status)}</span>
+      </div>
+    `).join("");
   }catch(e){
-    alert(e.message);
+    document.getElementById("letterList").innerHTML=
+      `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+
+async function complaints(){
+  layout("Pengaduan Warga",`
+    <div class="card" id="complaintList">Memuat...</div>
+  `);
+
+  try{
+    const data=await api("/api/complaints");
+    const box=document.getElementById("complaintList");
+
+    if(!data.length){
+      box.innerHTML="<p class='muted'>Belum ada pengaduan</p>";
+      return;
+    }
+
+    box.innerHTML=data.map(x=>`
+      <div class="row">
+        <b>${esc(x.title)}</b>
+        <div>${esc(x.content)}</div>
+        <div class="muted">Warga: ${esc(x.nama)}</div>
+        <span class="badge">${esc(x.status)}</span>
+      </div>
+    `).join("");
+  }catch(e){
+    document.getElementById("complaintList").innerHTML=
+      `<div class="error">${esc(e.message)}</div>`;
   }
 }
 
 async function announcements(){
+  layout("Pengumuman",`
+    <div class="card">
+      <button class="btn" onclick="addAnnouncement()">+ Tambah pengumuman</button>
+    </div>
+    <div class="card" id="announcementList">Memuat...</div>
+  `);
+
   try{
-    const rows=await api("/api/announcements");
+    const data=await api("/api/announcements");
+    const box=document.getElementById("announcementList");
 
-    A.querySelector("main").innerHTML=`
-      <h2>Pengumuman</h2>
+    if(!data.length){
+      box.innerHTML="<p class='muted'>Belum ada pengumuman</p>";
+      return;
+    }
 
-      <button onclick="addAnnouncement()">
-        + Buat Pengumuman
-      </button>
-
-      <div class="section">
-
-      ${
-        rows.length
-        ? rows.map(x=>`
-          <div class="card" style="margin:8px 0">
-            <b>${esc(x.title)}</b>
-
-            <div>${esc(x.content)}</div>
-
-            <div class="muted">
-              ${esc(x.created_at||"")}
-            </div>
-          </div>
-        `).join("")
-        : `<div class="card">
-            Belum ada pengumuman.
-          </div>`
-      }
-
-      </div>`;
+    box.innerHTML=data.map(x=>`
+      <div class="row">
+        <b>${esc(x.title||x.judul)}</b>
+        <div>${esc(x.content||x.isi)}</div>
+      </div>
+    `).join("");
   }catch(e){
-    alert(e.message);
+    document.getElementById("announcementList").innerHTML=
+      `<div class="error">${esc(e.message)}</div>`;
   }
 }
 
 function addAnnouncement(){
-  A.querySelector("main").innerHTML=`
-    <h2>Pengumuman Baru</h2>
-
+  layout("Tambah Pengumuman",`
     <div class="card">
+      <label>Judul</label>
+      <input id="annTitle">
 
-      <input id="at"
-        class="input"
-        placeholder="Judul">
+      <label>Isi pengumuman</label>
+      <textarea id="annContent"></textarea>
 
-      <textarea id="ac"
-        placeholder="Isi pengumuman"></textarea>
-
-      <button onclick="saveAnnouncement()">
-        Terbitkan
+      <button class="btn" style="margin-top:16px" onclick="saveAnnouncement()">
+        Simpan pengumuman
       </button>
-
-    </div>`;
+      <button class="btn secondary" style="margin-top:8px" onclick="announcements()">
+        Kembali
+      </button>
+    </div>
+  `);
 }
 
 async function saveAnnouncement(){
@@ -506,33 +520,226 @@ async function saveAnnouncement(){
     await api("/api/announcements",{
       method:"POST",
       body:JSON.stringify({
-        title:at.value,
-        content:ac.value
+        title:document.getElementById("annTitle").value.trim(),
+        content:document.getElementById("annContent").value.trim()
       })
     });
 
-    alert("Pengumuman berhasil dibuat.");
-
     announcements();
-
+    alert("Pengumuman berhasil disimpan");
   }catch(e){
     alert(e.message);
   }
 }
 
-async function logout(){
-  try{
-    await api("/api/logout",{method:"POST"});
-  }catch(e){}
+/* =========================
+   WARGA
+========================= */
 
-  login();
+function wargaHome(){
+  layout("Portal Warga",`
+    <div class="card">
+      <h2>Halo, ${esc(currentUser?.nama||"Warga")} 👋</h2>
+      <p class="muted">Selamat datang di aplikasi RT Kita.</p>
+    </div>
+
+    <div class="card">
+      <h3>Layanan Warga</h3>
+      <div class="menu">
+        <button onclick="myData()">👤 Data Saya</button>
+        <button onclick="newLetter()">📄 Ajukan Surat</button>
+        <button onclick="myLetters()">📋 Surat Saya</button>
+        <button onclick="newComplaint()">📢 Pengaduan</button>
+        <button onclick="announcementsWarga()">📣 Pengumuman</button>
+      </div>
+    </div>
+
+    <div class="bottom">
+      <button onclick="wargaHome()">🏠<br>Beranda</button>
+      <button onclick="myData()">👤<br>Data Saya</button>
+      <button onclick="myLetters()">📄<br>Surat</button>
+      <button onclick="announcementsWarga()">📣<br>Info</button>
+    </div>
+  `);
 }
 
-if("serviceWorker" in navigator){
-  navigator.serviceWorker.register("/sw.js").catch(()=>{});
+async function myData(){
+  layout("Data Saya",`
+    <div class="card" id="myDataBox">Memuat...</div>
+    <button class="btn secondary" onclick="wargaHome()">Kembali</button>
+  `);
+
+  try{
+    const w=await api("/api/my-data");
+    const box=document.getElementById("myDataBox");
+
+    if(!w){
+      box.innerHTML="<p class='muted'>Data warga tidak ditemukan</p>";
+      return;
+    }
+
+    box.innerHTML=`
+      <h3>${esc(w.nama_lengkap)}</h3>
+      <div class="row"><b>NIK</b><br>${esc(w.nik)}</div>
+      <div class="row"><b>No. KK</b><br>${esc(w.no_kk)}</div>
+      <div class="row"><b>Jenis Kelamin</b><br>${esc(w.jenis_kelamin)}</div>
+      <div class="row"><b>Tempat/Tanggal Lahir</b><br>${esc(w.tempat_lahir)} / ${esc(w.tanggal_lahir)}</div>
+      <div class="row"><b>Alamat</b><br>${esc(w.alamat)}</div>
+      <div class="row"><b>RT/RW</b><br>${esc(w.rt)} / ${esc(w.rw)}</div>
+      <div class="row"><b>Status Perkawinan</b><br>${esc(w.status_perkawinan)}</div>
+      <div class="row"><b>Pekerjaan</b><br>${esc(w.pekerjaan)}</div>
+      <div class="row"><b>No. HP</b><br>${esc(w.no_hp)}</div>
+      <div class="row"><b>Status Warga</b><br>${esc(w.status_warga)}</div>
+    `;
+  }catch(e){
+    document.getElementById("myDataBox").innerHTML=
+      `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+
+function newLetter(){
+  layout("Ajukan Surat",`
+    <div class="card">
+      <label>Jenis surat</label>
+      <select id="letterType">
+        <option value="">-- Pilih jenis surat --</option>
+        <option value="Surat Pengantar">Surat Pengantar</option>
+        <option value="Surat Keterangan Domisili">Surat Keterangan Domisili</option>
+        <option value="Surat Keterangan Tidak Mampu">Surat Keterangan Tidak Mampu</option>
+        <option value="Surat Keterangan Usaha">Surat Keterangan Usaha</option>
+        <option value="Surat Pengantar SKCK">Surat Pengantar SKCK</option>
+      </select>
+
+      <label>Keperluan</label>
+      <textarea id="letterPurpose"
+        placeholder="Tuliskan keperluan surat"></textarea>
+
+      <button class="btn" style="margin-top:16px" onclick="saveLetter()">
+        Ajukan surat
+      </button>
+
+      <button class="btn secondary" style="margin-top:8px" onclick="wargaHome()">
+        Kembali
+      </button>
+    </div>
+  `);
+}
+
+async function saveLetter(){
+  try{
+    await api("/api/letters",{
+      method:"POST",
+      body:JSON.stringify({
+        type:document.getElementById("letterType").value,
+        purpose:document.getElementById("letterPurpose").value.trim()
+      })
+    });
+
+    alert("Pengajuan surat berhasil dikirim");
+    myLetters();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function myLetters(){
+  layout("Surat Saya",`
+    <div class="card" id="myLetterList">Memuat...</div>
+    <button class="btn" onclick="newLetter()">+ Ajukan surat</button>
+    <button class="btn secondary" style="margin-top:8px" onclick="wargaHome()">Kembali</button>
+  `);
+
+  try{
+    const data=await api("/api/my-letters");
+    const box=document.getElementById("myLetterList");
+
+    if(!data.length){
+      box.innerHTML="<p class='muted'>Belum ada pengajuan surat</p>";
+      return;
+    }
+
+    box.innerHTML=data.map(x=>`
+      <div class="row">
+        <b>${esc(x.type||x.jenis_surat)}</b>
+        <div>${esc(x.purpose||x.keperluan)}</div>
+        <div style="margin-top:6px">
+          <span class="badge">${esc(x.status)}</span>
+        </div>
+        ${x.catatan?`<div class="muted">Catatan RT: ${esc(x.catatan)}</div>`:""}
+      </div>
+    `).join("");
+  }catch(e){
+    document.getElementById("myLetterList").innerHTML=
+      `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+
+function newComplaint(){
+  layout("Pengaduan Warga",`
+    <div class="card">
+      <label>Judul pengaduan</label>
+      <input id="complaintTitle" placeholder="Contoh: Lampu jalan mati">
+
+      <label>Isi pengaduan</label>
+      <textarea id="complaintContent"
+        placeholder="Jelaskan pengaduan Anda"></textarea>
+
+      <button class="btn" style="margin-top:16px" onclick="saveComplaint()">
+        Kirim pengaduan
+      </button>
+
+      <button class="btn secondary" style="margin-top:8px" onclick="wargaHome()">
+        Kembali
+      </button>
+    </div>
+  `);
+}
+
+async function saveComplaint(){
+  try{
+    await api("/api/complaints",{
+      method:"POST",
+      body:JSON.stringify({
+        title:document.getElementById("complaintTitle").value.trim(),
+        content:document.getElementById("complaintContent").value.trim()
+      })
+    });
+
+    alert("Pengaduan berhasil dikirim");
+    wargaHome();
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+async function announcementsWarga(){
+  layout("Pengumuman RT",`
+    <div class="card" id="wargaAnnouncementList">Memuat...</div>
+    <button class="btn secondary" onclick="wargaHome()">Kembali</button>
+  `);
+
+  try{
+    const data=await api("/api/announcements");
+    const box=document.getElementById("wargaAnnouncementList");
+
+    if(!data.length){
+      box.innerHTML="<p class='muted'>Belum ada pengumuman</p>";
+      return;
+    }
+
+    box.innerHTML=data.map(x=>`
+      <div class="row">
+        <b>${esc(x.title||x.judul)}</b>
+        <div>${esc(x.content||x.isi)}</div>
+      </div>
+    `).join("");
+  }catch(e){
+    document.getElementById("wargaAnnouncementList").innerHTML=
+      `<div class="error">${esc(e.message)}</div>`;
+  }
 }
 
 boot();
 </script>
 </body>
-</html>
+  </html>
