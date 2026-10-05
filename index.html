@@ -607,7 +607,31 @@ async function iuranAdmin(){
     alert(e.message || "Gagal mengambil data iuran");
   }
 }
+async function bayarIuran(){
+  layout("Bayar Iuran",`
+    <div class="card">
+      <h2>💳 Bayar Iuran Warga</h2>
+      <p class="muted">Total iuran bulan ini</p>
 
+      <div style="font-size:28px;font-weight:800;color:#1267c9">
+        Rp35.000
+      </div>
+
+      <p>Silakan lakukan pembayaran melalui rekening/QR yang ditentukan Ketua RT.</p>
+
+      <div class="card">
+        <b>Status pembayaran</b>
+        <div style="margin-top:6px">
+          <span class="badge">Menunggu pembayaran</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn secondary" onclick="iuranWarga()">
+      Kembali
+    </button>
+  `);
+}
   async function iuranWarga(){
   const security=15000;
   const sampah=15000;
@@ -667,7 +691,9 @@ async function iuranAdmin(){
           Security Rp15.000 + Sampah Rp15.000 + Kas RT Rp5.000.
         </p>
       </div>
-
+<button class="btn" onclick="bayarIuran()">
+  💳 Bayar Iuran Rp35.000
+</button>
       <button class="btn secondary" onclick="wargaHome()">
         Kembali ke Dashboard
       </button>
