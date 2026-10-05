@@ -15,53 +15,49 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 const sessions = new Map();
 
-function supabaseRequest(table, options = {}) {
+async function supabaseRequest(table, options = {}) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error("Supabase belum terhubung");
   }
 
-  const {
-    method = "GET",
-    query = "",
-    body
-  } = options;
+  const method = options.method || "GET";
+  const query = options.query || "";
+  const body = options.body;
 
   const url =
     `${SUPABASE_URL}/rest/v1/${table}` +
     (query ? `?${query}` : "");
 
-  return fetch(url, {
+  const response = await fetch(url, {
     method,
     headers: {
       apikey: SUPABASE_KEY,
       Authorization: `Bearer ${SUPABASE_KEY}`,
       "Content-Type": "application/json",
-      Prefer: method === "GET"
-        ? "return=representation"
-        : "return=representation"
+      Prefer: "return=representation"
     },
     body: body ? JSON.stringify(body) : undefined
-  }).then(async response => {
-    const text = await response.text();
-
-    let data;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = text;
-    }
-
-    if (!response.ok) {
-      console.error("SUPABASE ERROR:", response.status, data);
-      throw new Error(
-        typeof data === "object"
-          ? JSON.stringify(data)
-          : String(data)
-      );
-    }
-
-    return data;
   });
+
+  const text = await response.text();
+
+  let data;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+
+  if (!response.ok) {
+    console.error("SUPABASE ERROR:", response.status, data);
+    throw new Error(
+      typeof data === "object"
+        ? JSON.stringify(data)
+        : String(data)
+    );
+  }
+
+  return data;
 }
 
 function getToken(req) {
@@ -98,8 +94,10 @@ app.post("/api/login", (req, res) => {
   }
 
   const token = crypto.randomBytes(32).toString("hex");
+
   sessions.set(token, {
     username,
+    role: "admin",
     createdAt: Date.now()
   });
 
@@ -110,7 +108,11 @@ app.post("/api/login", (req, res) => {
 
   res.json({
     ok: true,
-    username
+    user: {
+      id: "admin",
+      username,
+      role: "admin"
+    }
   });
 });
 
@@ -132,9 +134,16 @@ app.post("/api/logout", (req, res) => {
 
 /* CEK LOGIN */
 app.get("/api/me", requireLogin, (req, res) => {
+  const token = getToken(req);
+  const session = sessions.get(token);
+
   res.json({
     ok: true,
-    username: ADMIN_USER
+    user: {
+      id: "admin",
+      username: session.username,
+      role: "admin"
+    }
   });
 });
 
@@ -153,31 +162,31 @@ app.get("/api/dashboard", requireLogin, async (req, res) => {
       query: "select=jenis,jumlah&limit=1000"
     });
 
-    let saldo = 0;
+    let balance = 0;
 
     if (Array.isArray(kas)) {
       for (const item of kas) {
         const jumlah = Number(item.jumlah) || 0;
 
         if (
-          String(item.jenis || "").toLowerCase() === "pengeluaran"
+          String(item.jenis || "").toLowerCase() ===
+          "pengeluaran"
         ) {
-          saldo -= jumlah;
+          balance -= jumlah;
         } else {
-          saldo += jumlah;
+          balance += jumlah;
         }
       }
     }
 
     res.json({
-      ok: true,
-      warga: Array.isArray(warga) ? warga.length : 0,
-      surat: Array.isArray(surat) ? surat.length : 0,
-      pengaduan: 0,
-      saldo
+      residents: Array.isArray(warga) ? warga.length : 0,
+      letters: Array.isArray(surat) ? surat.length : 0,
+      complaints: 0,
+      balance
     });
   } catch (error) {
-    console.error(error);
+    console.error("DASHBOARD ERROR:", error);
 
     res.status(500).json({
       ok: false,
@@ -186,7 +195,7 @@ app.get("/api/dashboard", requireLogin, async (req, res) => {
   }
 });
 
-/* DATA WARGA - AMBIL */
+/* DATA WARGA */
 app.get("/api/residents", requireLogin, async (req, res) => {
   try {
     const data = await supabaseRequest("warga", {
@@ -194,185 +203,8 @@ app.get("/api/residents", requireLogin, async (req, res) => {
         "select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_warga,created_at&order=nama_lengkap.asc"
     });
 
-    res.json({
-      ok: true,
-      data: Array.isArray(data) ? data : []
-    });
-  } catch (error) {
-    console.error("RESIDENTS ERROR:", error);
-
-    res.status(500).json({
-      ok: false,
-      message: "Gagal mengambil data warga"
-    });
-  }
-});
-
-/* DATA WARGA - TAMBAH */
-app.post("/api/residents", requireLogin, async (req, res) => {
-  try {
-    const data = await supabaseRequest("warga", {
-      method: "POST",
-      body: req.body
-    });
-
-    res.json({
-      ok: true,
-      data
-    });
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      ok: false,
-      message: "Gagal menambah warga"
-    });
-  }
-});
-
-/* DATA WARGA - EDIT */
-app.put("/api/residents/:id", requireLogin, async (req, res) => {
-  try {
-    const id = encodeURIComponent(req.params.id);
-
-    const data = await supabaseRequest("warga", {
-      method: "PATCH",
-      query: `id=eq.${id}`,
-      body: req.body
-    });
-
-    res.json({
-      ok: true,
-      data
-    });
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      ok: false,
-      message: "Gagal mengubah data warga"
-    });
-  }
-});
-
-/* PENGUMUMAN */
-app.get("/api/announcements", requireLogin, async (req, res) => {
-  try {
-    const data = await supabaseRequest("pengumuman", {
-      query: "select=*&order=created_at.desc"
-    });
-
-    res.json({
-      ok: true,
-      data: Array.isArray(data) ? data : []
-    });
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      ok: false,
-      message: "Gagal mengambil pengumuman"
-    });
-  }
-});
-
-app.post("/api/announcements", requireLogin, async (req, res) => {
-  try {
-    const data = await supabaseRequest("pengumuman", {
-      method: "POST",
-      body: req.body
-    });
-
-    res.json({
-      ok: true,
-      data
-    });
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      ok: false,
-      message: "Gagal membuat pengumuman"
-    });
-  }
-});
-
-/* SURAT */
-app.get("/api/letters", requireLogin, async (req, res) => {
-  try {
-    const data = await supabaseRequest("pengajuan_surat", {
-      query: "select=*&order=id.desc"
-    });
-
-    res.json({
-      ok: true,
-      data: Array.isArray(data) ? data : []
-    });
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      ok: false,
-      message: "Gagal mengambil data surat"
-    });
-  }
-});
-
-/* KAS */
-app.get("/api/cash", requireLogin, async (req, res) => {
-  try {
-    const data = await supabaseRequest("kas_rt", {
-      query: "select=*&order=id.desc"
-    });
-
-    res.json({
-      ok: true,
-      data: Array.isArray(data) ? data : []
-    });
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      ok: false,
-      message: "Gagal mengambil kas"
-    });
-  }
-});
-
-app.post("/api/cash", requireLogin, async (req, res) => {
-  try {
-    const data = await supabaseRequest("kas_rt", {
-      method: "POST",
-      body: req.body
-    });
-
-    res.json({
-      ok: true,
-      data
-    });
-  } catch (error) {
-    console.error(error);
-
-    res.status(500).json({
-      ok: false,
-      message: "Gagal menyimpan kas"
-    });
-  }
-});
-
-/* HEALTH CHECK */
-app.get("/health", (req, res) => {
-  res.json({
-    ok: true,
-    message: "RT KITA berjalan"
-  });
-});
-
-/* FILE WEBSITE */
-app.use(express.static(__dirname));
-
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
-module.exports = app;
+    const rows = Array.isArray(data)
+      ? data.map(row => ({
+          ...row,
+          nama: row.nama_lengkap
+        }))
