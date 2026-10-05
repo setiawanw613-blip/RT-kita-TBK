@@ -658,6 +658,41 @@ app.post("/api/complaints", requireWarga, (req, res) => {
   });
 });
 
+/* IURAN WARGA */
+
+app.get("/api/my-iuran", requireWarga, async (req, res) => {
+  try {
+    const data = await supabaseRequest("iuran_warga", {
+      query:
+        `select=*&warga_id=eq.${encodeURIComponent(req.session.wargaId)}` +
+        `&order=bulan.desc`
+    });
+
+    res.json(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error("MY IURAN ERROR:", error);
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil data iuran"
+    });
+  }
+});
+
+app.get("/api/iuran", requireAdmin, async (req, res) => {
+  try {
+    const data = await supabaseRequest("iuran_warga", {
+      query: "select=*&order=bulan.desc"
+    });
+
+    res.json(Array.isArray(data) ? data : []);
+  } catch (error) {
+    console.error("IURAN ERROR:", error);
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil data iuran"
+    });
+  }
+});
 /* HEALTH CHECK */
 app.get("/health", (req, res) => {
   res.json({
