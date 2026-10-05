@@ -610,21 +610,39 @@ async function iuranAdmin(){
 async function bayarIuran(){
   layout("Bayar Iuran",`
     <div class="card">
-      <h2>💳 Bayar Iuran Warga</h2>
-      <p class="muted">Total iuran bulan ini</p>
+      <h2>💳 Pembayaran Iuran Warga</h2>
+
+      <p class="muted">
+        Total iuran bulan ini
+      </p>
 
       <div style="font-size:28px;font-weight:800;color:#1267c9">
         Rp35.000
       </div>
+    </div>
 
-      <p>Silakan lakukan pembayaran melalui rekening/QR yang ditentukan Ketua RT.</p>
+    <div class="card">
+      <h3>📱 QRIS</h3>
 
-      <div class="card">
-        <b>Status pembayaran</b>
-        <div style="margin-top:6px">
-          <span class="badge">Menunggu pembayaran</span>
+      <div style="
+        padding:30px 20px;
+        text-align:center;
+        border:1px dashed #999;
+        border-radius:12px;
+      ">
+        <b>QRIS akan ditampilkan di sini</b>
+        <div class="muted" style="margin-top:8px">
+          Belum aktif
         </div>
       </div>
+    </div>
+
+    <div class="card">
+      <h3>🏦 Rekening Bank</h3>
+
+      <p><b>Bank:</b> Akan ditampilkan di sini</p>
+      <p><b>Nomor Rekening:</b> Akan ditampilkan di sini</p>
+      <p><b>Atas Nama:</b> Akan ditampilkan di sini</p>
     </div>
 
     <button class="btn secondary" onclick="iuranWarga()">
