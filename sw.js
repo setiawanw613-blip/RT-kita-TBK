@@ -1,10 +1,11 @@
-const CACHE_NAME = "rt-kita-v1";
+const CACHE_NAME = "rt-kita-v2";
 
 const FILES_TO_CACHE = [
   "/",
   "/index.html",
   "/manifest.webmanifest",
-  "/icon.svg"
+  "/icon-192.png",
+  "/icon-512.png"
 ];
 
 self.addEventListener("install", event => {
