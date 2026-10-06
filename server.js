@@ -723,8 +723,7 @@ app.get("/api/iuran", requireAdmin, async (req, res) => {
 /* BAYAR IURAN - WARGA */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
-    const bulan = req.body.bulan;
-
+    const bulan = String(req.body.bulan || "").slice(0, 7) + "-01";
     if (!bulan) {
       return res.status(400).json({
         ok: false,
