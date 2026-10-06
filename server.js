@@ -772,6 +772,81 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
     });
   }
 });
+/* VERIFIKASI IURAN - KETUA RT */
+app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
+  try {
+    const id = req.body.id;
+
+    if (!id) {
+      return res.status(400).json({
+        ok: false,
+        message: "ID iuran wajib diisi"
+      });
+    }
+
+    const existing = await supabaseRequest("iuran_warga", {
+      query:
+        `select=id,warga_id,bulan,status,total_amount` +
+        `&id=eq.${encodeURIComponent(id)}` +
+        `&limit=1`
+    });
+
+    if (!Array.isArray(existing) || !existing.length) {
+      return res.status(404).json({
+        ok: false,
+        message: "Data iuran tidak ditemukan"
+      });
+    }
+
+    const iuran = existing[0];
+
+    const keteranganKas =
+      `Kas RT dari iuran ${iuran.bulan} - iuran_id ${iuran.id}`;
+
+    const kasExisting = await supabaseRequest("kas_rt", {
+      query:
+        `select=id` +
+        `&keterangan=eq.${encodeURIComponent(keteranganKas)}` +
+        `&limit=1`
+    });
+
+    if (!Array.isArray(kasExisting) || !kasExisting.length) {
+      await supabaseRequest("kas_rt", {
+        method: "POST",
+        body: {
+          tanggal: new Date().toISOString().slice(0, 10),
+          jenis: "masuk",
+          keterangan: keteranganKas,
+          jumlah: 5000
+        }
+      });
+    }
+
+    const data = await supabaseRequest("iuran_warga", {
+      method: "PATCH",
+      query: `id=eq.${encodeURIComponent(id)}`,
+      body: {
+        status: "lunas",
+        diverifikasi_at: new Date().toISOString(),
+        diverifikasi_oleh: req.session.adminUser || "Ketua RT"
+      }
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    res.json({
+      ok: true,
+      data: row
+    });
+  } catch (error) {
+    console.error("VERIFIKASI IURAN ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal memverifikasi iuran"
+    });
+  }
+});
 /* HEALTH CHECK */
 app.get("/health", (req, res) => {
   res.json({
