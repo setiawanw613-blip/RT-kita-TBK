@@ -589,6 +589,19 @@ async function iuranAdmin(){
             <div>Bulan: ${item.bulan || "-"}</div>
             <div>Total: ${rupiah(item.total_amount || 0)}</div>
             <div>Status: <span class="badge">${item.status || "Belum Lunas"}</span></div>
+            ${
+  item.status === "menunggu_verifikasi"
+  ? `
+    <button
+      class="btn"
+      onclick="verifikasiIuran('${item.id}')"
+      style="margin-top:10px"
+    >
+      ✅ Verifikasi Pembayaran
+    </button>
+  `
+  : ""
+}
           </div>
         `;
       });
