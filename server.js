@@ -720,6 +720,58 @@ app.get("/api/iuran", requireAdmin, async (req, res) => {
     });
   }
 });
+/* BAYAR IURAN - WARGA */
+app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
+  try {
+    const bulan = req.body.bulan;
+
+    if (!bulan) {
+      return res.status(400).json({
+        ok: false,
+        message: "Bulan iuran wajib diisi"
+      });
+    }
+
+    const existing = await supabaseRequest("iuran_warga", {
+      query:
+        `select=id,status,total_amount` +
+        `&warga_id=eq.${encodeURIComponent(req.session.wargaId)}` +
+        `&bulan=eq.${encodeURIComponent(bulan)}` +
+        `&limit=1`
+    });
+
+    if (Array.isArray(existing) && existing.length) {
+      return res.json({
+        ok: true,
+        data: existing[0]
+      });
+    }
+
+    const data = await supabaseRequest("iuran_warga", {
+      method: "POST",
+      body: {
+        warga_id: req.session.wargaId,
+        bulan,
+        status: "menunggu_verifikasi",
+        total_amount: 35000
+      }
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    res.json({
+      ok: true,
+      data: row
+    });
+  } catch (error) {
+    console.error("BAYAR IURAN ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal menyimpan pembayaran iuran"
+    });
+  }
+});
 /* HEALTH CHECK */
 app.get("/health", (req, res) => {
   res.json({
