@@ -757,6 +757,7 @@ async function bayarIuran(){
   }catch(e){
     alert(e.message || "Gagal mengambil data iuran");
   }
+  }
     async function kasWarga(){
   try{
     const data=await api("/api/cash-warga");
