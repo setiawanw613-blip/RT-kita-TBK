@@ -855,6 +855,7 @@ app.get("/health", (req, res) => {
 });
 
 /* FILE FRONTEND */
+app.use(express.static(__dirname, { index: false }));
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
