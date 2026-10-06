@@ -621,6 +621,35 @@ async function iuranAdmin(){
     alert(e.message || "Gagal mengambil data iuran");
   }
 }
+  async function verifikasiIuran(id){
+  if(!id) return;
+
+  if(!confirm("Verifikasi pembayaran iuran ini?")){
+    return;
+  }
+
+  try{
+    const hasil = await api("/api/iuran/verifikasi",{
+      method:"POST",
+      body:JSON.stringify({
+        id: id
+      })
+    });
+
+    if(!hasil || !hasil.ok){
+      throw new Error(
+        hasil?.message || "Gagal memverifikasi iuran"
+      );
+    }
+
+    alert("Pembayaran berhasil diverifikasi.");
+
+    await iuranAdmin();
+
+  }catch(e){
+    alert(e.message || "Gagal memverifikasi iuran");
+  }
+}
 async function bayarIuran(){
   layout("Bayar Iuran",`
     <div class="card">
