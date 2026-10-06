@@ -1083,6 +1083,13 @@ async function announcementsWarga(){
       `<div class="error">${esc(e.message)}</div>`;
   }
 }
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js")
+      .then(() => console.log("Service Worker aktif"))
+      .catch(error => console.error("Service Worker gagal:", error));
+  });
+}
 
 boot();
 </script>
