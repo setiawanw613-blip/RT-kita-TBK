@@ -550,6 +550,7 @@ function wargaHome(){
         <button onclick="newComplaint()">📢 Pengaduan</button>
         <button onclick="announcementsWarga()">📣 Pengumuman</button>
         <button onclick="iuranWarga()">💳 Iuran Warga</button>
+        <button onclick="kasWarga()">💰 Kas RT</button>
       </div>
     </div>
 
@@ -756,7 +757,85 @@ async function bayarIuran(){
   }catch(e){
     alert(e.message || "Gagal mengambil data iuran");
   }
+    async function kasWarga(){
+  try{
+    const data=await api("/api/cash-warga");
+
+    let masuk=0;
+    let keluar=0;
+
+    if(Array.isArray(data)){
+      data.forEach(x=>{
+        const jumlah=Number(x.amount)||0;
+
+        if(x.type==="keluar"){
+          keluar+=jumlah;
+        }else{
+          masuk+=jumlah;
+        }
+      });
+    }
+
+    const saldo=masuk-keluar;
+
+    let html=`
+      <div class="card">
+        <h2>💰 Kas RT</h2>
+        <p class="muted">
+          Transparansi kas warga Taman Bali Kahuripan
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <b>💵 Total Kas Masuk</b>
+          <span class="badge">${rupiah(masuk)}</span>
+        </div>
+
+        <div class="row">
+          <b>💸 Total Kas Keluar</b>
+          <span class="badge">${rupiah(keluar)}</span>
+        </div>
+
+        <div class="row">
+          <b>💰 Saldo Kas</b>
+          <span class="badge">${rupiah(saldo)}</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>📋 Riwayat Kas</h3>
+    `;
+
+    if(!Array.isArray(data) || data.length===0){
+      html+=`<p class="muted">Belum ada transaksi kas.</p>`;
+    }else{
+      data.forEach(x=>{
+        html+=`
+          <div class="row">
+            <b>${x.type==="keluar"?"💸 Pengeluaran":"💵 Pemasukan"}</b>
+            <span class="badge">${rupiah(x.amount||0)}</span>
+            <div>${esc(x.description||"-")}</div>
+          </div>
+        `;
+      });
+    }
+
+    html+=`
+      </div>
+
+      <button class="btn secondary" onclick="wargaHome()">
+        Kembali ke Dashboard
+      </button>
+    `;
+
+    layout("Kas RT",html);
+
+  }catch(e){
+    alert(e.message || "Gagal mengambil data kas");
+  }
 }
+
 
 
 async function myData(){
