@@ -666,9 +666,9 @@ async function bayarIuran(){
 
     const hasil = await api("/api/iuran/bayar", {
       method: "POST",
-      body: {
-        bulan
-      }
+      body:JSON.stringify({
+  bulan
+})
     });
 
     if(!hasil || !hasil.ok){
