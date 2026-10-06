@@ -660,10 +660,10 @@ async function bayarIuran(){
     const sekarang = new Date();
 
     const bulan =
-      sekarang.getFullYear() +
-      "-" +
-      String(sekarang.getMonth() + 1).padStart(2, "0");
-
+  sekarang.getFullYear() +
+  "-" +
+  String(sekarang.getMonth() + 1).padStart(2, "0") +
+  "-01";
     const hasil = await api("/api/iuran/bayar", {
       method: "POST",
       body:JSON.stringify({
