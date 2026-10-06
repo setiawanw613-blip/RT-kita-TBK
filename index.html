@@ -656,36 +656,63 @@ async function bayarIuran(){
   `);
 }
   async function konfirmasiIuran(){
-  layout("Konfirmasi Pembayaran",`
-    <div class="card">
-      <h2>✅ Konfirmasi Pembayaran</h2>
+  try{
+    const sekarang = new Date();
 
-      <p class="muted">
-        Ini adalah simulasi untuk testing aplikasi.
-      </p>
+    const bulan =
+      sekarang.getFullYear() +
+      "-" +
+      String(sekarang.getMonth() + 1).padStart(2, "0");
 
-      <p><b>Total pembayaran:</b></p>
+    const hasil = await api("/api/iuran/bayar", {
+      method: "POST",
+      body: {
+        bulan
+      }
+    });
 
-      <div style="font-size:28px;font-weight:800;color:#1267c9">
-        Rp35.000
-      </div>
+    if(!hasil || !hasil.ok){
+      throw new Error(
+        hasil?.message || "Gagal menyimpan pembayaran iuran"
+      );
+    }
 
+    layout("Konfirmasi Pembayaran",`
       <div class="card">
-        <b>Status pembayaran</b>
-        <div style="margin-top:6px">
-          <span class="badge">Menunggu Verifikasi</span>
+        <h2>✅ Konfirmasi Pembayaran</h2>
+
+        <p class="muted">
+          Pembayaran iuran sudah dicatat dan menunggu verifikasi Ketua RT.
+        </p>
+
+        <p><b>Periode:</b> ${bulan}</p>
+
+        <p><b>Total pembayaran:</b></p>
+
+        <div style="font-size:28px;font-weight:800;color:#1267c9">
+          Rp35.000
         </div>
+
+        <div class="card">
+          <b>Status pembayaran</b>
+          <div style="margin-top:6px">
+            <span class="badge">Menunggu Verifikasi</span>
+          </div>
+        </div>
+
+        <p class="muted">
+          Setelah diverifikasi, Rp5.000 akan masuk ke Kas RT.
+        </p>
       </div>
 
-      <p class="muted">
-        Konfirmasi akan diperiksa oleh Ketua RT.
-      </p>
-    </div>
+      <button class="btn secondary" onclick="iuranWarga()">
+        Kembali
+      </button>
+    `);
 
-    <button class="btn secondary" onclick="iuranWarga()">
-      Kembali
-    </button>
-  `);
+  }catch(e){
+    alert(e.message || "Gagal menyimpan pembayaran iuran");
+  }
 }
   async function iuranWarga(){
   const security=15000;
