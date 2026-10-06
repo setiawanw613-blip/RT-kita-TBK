@@ -422,6 +422,33 @@ app.get("/api/cash", requireAdmin, async (req, res) => {
     });
   }
 });
+/* KAS - WARGA */
+app.get("/api/cash-warga", requireWarga, async (req, res) => {
+  try {
+    const data = await supabaseRequest("kas_rt", {
+      query:
+        "select=id,tanggal,jenis,keterangan,jumlah,created_at&order=created_at.desc"
+    });
+
+    const rows = Array.isArray(data)
+      ? data.map(row => ({
+          ...row,
+          description: row.keterangan,
+          type: row.jenis,
+          amount: row.jumlah
+        }))
+      : [];
+
+    res.json(rows);
+  } catch (error) {
+    console.error("CASH WARGA ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil data kas"
+    });
+  }
+});
 
 /* TAMBAH KAS */
 app.post("/api/cash", requireAdmin, async (req, res) => {
