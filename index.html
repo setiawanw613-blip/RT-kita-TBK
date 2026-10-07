@@ -145,14 +145,23 @@ function changeLoginForm(){
   const box=document.getElementById("loginFields");
   if(!box)return;
 
-  if(role==="warga"){
-    box.innerHTML=`
-      <label>NIK</label>
-      <input id="username" inputmode="numeric" placeholder="Masukkan NIK">
+if(role==="warga"){
+  box.innerHTML=`
+    <label>Nomor HP</label>
+    <input id="username" inputmode="tel" placeholder="Masukkan nomor HP">
 
-      <label>No. KK</label>
-      <input id="password" inputmode="numeric" placeholder="Masukkan No. KK">
-    `;
+    <label>Password</label>
+    <input id="password" type="password" placeholder="Masukkan password">
+
+    <button
+      class="btn secondary"
+      style="width:100%;margin-top:12px"
+      onclick="registerWarga()"
+    >
+      📝 Daftar sebagai Warga
+    </button>
+  `;
+
   }else{
     box.innerHTML=`
       <label>Username</label>
@@ -164,6 +173,84 @@ function changeLoginForm(){
   }
 }
 
+  function registerWarga(){
+  document.getElementById("app").innerHTML=`
+    <div class="wrap">
+      <div class="logo">
+        <h1>RT Kita</h1>
+        <div class="muted">RT 04 / RW 01 · Taman Bali Kahuripan</div>
+      </div>
+
+      <div class="card">
+        <h2>📝 Daftar sebagai Warga</h2>
+
+        <label>Nama Lengkap</label>
+        <input id="regNama" placeholder="Masukkan nama lengkap">
+
+        <label>NIK</label>
+        <input id="regNik" inputmode="numeric" placeholder="Masukkan NIK">
+
+        <label>No. KK</label>
+        <input id="regKk" inputmode="numeric" placeholder="Masukkan No. KK">
+
+        <label>Nomor HP</label>
+        <input id="regHp" inputmode="tel" placeholder="Masukkan nomor HP">
+
+        <label>Password</label>
+        <input id="regPassword" type="password" placeholder="Buat password">
+
+        <label>Alamat</label>
+        <textarea id="regAlamat" placeholder="Masukkan alamat tempat tinggal"></textarea>
+
+        <button class="btn" style="width:100%;margin-top:16px"
+          onclick="submitRegisterWarga()">
+          Daftar Warga
+        </button>
+
+        <button class="btn secondary" style="width:100%;margin-top:10px"
+          onclick="loginPage()">
+          Kembali ke Login
+        </button>
+      </div>
+    </div>`;
+}
+
+  async function submitRegisterWarga(){
+  const nama_lengkap=document.getElementById("regNama").value.trim();
+  const nik=document.getElementById("regNik").value.trim();
+  const no_kk=document.getElementById("regKk").value.trim();
+  const no_hp=document.getElementById("regHp").value.trim();
+  const password=document.getElementById("regPassword").value.trim();
+  const alamat=document.getElementById("regAlamat").value.trim();
+
+  if(!nama_lengkap || !nik || !no_kk || !no_hp || !password || !alamat){
+    alert("Semua data wajib diisi");
+    return;
+  }
+
+  try{
+    const data=await api("/api/register-warga",{
+      method:"POST",
+      body:JSON.stringify({
+        nama_lengkap,
+        nik,
+        no_kk,
+        no_hp,
+        password,
+        alamat
+      })
+    });
+
+    alert("Pendaftaran berhasil. Silakan masuk menggunakan nomor HP dan password.");
+
+    loginPage();
+    document.getElementById("role").value="warga";
+    changeLoginForm();
+
+  }catch(e){
+    alert(e.message || "Pendaftaran gagal");
+  }
+}
 async function doLogin(){
   const role=document.getElementById("role").value;
   const username=document.getElementById("username").value.trim();
