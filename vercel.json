@@ -4,30 +4,12 @@
     {
       "src": "server.js",
       "use": "@vercel/node"
-    },
+    }
+  ],
+  "routes": [
     {
-      "src": "index.html",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "manifest.webmanifest",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "sw.js",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "icon-192.png",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "icon-512.png",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "icon.svg",
-      "use": "@vercel/static"
+      "src": "/(.*)",
+      "dest": "/server.js"
     }
   ]
 }
