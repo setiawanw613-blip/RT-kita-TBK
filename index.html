@@ -364,33 +364,226 @@ async function saveResident(){
 async function cash(){
   layout("Kas RT",`
     <div class="card">
-      <button class="btn" onclick="addCash()">+ Catat transaksi</button>
+      <h2>💰 Kas RT</h2>
+      <p class="muted">Kelola dan pantau seluruh transaksi kas RT.</p>
+
+      <button class="btn" onclick="addCash()">
+        + Catat transaksi
+      </button>
     </div>
-    <div class="card" id="cashList">Memuat...</div>
+
+    <div class="card">
+      <h3>📊 Ringkasan Kas</h3>
+      <div id="cashSummary">Memuat...</div>
+    </div>
+
+    <div class="card">
+      <h3>🔎 Filter Transaksi</h3>
+
+      <label>Jenis transaksi</label>
+      <select id="cashTypeFilter" onchange="filterCashAdmin()">
+        <option value="">Semua</option>
+        <option value="masuk">Pemasukan</option>
+        <option value="keluar">Pengeluaran</option>
+      </select>
+
+      <label>Kategori</label>
+      <select id="cashCategoryFilter" onchange="filterCashAdmin()">
+        <option value="">Semua kategori</option>
+        <option value="Iuran Warga">Iuran Warga</option>
+        <option value="Keamanan">Keamanan</option>
+        <option value="Sampah">Sampah</option>
+        <option value="Kas RT">Kas RT</option>
+        <option value="Kegiatan RT">Kegiatan RT</option>
+        <option value="Sarana/Prasarana">Sarana/Prasarana</option>
+        <option value="Pemasukan Lainnya">Pemasukan Lainnya</option>
+<option value="Pengeluaran">Pengeluaran</option>
+      </select>
+
+      <button
+        class="btn secondary"
+        style="margin-top:12px"
+        onclick="exportCash()"
+      >
+        📥 Export Kas RT
+      </button>
+    </div>
+
+    <div class="card">
+      <h3>📜 Riwayat Transaksi</h3>
+      <div id="cashList">Memuat...</div>
+    </div>
   `);
 
   try{
-    const data=await api("/api/cash");
-    const box=document.getElementById("cashList");
+    const data = await api("/api/cash");
 
-    if(!data.length){
-      box.innerHTML="<p class='muted'>Belum ada transaksi</p>";
-      return;
-    }
+    window._cashAdminRows =
+      Array.isArray(data) ? data : [];
 
-    box.innerHTML=data.map(x=>`
+    let masuk = 0;
+    let keluar = 0;
+
+    window._cashAdminRows.forEach(x=>{
+      const jumlah = Number(x.amount) || 0;
+
+      if(x.type === "keluar"){
+        keluar += jumlah;
+      }else{
+        masuk += jumlah;
+      }
+    });
+
+    const saldo = masuk - keluar;
+
+    document.getElementById("cashSummary").innerHTML = `
       <div class="row">
-        <b>${x.type==="keluar"?"Pengeluaran":"Pemasukan"}</b>
-        <span class="badge">${rupiah(x.amount)}</span>
-        <div>${esc(x.description)}</div>
+        <b>Saldo Awal</b>
+        <span>Rp0</span>
       </div>
-    `).join("");
+
+      <div class="row">
+        <b>💵 Total Pemasukan</b>
+        <span>${rupiah(masuk)}</span>
+      </div>
+
+      <div class="row">
+        <b>💸 Total Pengeluaran</b>
+        <span>${rupiah(keluar)}</span>
+      </div>
+
+      <div class="row">
+        <b>💰 Saldo Akhir</b>
+        <span>${rupiah(saldo)}</span>
+      </div>
+    `;
+
+    filterCashAdmin();
+
   }catch(e){
-    document.getElementById("cashList").innerHTML=
+    document.getElementById("cashSummary").innerHTML =
       `<div class="error">${esc(e.message)}</div>`;
+
+    document.getElementById("cashList").innerHTML = "";
   }
 }
 
+function getCashCategory(x){
+  const keterangan =
+    String(x.description || "").toLowerCase();
+
+  if(
+    keterangan.includes("kas rt dari iuran") &&
+    keterangan.includes("iuran_id")
+  ){
+    return "Iuran Warga";
+  }
+
+  if(keterangan.includes("keamanan")){
+    return "Keamanan";
+  }
+
+  if(keterangan.includes("sampah")){
+    return "Sampah";
+  }
+
+  if(keterangan.includes("kas rt")){
+    return "Kas RT";
+  }
+
+  if(keterangan.includes("kegiatan")){
+    return "Kegiatan RT";
+  }
+
+  if(
+    keterangan.includes("sarana") ||
+    keterangan.includes("prasarana")
+  ){
+    return "Sarana/Prasarana";
+  }
+
+  return x.type === "masuk"
+  ? "Pemasukan Lainnya"
+  : "Pengeluaran";
+}
+
+function filterCashAdmin(){
+  const rows = Array.isArray(window._cashAdminRows)
+    ? window._cashAdminRows
+    : [];
+
+  const type =
+    document.getElementById("cashTypeFilter")?.value || "";
+
+  const category =
+    document.getElementById("cashCategoryFilter")?.value || "";
+
+  const filtered = rows.filter(x=>{
+    if(type && x.type !== type){
+      return false;
+    }
+
+    const kat = getCashCategory(x);
+
+    if(category && kat !== category){
+      return false;
+    }
+
+    return true;
+  });
+
+  renderCashAdmin(filtered);
+}
+
+function renderCashAdmin(rows){
+  const box = document.getElementById("cashList");
+
+  if(!rows.length){
+    box.innerHTML =
+      "<p class='muted'>Belum ada transaksi.</p>";
+    return;
+  }
+
+  box.innerHTML = rows.map((x,index)=>{
+    const kategori = getCashCategory(x);
+
+    return `
+      <div class="row">
+        <b>
+          ${index + 1}.
+          ${
+            x.type === "keluar"
+              ? "💸 Pengeluaran"
+              : "💵 Pemasukan"
+          }
+        </b>
+
+        <span class="badge">
+          ${rupiah(Number(x.amount) || 0)}
+        </span>
+
+        <div>
+          <b>Kategori:</b>
+          ${esc(kategori)}
+        </div>
+
+        <div>
+          <b>Tanggal:</b>
+          ${esc(x.date || "")}
+        </div>
+
+        <div>
+          <b>Keterangan:</b>
+          ${esc(x.description || "")}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function exportCash(){
+  window.location.href="/api/cash/export";
+}
 function addCash(){
   layout("Catat Transaksi Kas",`
     <div class="card">
