@@ -499,6 +499,66 @@ app.get("/api/cash", requireAdmin, async (req, res) => {
     });
   }
 });
+/* EXPORT KAS RT */
+app.get("/api/cash/export", requireAdmin, async (req, res) => {
+  try {
+    const data = await supabaseRequest("kas_rt", {
+      query:
+        "select=id,tanggal,jenis,keterangan,jumlah,created_at&order=created_at.desc"
+    });
+
+    const rows = Array.isArray(data) ? data : [];
+
+    const header = [
+      "No",
+      "Tanggal",
+      "Jenis",
+      "Keterangan",
+      "Jumlah",
+      "Tanggal Dibuat"
+    ];
+
+    const csvRows = rows.map((row, index) => [
+      index + 1,
+      row.tanggal || "",
+      row.jenis || "",
+      row.keterangan || "",
+      row.jumlah || 0,
+      row.created_at || ""
+    ]);
+
+    const csv = [
+      header,
+      ...csvRows
+    ]
+      .map(row =>
+        row.map(value =>
+          `"${String(value).replace(/"/g, '""')}"`
+        ).join(",")
+      )
+      .join("\n");
+
+    res.setHeader(
+      "Content-Type",
+      "text/csv; charset=utf-8"
+    );
+
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="kas-rt-kita.csv"'
+    );
+
+    res.send("\uFEFF" + csv);
+
+  } catch (error) {
+    console.error("EXPORT KAS ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal export kas RT"
+    });
+  }
+});
 /* KAS - WARGA */
 app.get("/api/cash-warga", requireWarga, async (req, res) => {
   try {
