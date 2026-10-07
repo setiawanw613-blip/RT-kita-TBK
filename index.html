@@ -258,8 +258,15 @@ async function adminHome(){
 async function residents(){
   layout("Data Warga",`
     <div class="card">
-      <button class="btn" onclick="addResident()">+ Tambah data warga</button>
+      <button class="btn" onclick="addResident()">
+        + Tambah data warga
+      </button>
+
+      <button class="btn" style="margin-top:8px" onclick="exportResidents()">
+        📥 Export Data Warga
+      </button>
     </div>
+
     <div class="card" id="residentList">Memuat...</div>
   `);
 
@@ -285,6 +292,10 @@ async function residents(){
     document.getElementById("residentList").innerHTML=
       `<div class="error">${esc(e.message)}</div>`;
   }
+}
+
+function exportResidents(){
+  window.location.href="/api/residents/export";
 }
 
 function addResident(){
