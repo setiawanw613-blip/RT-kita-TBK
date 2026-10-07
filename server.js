@@ -481,14 +481,17 @@ app.get("/api/cash", requireAdmin, async (req, res) => {
     });
 
     const rows = Array.isArray(data)
-      ? data.map(row => ({
-          ...row,
-          description: row.keterangan,
-          type: row.jenis,
-          amount: row.jumlah
-        }))
-      : [];
-
+  ? data.map(row => ({
+      ...row,
+      description: row.keterangan,
+      date: row.tanggal,
+      type:
+        String(row.jenis || "").toLowerCase().includes("keluar")
+          ? "keluar"
+          : "masuk",
+      amount: row.jumlah
+    }))
+  : [];
     res.json(rows);
   } catch (error) {
     console.error("CASH ERROR:", error);
