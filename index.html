@@ -376,6 +376,10 @@ async function cash(){
       <h3>📊 Ringkasan Kas</h3>
       <div id="cashSummary">Memuat...</div>
     </div>
+        <div class="card">
+      <h3>📋 Rekap Kategori</h3>
+      <div id="cashCategorySummary">Memuat...</div>
+    </div>
 
     <div class="card">
       <h3>🔎 Filter Transaksi</h3>
@@ -459,7 +463,72 @@ async function cash(){
     `;
 
     filterCashAdmin();
+    
+    
 
+    const kategoriJumlah = {
+      "Keamanan": 0,
+      "Sampah": 0,
+      "Kas RT": 0,
+      "Iuran Warga": 0,
+      "Kegiatan RT": 0,
+      "Sarana/Prasarana": 0,
+      "Pemasukan Lainnya": 0,
+      "Pengeluaran": 0
+    };
+
+    window._cashAdminRows.forEach(x => {
+      const kategori = getCashCategory(x);
+      const jumlah = Number(x.amount) || 0;
+
+      if(kategoriJumlah[kategori] !== undefined){
+        kategoriJumlah[kategori] += jumlah;
+      }
+    });
+
+    document.getElementById("cashCategorySummary").innerHTML = `
+      <div class="row">
+        <b>Keamanan</b>
+        <span>${rupiah(kategoriJumlah["Keamanan"])}</span>
+      </div>
+
+      <div class="row">
+        <b>Sampah</b>
+        <span>${rupiah(kategoriJumlah["Sampah"])}</span>
+      </div>
+
+      <div class="row">
+        <b>Kas RT</b>
+        <span>${rupiah(kategoriJumlah["Kas RT"])}</span>
+      </div>
+
+      <div class="row">
+        <b>Iuran Warga</b>
+        <span>${rupiah(kategoriJumlah["Iuran Warga"])}</span>
+      </div>
+
+      <div class="row">
+        <b>Kegiatan RT</b>
+        <span>${rupiah(kategoriJumlah["Kegiatan RT"])}</span>
+      </div>
+
+      <div class="row">
+        <b>Sarana/Prasarana</b>
+        <span>${rupiah(kategoriJumlah["Sarana/Prasarana"])}</span>
+      </div>
+
+      <div class="row">
+        <b>Pemasukan Lainnya</b>
+        <span>${rupiah(kategoriJumlah["Pemasukan Lainnya"])}</span>
+      </div>
+
+      <div class="row">
+        <b>Pengeluaran</b>
+        <span>${rupiah(kategoriJumlah["Pengeluaran"])}</span>
+      </div>
+    `;
+
+    filterCashAdmin();
   }catch(e){
     document.getElementById("cashSummary").innerHTML =
       `<div class="error">${esc(e.message)}</div>`;
