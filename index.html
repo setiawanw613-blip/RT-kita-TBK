@@ -94,15 +94,19 @@ function layout(title,body){
         </div>
         <button class="btn secondary" onclick="logout()">Keluar</button>
       </div>
-${body}
-<div style="display:flex;gap:8px;margin-top:12px">
-  <button class="btn secondary" onclick="dashboard()">
-    ← Kembali ke Dashboard
-  </button>
-</div>
-    </div>`;
+
+      ${body}
+
+      ${showBack ? `
+  <div style="display:flex;gap:8px;margin-top:12px">
+    <button class="btn secondary" onclick="dashboard()">
+      ← Kembali ke Dashboard
+    </button>
+  </div>
+` : ""}
 }
-  function dashboard(){
+
+function dashboard(){
   boot();
 }
 
@@ -234,8 +238,10 @@ async function adminHome(){
         <button onclick="iuranAdmin()">💳 Iuran Warga</button>
       </div>
     </div>
-  `);
+  
+  `,false);
 
+  
   try{
     const d=await api("/api/dashboard");
 
@@ -579,7 +585,7 @@ function wargaHome(){
       <button onclick="myLetters()">📄<br>Surat</button>
       <button onclick="announcementsWarga()">📣<br>Info</button>
     </div>
-  `);
+    `,false);
 }
 async function iuranAdmin(){
   try{
@@ -629,9 +635,7 @@ async function iuranAdmin(){
     }
 
     html+=`
-      <button class="btn secondary" onclick="adminHome()">
-        Kembali ke Dashboard
-      </button>
+      
     `;
 
     layout("Iuran Warga",html);
@@ -834,9 +838,7 @@ async function bayarIuran(){
 <button class="btn" onclick="bayarIuran()">
   💳 Bayar Iuran Rp35.000
 </button>
-      <button class="btn secondary" onclick="wargaHome()">
-        Kembali ke Dashboard
-      </button>
+      
     `);
 
   }catch(e){
@@ -910,9 +912,7 @@ async function bayarIuran(){
     html+=`
       </div>
 
-      <button class="btn secondary" onclick="wargaHome()">
-        Kembali ke Dashboard
-      </button>
+      
     `;
 
     layout("Kas RT",html);
