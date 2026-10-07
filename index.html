@@ -849,80 +849,2321 @@ async function bayarIuran(){
     async function kasWarga(){
   try{
     const data=await api("/api/cash-warga");
+    const rows=Array.isArray(data)?data:[];
 
-    let masuk=0;
-    let keluar=0;
+    const kategoriKas=(x)=>{
+      const d=String(x.description||"").toLowerCase();
 
-    if(Array.isArray(data)){
-      data.forEach(x=>{
-        const jumlah=Number(x.amount)||0;
+      if(x.kategori==="Iuran Warga"){
+        return "Iuran Warga";
+      }
 
-        if(x.type==="keluar"){
-          keluar+=jumlah;
-        }else{
-          masuk+=jumlah;
+      if(x.type==="keluar"){
+        if(
+          d.includes("kegiatan") ||
+          d.includes("acara") ||
+          d.includes("rapat") ||
+          d.includes("gotong") ||
+          d.includes("17 agustus")
+        ){
+          return "Kegiatan RT";
         }
-      });
-    }
 
-    const saldo=masuk-keluar;
+        if(
+          d.includes("sarana") ||
+          d.includes("prasarana") ||
+          d.includes("lampu") ||
+          d.includes("jalan") ||
+          d.includes("perbaikan") ||
+          d.includes("fasilitas")
+        ){
+          return "Sarana / Prasarana";
+        }
+
+        return "Pengeluaran";
+      }
+
+      return "Pemasukan Lainnya";
+    };
+
+    const tanggal=(v)=>{
+      if(!v)return "-";
+
+      const d=new Date(v+"T00:00:00");
+
+      if(Number.isNaN(d.getTime()))return v;
+
+      return d.toLocaleDateString("id-ID",{
+        day:"2-digit",
+        month:"long",
+        year:"numeric"
+      });
+    };
+
+    const waktu=(v)=>{
+      if(!v)return "-";
+
+      const d=new Date(v);
+
+      if(Number.isNaN(d.getTime()))return "-";
+
+      return d.toLocaleTimeString("id-ID",{
+        hour:"2-digit",
+        minute:"2-digit"
+      })+" WIB";
+    };
+
+    const periode=(v)=>{
+      if(!v)return "-";
+
+      const d=new Date(v+"T00:00:00");
+
+      if(Number.isNaN(d.getTime()))return v;
+
+      return d.toLocaleDateString("id-ID",{
+        month:"long",
+        year:"numeric"
+      });
+    };
+
+    const rupiahSafe=(v)=>{
+      return rupiah(Number(v)||0);
+    };
+
+    const masuk=rows
+      .filter(x=>x.type!=="keluar")
+      .reduce((a,x)=>a+(Number(x.amount)||0),0);
+
+    const keluar=rows
+      .filter(x=>x.type==="keluar")
+      .reduce((a,x)=>a+(Number(x.amount)||0),0);
+
+    const saldoAwal=0;
+    const saldoAkhir=saldoAwal+masuk-keluar;
+
+    const iuran=rows.filter(
+      x=>x.kategori==="Iuran Warga"
+    );
+
+    const keamanan=iuran.length*15000;
+    const sampah=iuran.length*15000;
+
+    const kasRT=iuran.reduce(
+      (a,x)=>a+(Number(x.amount)||0),
+      0
+    );
+
+    const pemasukanLain=rows
+      .filter(
+        x=>x.type!=="keluar" &&
+        x.kategori!=="Iuran Warga"
+      )
+      .reduce(
+        (a,x)=>a+(Number(x.amount)||0),
+        0
+      );
+
+    const kegiatan=rows
+      .filter(x=>kategoriKas(x)==="Kegiatan RT")
+      .reduce(
+        (a,x)=>a+(Number(x.amount)||0),
+        0
+      );
+
+    const sarana=rows
+      .filter(x=>kategoriKas(x)==="Sarana / Prasarana")
+      .reduce(
+        (a,x)=>a+(Number(x.amount)||0),
+        0
+      );
+
+    const pengeluaranLain=rows
+      .filter(
+        x=>
+          x.type==="keluar" &&
+          kategoriKas(x)==="Pengeluaran"
+      )
+      .reduce(
+        (a,x)=>a+(Number(x.amount)||0),
+        0
+      );
 
     let html=`
+
       <div class="card">
-        <h2>💰 Kas RT</h2>
+        <h2>💰 Transparansi Kas RT</h2>
+
         <p class="muted">
-          Transparansi kas warga Taman Bali Kahuripan
+          Taman Bali Kahuripan
+        </p>
+
+        <p class="muted">
+          Informasi pemasukan, pengeluaran,
+          dan penggunaan dana kas RT.
         </p>
       </div>
 
       <div class="card">
-        <div class="row">
-          <b>💵 Total Kas Masuk</b>
-          <span class="badge">${rupiah(masuk)}</span>
-        </div>
+        <h3>📊 Ringkasan Kas</h3>
 
-        <div class="row">
-          <b>💸 Total Kas Keluar</b>
-          <span class="badge">${rupiah(keluar)}</span>
-        </div>
+        <div class="grid">
 
-        <div class="row">
-          <b>💰 Saldo Kas</b>
-          <span class="badge">${rupiah(saldo)}</span>
+          <div class="stat">
+            <span>Saldo Awal</span>
+            <b>${rupiahSafe(saldoAwal)}</b>
+          </div>
+
+          <div class="stat">
+            <span>Total Pemasukan</span>
+            <b>${rupiahSafe(masuk)}</b>
+          </div>
+
+          <div class="stat">
+            <span>Total Pengeluaran</span>
+            <b>${rupiahSafe(keluar)}</b>
+          </div>
+
+          <div class="stat">
+            <span>Saldo Akhir</span>
+            <b>${rupiahSafe(saldoAkhir)}</b>
+          </div>
+
         </div>
       </div>
 
       <div class="card">
-        <h3>📋 Riwayat Kas</h3>
+        <h3>📑 Rekap Berdasarkan Jenis</h3>
+
+        <div class="row">
+          <b>🛡️ Keamanan</b>
+          <span class="badge">
+            ${rupiahSafe(keamanan)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>🗑️ Sampah</b>
+          <span class="badge">
+            ${rupiahSafe(sampah)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>💰 Kas RT</b>
+          <span class="badge">
+            ${rupiahSafe(kasRT)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>💵 Pemasukan Lainnya</b>
+          <span class="badge">
+            ${rupiahSafe(pemasukanLain)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>🎉 Kegiatan RT</b>
+          <span class="badge">
+            ${rupiahSafe(kegiatan)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>🔧 Sarana / Prasarana</b>
+          <span class="badge">
+            ${rupiahSafe(sarana)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>💸 Pengeluaran Lainnya</b>
+          <span class="badge">
+            ${rupiahSafe(pengeluaranLain)}
+          </span>
+        </div>
+      </div>
+
+      <div class="card">
+
+        <h3>🔎 Filter Transaksi</h3>
+
+        <label>Periode</label>
+
+        <select id="kasFilterPeriode">
+          <option value="semua">
+            Semua Transaksi
+          </option>
+
+          <option value="hari">
+            Hari Ini
+          </option>
+
+          <option value="minggu">
+            Minggu Ini
+          </option>
+
+          <option value="bulan">
+            Bulan Ini
+          </option>
+
+          <option value="tahun">
+            Tahun Ini
+          </option>
+
+          <option value="custom">
+            Tanggal Khusus
+          </option>
+        </select>
+
+        <div
+          id="kasCustomTanggal"
+          style="display:none"
+        >
+
+          <label>Tanggal Mulai</label>
+
+          <input
+            type="date"
+            id="kasTanggalMulai"
+          >
+
+          <label>Tanggal Akhir</label>
+
+          <input
+            type="date"
+            id="kasTanggalAkhir"
+          >
+
+        </div>
+
+        <label>Jenis Transaksi</label>
+
+        <select id="kasFilterJenis">
+
+          <option value="semua">
+            Semua
+          </option>
+
+          <option value="masuk">
+            Pemasukan
+          </option>
+
+          <option value="keluar">
+            Pengeluaran
+          </option>
+
+        </select>
+
+        <label>Kategori</label>
+
+        <select id="kasFilterKategori">
+
+          <option value="semua">
+            Semua
+          </option>
+
+          <option value="iuran">
+            Iuran Warga
+          </option>
+
+          <option value="keamanan">
+            Keamanan
+          </option>
+
+          <option value="sampah">
+            Sampah
+          </option>
+
+          <option value="kas">
+            Kas RT
+          </option>
+
+          <option value="kegiatan">
+            Kegiatan RT
+          </option>
+
+          <option value="sarana">
+            Sarana / Prasarana
+          </option>
+
+          <option value="lainnya">
+            Lainnya
+          </option>
+
+        </select>
+
+      </div>
+
+      <div class="card">
+
+        <h3>📋 Riwayat Transaksi</h3>
+
+        <div
+          id="kasJumlahFilter"
+          class="muted"
+          style="margin-bottom:10px"
+        >
+          Menampilkan ${rows.length} transaksi
+        </div>
+
+        <div id="kasTransactionList">
     `;
 
-    if(!Array.isArray(data) || data.length===0){
-      html+=`<p class="muted">Belum ada transaksi kas.</p>`;
+    if(rows.length===0){
+
+      html+=`
+        <p class="muted">
+          Belum ada transaksi kas.
+        </p>
+      `;
+
     }else{
-      data.forEach(x=>{
+
+      rows.forEach(x=>{
+
+        const kategori=kategoriKas(x);
+        const amount=Number(x.amount)||0;
+
+        let filterKategori="lainnya";
+
+        if(kategori==="Iuran Warga"){
+          filterKategori="iuran";
+        }else if(kategori==="Kegiatan RT"){
+          filterKategori="kegiatan";
+        }else if(kategori==="Sarana / Prasarana"){
+          filterKategori="sarana";
+        }else if(kategori==="Pengeluaran"){
+          filterKategori="lainnya";
+        }
+
+        const id=String(x.id||"");
+
         html+=`
-          <div class="row">
-            <b>${x.type==="keluar"?"💸 Pengeluaran":"💵 Pemasukan"}</b>
-            <span class="badge">${rupiah(x.amount||0)}</span>
-            <div>${esc(x.description||"-")}</div>
+
+          <div
+            class="row kas-item"
+            data-type="${esc(x.type||"masuk")}"
+            data-category="${esc(filterKategori)}"
+            data-date="${esc(x.tanggal||"")}"
+          >
+
+            <div style="
+              display:flex;
+              justify-content:space-between;
+              gap:10px;
+              align-items:flex-start;
+            ">
+
+              <div>
+
+                <b>
+                  ${
+                    x.type==="keluar"
+                    ? "💸 Pengeluaran"
+                    : "💵 Pemasukan"
+                  }
+                </b>
+
+                <div style="margin-top:5px">
+                  <span class="badge">
+                    ${esc(kategori)}
+                  </span>
+                </div>
+
+              </div>
+
+              <b>
+                ${rupiahSafe(amount)}
+              </b>
+
+            </div>
+
+            <div style="margin-top:10px">
+
+              <b>ID Transaksi:</b>
+              #${esc(id)}
+
+            </div>
+
+            <div>
+
+              <b>Tanggal:</b>
+              ${esc(tanggal(x.tanggal))}
+
+            </div>
+
+            <div>
+
+              <b>Waktu:</b>
+              ${esc(waktu(x.waktu))}
+
+            </div>
+
+            ${
+              x.nama_warga
+              ? `
+                <div>
+                  <b>Warga:</b>
+                  ${esc(x.nama_warga)}
+                </div>
+              `
+              : ""
+            }
+
+            ${
+              x.periode
+              ? `
+                <div>
+                  <b>Periode:</b>
+                  ${esc(periode(x.periode))}
+                </div>
+              `
+              : ""
+            }
+
+            <div style="margin-top:6px">
+
+              <b>Keterangan:</b>
+              ${esc(x.description||"-")}
+
+            </div>
+
+            ${
+              x.kategori==="Iuran Warga"
+              ? `
+
+                <div
+                  style="
+                    background:#f4f8fd;
+                    border-radius:12px;
+                    padding:12px;
+                    margin-top:12px;
+                  "
+                >
+
+                  <b>🧾 Rincian Iuran</b>
+
+                  <div class="row">
+                    🛡️ Keamanan
+                    <span class="badge">
+                      Rp15.000
+                    </span>
+                  </div>
+
+                  <div class="row">
+                    🗑️ Sampah
+                    <span class="badge">
+                      Rp15.000
+                    </span>
+                  </div>
+
+                  <div class="row">
+                    💰 Kas RT
+                    <span class="badge">
+                      Rp5.000
+                    </span>
+                  </div>
+
+                  <div class="row">
+                    <b>Total Dibayar</b>
+                    <b>
+                      ${rupiahSafe(
+                        x.total_iuran||35000
+                      )}
+                    </b>
+                  </div>
+
+                  <div class="row">
+                    <b>Masuk ke Kas RT</b>
+                    <b>
+                      ${rupiahSafe(amount)}
+                    </b>
+                  </div>
+
+                </div>
+
+              `
+              : ""
+            }
+
+            <div style="margin-top:8px">
+
+              <b>Status:</b>
+
+              <span class="badge">
+
+                ${
+                  x.status_iuran==="lunas"
+                  ? "Lunas"
+                  : x.status_iuran==="menunggu_verifikasi"
+                  ? "Menunggu Verifikasi"
+                  : x.type==="keluar"
+                  ? "Dicatat"
+                  : "Tercatat"
+                }
+
+              </span>
+
+            </div>
+
+            ${
+              x.diverifikasi_at ||
+              x.diverifikasi_oleh
+              ? `
+
+                <div
+                  style="
+                    background:#f4f8fd;
+                    border-radius:12px;
+                    padding:12px;
+                    margin-top:10px;
+                  "
+                >
+
+                  <b>✅ Verifikasi</b>
+
+                  ${
+                    x.diverifikasi_at
+                    ? `
+                      <div class="row">
+                        <b>Tanggal:</b>
+                        ${esc(
+                          tanggal(
+                            String(
+                              x.diverifikasi_at
+                            ).slice(0,10)
+                          )
+                        )}
+                      </div>
+                    `
+                    : ""
+                  }
+
+                  ${
+                    x.diverifikasi_oleh
+                    ? `
+                      <div class="row">
+                        <b>Diverifikasi oleh:</b>
+                        ${esc(
+                          x.diverifikasi_oleh
+                        )}
+                      </div>
+                    `
+                    : ""
+                  }
+
+                </div>
+
+              `
+              : ""
+            }
+
+            ${
+              x.type==="keluar"
+              ? `
+
+                <div
+                  class="muted"
+                  style="margin-top:10px"
+                >
+                  📎 Bukti pengeluaran:
+                  Belum tersedia
+                </div>
+
+                <div
+                  class="muted"
+                  style="margin-top:4px"
+                >
+                  👤 Penerima:
+                  Belum tercatat
+                </div>
+
+              `
+              : ""
+            }
+
           </div>
+
         `;
       });
     }
 
     html+=`
+
+        </div>
+
       </div>
 
-      
+      <div class="card">
+
+        <h3>📅 Laporan Bulanan</h3>
+
+        <div style="overflow-x:auto">
+
+          <table style="
+            width:100%;
+            border-collapse:collapse;
+          ">
+
+            <thead>
+
+              <tr>
+
+                <th
+                  style="
+                    text-align:left;
+                    padding:10px 6px;
+                  "
+                >
+                  Keterangan
+                </th>
+
+                <th
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  Masuk
+                </th>
+
+                <th
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  Keluar
+                </th>
+
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              <tr>
+
+                <td style="padding:10px 6px">
+                  Iuran Warga
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  ${rupiahSafe(kasRT)}
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  -
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td style="padding:10px 6px">
+                  Kegiatan RT
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  -
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  ${rupiahSafe(kegiatan)}
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td style="padding:10px 6px">
+                  Sarana / Prasarana
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  -
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  ${rupiahSafe(sarana)}
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td style="padding:10px 6px">
+                  Pemasukan Lainnya
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  ${rupiahSafe(pemasukanLain)}
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  -
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td style="padding:10px 6px">
+                  Pengeluaran Lainnya
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  -
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                  "
+                >
+                  ${rupiahSafe(pengeluaranLain)}
+                </td>
+
+              </tr>
+
+              <tr
+                style="
+                  border-top:2px solid #ccd4df;
+                "
+              >
+
+                <td
+                  style="
+                    padding:10px 6px;
+                    font-weight:700;
+                  "
+                >
+                  TOTAL
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                    font-weight:700;
+                  "
+                >
+                  ${rupiahSafe(masuk)}
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                    font-weight:700;
+                  "
+                >
+                  ${rupiahSafe(keluar)}
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td
+                  colspan="2"
+                  style="
+                    padding:10px 6px;
+                    font-weight:700;
+                  "
+                >
+                  Saldo Akhir
+                </td>
+
+                <td
+                  style="
+                    text-align:right;
+                    padding:10px 6px;
+                    font-weight:700;
+                  "
+                >
+                  ${rupiahSafe(saldoAkhir)}
+                </td>
+
+              </tr>
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
     `;
 
     layout("Kas RT",html);
 
+    const periodeSelect=
+      document.getElementById(
+        "kasFilterPeriode"
+      );
+
+    const jenisSelect=
+      document.getElementById(
+        "kasFilterJenis"
+      );
+
+    const kategoriSelect=
+      document.getElementById(
+        "kasFilterKategori"
+      );
+
+    const customBox=
+      document.getElementById(
+        "kasCustomTanggal"
+      );
+
+    const tanggalMulai=
+      document.getElementById(
+        "kasTanggalMulai"
+      );
+
+    const tanggalAkhir=
+      document.getElementById(
+        "kasTanggalAkhir"
+      );
+
+    const items=
+      Array.from(
+        document.querySelectorAll(
+          ".kas-item"
+        )
+      );
+
+    function cocokTanggal(
+      tanggalTransaksi,
+      pilihan
+    ){
+
+      if(pilihan==="semua"){
+        return true;
+      }
+
+      if(!tanggalTransaksi){
+        return false;
+      }
+
+      const t=
+        new Date(
+          tanggalTransaksi+"T00:00:00"
+        );
+
+      const sekarang=
+        new Date();
+
+      if(Number.isNaN(t.getTime())){
+        return false;
+      }
+
+      if(pilihan==="hari"){
+
+        return (
+          t.getFullYear()===
+            sekarang.getFullYear() &&
+          t.getMonth()===
+            sekarang.getMonth() &&
+          t.getDate()===
+            sekarang.getDate()
+        );
+
+      }
+
+      if(pilihan==="bulan"){
+
+        return (
+          t.getFullYear()===
+            sekarang.getFullYear() &&
+          t.getMonth()===
+            sekarang.getMonth()
+        );
+
+      }
+
+      if(pilihan==="tahun"){
+
+        return (
+          t.getFullYear()===
+            sekarang.getFullYear()
+        );
+
+      }
+
+      if(pilihan==="minggu"){
+
+        const awal=
+          new Date(sekarang);
+
+        const hari=awal.getDay();
+
+        const selisih=
+          hari===0 ? 6 : hari-1;
+
+        awal.setDate(
+          awal.getDate()-selisih
+        );
+
+        awal.setHours(0,0,0,0);
+
+        const akhir=
+          new Date(awal);
+
+        akhir.setDate(
+          akhir.getDate()+6
+        );
+
+        akhir.setHours(
+          23,59,59,999
+        );
+
+        return (
+          t>=awal &&
+          t<=akhir
+        );
+
+      }
+
+      if(pilihan==="custom"){
+
+        const mulai=
+          tanggalMulai.value;
+
+        const akhir=
+          tanggalAkhir.value;
+
+
+async function kasWarga(){
+  try{
+    const data=await api("/api/cash-warga");
+    const rows=Array.isArray(data)?data:[];
+
+    const kategoriKas=(x)=>{
+      const d=String(x.description||"").toLowerCase();
+
+      if(x.kategori==="Iuran Warga"){
+        return "Iuran Warga";
+      }
+
+      if(x.type==="keluar"){
+        if(
+          d.includes("kegiatan") ||
+          d.includes("acara") ||
+          d.includes("rapat") ||
+          d.includes("gotong") ||
+          d.includes("17 agustus")
+        ){
+          return "Kegiatan RT";
+        }
+
+        if(
+          d.includes("sarana") ||
+          d.includes("prasarana") ||
+          d.includes("lampu") ||
+          d.includes("jalan") ||
+          d.includes("perbaikan") ||
+          d.includes("fasilitas")
+        ){
+          return "Sarana / Prasarana";
+        }
+
+        return "Pengeluaran";
+      }
+
+      return "Pemasukan Lainnya";
+    };
+
+    const tanggal=(v)=>{
+      if(!v)return "-";
+
+      const d=new Date(v+"T00:00:00");
+
+      if(Number.isNaN(d.getTime()))return v;
+
+      return d.toLocaleDateString("id-ID",{
+        day:"2-digit",
+        month:"long",
+        year:"numeric"
+      });
+    };
+
+    const waktu=(v)=>{
+      if(!v)return "-";
+
+      const d=new Date(v);
+
+      if(Number.isNaN(d.getTime()))return "-";
+
+      return d.toLocaleTimeString("id-ID",{
+        hour:"2-digit",
+        minute:"2-digit"
+      })+" WIB";
+    };
+
+    const periode=(v)=>{
+      if(!v)return "-";
+
+      const d=new Date(v+"T00:00:00");
+
+      if(Number.isNaN(d.getTime()))return v;
+
+      return d.toLocaleDateString("id-ID",{
+        month:"long",
+        year:"numeric"
+      });
+    };
+
+    const rupiahSafe=(v)=>{
+      return rupiah(Number(v)||0);
+    };
+
+    /* =========================
+       RINGKASAN KAS
+    ========================= */
+
+    const masuk=rows
+      .filter(x=>x.type!=="keluar")
+      .reduce(
+        (a,x)=>a+(Number(x.amount)||0),
+        0
+      );
+
+    const keluar=rows
+      .filter(x=>x.type==="keluar")
+      .reduce(
+        (a,x)=>a+(Number(x.amount)||0),
+        0
+      );
+
+    const saldoAwal=0;
+    const saldoAkhir=
+      saldoAwal+
+      masuk-
+      keluar;
+
+    /* =========================
+       REKAP IURAN
+    ========================= */
+
+    const iuran=rows.filter(
+      x=>x.kategori==="Iuran Warga"
+    );
+
+    const keamanan=
+      iuran.length*15000;
+
+    const sampah=
+      iuran.length*15000;
+
+    const kasRT=
+      iuran.reduce(
+        (a,x)=>a+(Number(x.amount)||0),
+        0
+      );
+
+    const totalIuran=
+      iuran.reduce(
+        (a,x)=>a+
+          (Number(x.total_iuran)||35000),
+        0
+      );
+
+    /* =========================
+       PEMASUKAN LAIN
+    ========================= */
+
+    const pemasukanLain=
+      rows
+        .filter(
+          x=>
+            x.type!=="keluar" &&
+            x.kategori!=="Iuran Warga"
+        )
+        .reduce(
+          (a,x)=>a+(Number(x.amount)||0),
+          0
+        );
+
+    /* =========================
+       PENGELUARAN
+    ========================= */
+
+    const kegiatan=
+      rows
+        .filter(
+          x=>
+            x.type==="keluar" &&
+            kategoriKas(x)==="Kegiatan RT"
+        )
+        .reduce(
+          (a,x)=>a+(Number(x.amount)||0),
+          0
+        );
+
+    const sarana=
+      rows
+        .filter(
+          x=>
+            x.type==="keluar" &&
+            kategoriKas(x)==="Sarana / Prasarana"
+        )
+        .reduce(
+          (a,x)=>a+(Number(x.amount)||0),
+          0
+        );
+
+    const pengeluaranLain=
+      rows
+        .filter(
+          x=>
+            x.type==="keluar" &&
+            kategoriKas(x)==="Pengeluaran"
+        )
+        .reduce(
+          (a,x)=>a+(Number(x.amount)||0),
+          0
+        );
+
+    let html=`
+
+      <div class="card">
+
+        <h2>💰 Transparansi Kas RT</h2>
+
+        <p style="
+          color:#1267c9;
+          font-weight:700;
+        ">
+          Taman Bali Kahuripan
+        </p>
+
+        <p class="muted">
+          Laporan transparansi pemasukan,
+          pengeluaran, dan penggunaan
+          dana Kas RT.
+        </p>
+
+      </div>
+
+      <!-- RINGKASAN -->
+
+      <div class="card">
+
+        <h3>📊 Ringkasan Kas</h3>
+
+        <div class="grid">
+
+          <div class="stat">
+            <span>Saldo Awal</span>
+            <b>
+              ${rupiahSafe(saldoAwal)}
+            </b>
+          </div>
+
+          <div class="stat">
+            <span>Total Pemasukan</span>
+            <b>
+              ${rupiahSafe(masuk)}
+            </b>
+          </div>
+
+          <div class="stat">
+            <span>Total Pengeluaran</span>
+            <b>
+              ${rupiahSafe(keluar)}
+            </b>
+          </div>
+
+          <div class="stat">
+            <span>Saldo Akhir</span>
+            <b>
+              ${rupiahSafe(saldoAkhir)}
+            </b>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- REKAP -->
+
+      <div class="card">
+
+        <h3>📑 Rekap Iuran & Kas</h3>
+
+        <div class="row">
+          <b>🧾 Total Iuran Dibayar</b>
+          <span class="badge">
+            ${rupiahSafe(totalIuran)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>🛡️ Keamanan</b>
+          <span class="badge">
+            ${rupiahSafe(keamanan)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>🗑️ Sampah</b>
+          <span class="badge">
+            ${rupiahSafe(sampah)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>💰 Masuk Kas RT</b>
+          <span class="badge">
+            ${rupiahSafe(kasRT)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>💵 Pemasukan Lainnya</b>
+          <span class="badge">
+            ${rupiahSafe(pemasukanLain)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>🎉 Kegiatan RT</b>
+          <span class="badge">
+            ${rupiahSafe(kegiatan)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>🔧 Sarana / Prasarana</b>
+          <span class="badge">
+            ${rupiahSafe(sarana)}
+          </span>
+        </div>
+
+        <div class="row">
+          <b>💸 Pengeluaran Lainnya</b>
+          <span class="badge">
+            ${rupiahSafe(pengeluaranLain)}
+          </span>
+        </div>
+
+      </div>
+
+      <!-- FILTER -->
+
+      <div class="card">
+
+        <h3>🔎 Filter Transaksi</h3>
+
+        <label>Periode</label>
+
+        <select id="kasFilterPeriode">
+
+          <option value="semua">
+            Semua Transaksi
+          </option>
+
+          <option value="hari">
+            Hari Ini
+          </option>
+
+          <option value="minggu">
+            Minggu Ini
+          </option>
+
+          <option value="bulan">
+            Bulan Ini
+          </option>
+
+          <option value="tahun">
+            Tahun Ini
+          </option>
+
+          <option value="custom">
+            Tanggal Khusus
+          </option>
+
+        </select>
+
+        <div
+          id="kasCustomTanggal"
+          style="display:none"
+        >
+
+          <label>Tanggal Mulai</label>
+
+          <input
+            type="date"
+            id="kasTanggalMulai"
+          >
+
+          <label>Tanggal Akhir</label>
+
+          <input
+            type="date"
+            id="kasTanggalAkhir"
+          >
+
+        </div>
+
+        <label>Jenis Transaksi</label>
+
+        <select id="kasFilterJenis">
+
+          <option value="semua">
+            Semua
+          </option>
+
+          <option value="masuk">
+            Pemasukan
+          </option>
+
+          <option value="keluar">
+            Pengeluaran
+          </option>
+
+        </select>
+
+        <label>Kategori</label>
+
+        <select id="kasFilterKategori">
+
+          <option value="semua">
+            Semua
+          </option>
+
+          <option value="iuran">
+            Iuran Warga
+          </option>
+
+          <option value="keamanan">
+            Keamanan
+          </option>
+
+          <option value="sampah">
+            Sampah
+          </option>
+
+          <option value="kas">
+            Kas RT
+          </option>
+
+          <option value="kegiatan">
+            Kegiatan RT
+          </option>
+
+          <option value="sarana">
+            Sarana / Prasarana
+          </option>
+
+          <option value="lainnya">
+            Lainnya
+          </option>
+
+        </select>
+
+      </div>
+
+      <!-- RIWAYAT -->
+
+      <div class="card">
+
+        <h3>📋 Riwayat Transaksi</h3>
+
+        <div
+          id="kasJumlahFilter"
+          class="muted"
+          style="margin-bottom:10px"
+        >
+          Menampilkan ${rows.length}
+          transaksi
+        </div>
+
+        <div id="kasTransactionList">
+    `;
+
+    if(rows.length===0){
+
+      html+=`
+        <p class="muted">
+          Belum ada transaksi kas.
+        </p>
+      `;
+
+    }else{
+
+      rows.forEach(x=>{
+
+        const kategori=
+          kategoriKas(x);
+
+        const amount=
+          Number(x.amount)||0;
+
+        let filterKategori=
+          "lainnya";
+
+        if(kategori==="Iuran Warga"){
+          filterKategori="iuran";
+        }else if(kategori==="Kegiatan RT"){
+          filterKategori="kegiatan";
+        }else if(kategori==="Sarana / Prasarana"){
+          filterKategori="sarana";
+        }else if(kategori==="Pengeluaran"){
+          filterKategori="lainnya";
+        }
+
+        const components=
+          kategori==="Iuran Warga"
+          ? "keamanan,sampah,kas"
+          : "";
+
+        const id=
+          String(x.id||"");
+
+        html+=`
+
+          <div
+            class="row kas-item"
+            data-type="${esc(x.type||"masuk")}"
+            data-category="${esc(filterKategori)}"
+            data-components="${esc(components)}"
+            data-date="${esc(x.tanggal||"")}"
+          >
+
+            <div style="
+              display:flex;
+              justify-content:space-between;
+              gap:10px;
+              align-items:flex-start;
+            ">
+
+              <div>
+
+                <b>
+                  ${
+                    x.type==="keluar"
+                    ? "💸 Pengeluaran"
+                    : "💵 Pemasukan"
+                  }
+                </b>
+
+                <div style="margin-top:5px">
+
+                  <span class="badge">
+                    ${esc(kategori)}
+                  </span>
+
+                </div>
+
+              </div>
+
+              <b>
+                ${rupiahSafe(amount)}
+              </b>
+
+            </div>
+
+            <div style="margin-top:10px">
+
+              <b>ID Transaksi:</b>
+              #${esc(id)}
+
+            </div>
+
+            <div>
+              <b>Tanggal:</b>
+              ${esc(tanggal(x.tanggal))}
+            </div>
+
+            <div>
+              <b>Waktu:</b>
+              ${esc(waktu(x.waktu))}
+            </div>
+
+            ${
+              x.nama_warga
+              ? `
+                <div>
+                  <b>Warga:</b>
+                  ${esc(x.nama_warga)}
+                </div>
+              `
+              : ""
+            }
+
+            ${
+              x.periode
+              ? `
+                <div>
+                  <b>Periode:</b>
+                  ${esc(periode(x.periode))}
+                </div>
+              `
+              : ""
+            }
+
+            <div style="margin-top:6px">
+
+              <b>Keterangan:</b>
+              ${esc(x.description||"-")}
+
+            </div>
+
+            ${
+              x.kategori==="Iuran Warga"
+              ? `
+
+                <div
+                  style="
+                    background:#f4f8fd;
+                    border-radius:12px;
+                    padding:12px;
+                    margin-top:12px;
+                  "
+                >
+
+                  <b>🧾 Rincian Iuran</b>
+
+                  <div class="row">
+                    🛡️ Keamanan
+                    <span class="badge">
+                      Rp15.000
+                    </span>
+                  </div>
+
+                  <div class="row">
+                    🗑️ Sampah
+                    <span class="badge">
+                      Rp15.000
+                    </span>
+                  </div>
+
+                  <div class="row">
+                    💰 Kas RT
+                    <span class="badge">
+                      Rp5.000
+                    </span>
+                  </div>
+
+                  <div class="row">
+                    <b>Total Dibayar</b>
+                    <b>
+                      ${rupiahSafe(
+                        x.total_iuran||35000
+                      )}
+                    </b>
+                  </div>
+
+                  <div class="row">
+                    <b>Masuk ke Kas RT</b>
+                    <b>
+                      ${rupiahSafe(amount)}
+                    </b>
+                  </div>
+
+                </div>
+
+              `
+              : ""
+            }
+
+            <div style="margin-top:8px">
+
+              <b>Status:</b>
+
+              <span class="badge">
+
+                ${
+                  x.status_iuran==="lunas"
+                  ? "Lunas"
+                  : x.status_iuran==="menunggu_verifikasi"
+                  ? "Menunggu Verifikasi"
+                  : x.type==="keluar"
+                  ? "Dicatat"
+                  : "Tercatat"
+                }
+
+              </span>
+
+            </div>
+
+            ${
+              x.diverifikasi_at ||
+              x.diverifikasi_oleh
+              ? `
+
+                <div
+                  style="
+                    background:#f4f8fd;
+                    border-radius:12px;
+                    padding:12px;
+                    margin-top:10px;
+                  "
+                >
+
+                  <b>✅ Verifikasi</b>
+
+                  ${
+                    x.diverifikasi_at
+                    ? `
+                      <div class="row">
+
+                        <b>Tanggal:</b>
+
+                        ${esc(
+                          tanggal(
+                            String(
+                              x.diverifikasi_at
+                            ).slice(0,10)
+                          )
+                        )}
+
+                      </div>
+                    `
+                    : ""
+                  }
+
+                  ${
+                    x.diverifikasi_oleh
+                    ? `
+                      <div class="row">
+
+                        <b>Diverifikasi oleh:</b>
+
+                        ${esc(
+                          x.diverifikasi_oleh
+                        )}
+
+                      </div>
+                    `
+                    : ""
+                  }
+
+                </div>
+
+              `
+              : ""
+            }
+
+            ${
+              x.type==="keluar"
+              ? `
+
+                <div
+                  class="muted"
+                  style="margin-top:10px"
+                >
+                  📎 Bukti pengeluaran:
+                  Belum tersedia
+                </div>
+
+                <div
+                  class="muted"
+                  style="margin-top:4px"
+                >
+                  👤 Penerima:
+                  Belum tercatat
+                </div>
+
+              `
+              : ""
+            }
+
+          </div>
+
+        `;
+      });
+    }
+
+    html+=`
+
+        </div>
+
+      </div>
+
+      <!-- LAPORAN BULANAN -->
+
+      <div class="card">
+
+        <h3>📅 Laporan Bulanan</h3>
+
+        <p class="muted">
+          Nilai iuran di bawah menunjukkan
+          bagian yang benar-benar masuk ke Kas RT.
+        </p>
+
+        <div style="overflow-x:auto">
+
+          <table style="
+            width:100%;
+            border-collapse:collapse;
+          ">
+
+            <thead>
+
+              <tr>
+
+                <th style="
+                  text-align:left;
+                  padding:10px 6px;
+                ">
+                  Keterangan
+                </th>
+
+                <th style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  Masuk
+                </th>
+
+                <th style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  Keluar
+                </th>
+
+              </tr>
+
+            </thead>
+
+            <tbody>
+
+              <tr>
+
+                <td style="padding:10px 6px">
+                  Iuran Warga — Masuk Kas RT
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  ${rupiahSafe(kasRT)}
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  -
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td style="padding:10px 6px">
+                  Pemasukan Lainnya
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  ${rupiahSafe(pemasukanLain)}
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  -
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td style="padding:10px 6px">
+                  Kegiatan RT
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  -
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  ${rupiahSafe(kegiatan)}
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td style="padding:10px 6px">
+                  Sarana / Prasarana
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  -
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  ${rupiahSafe(sarana)}
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td style="padding:10px 6px">
+                  Pengeluaran Lainnya
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  -
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                ">
+                  ${rupiahSafe(pengeluaranLain)}
+                </td>
+
+              </tr>
+
+              <tr style="
+                border-top:2px solid #ccd4df;
+              ">
+
+                <td style="
+                  padding:10px 6px;
+                  font-weight:700;
+                ">
+                  TOTAL
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                  font-weight:700;
+                ">
+                  ${rupiahSafe(masuk)}
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                  font-weight:700;
+                ">
+                  ${rupiahSafe(keluar)}
+                </td>
+
+              </tr>
+
+              <tr>
+
+                <td
+                  colspan="2"
+                  style="
+                    padding:10px 6px;
+                    font-weight:700;
+                  "
+                >
+                  Saldo Akhir
+                </td>
+
+                <td style="
+                  text-align:right;
+                  padding:10px 6px;
+                  font-weight:700;
+                ">
+                  ${rupiahSafe(saldoAkhir)}
+                </td>
+
+              </tr>
+
+            </tbody>
+
+          </table>
+
+        </div>
+
+      </div>
+
+    `;
+
+    layout("Kas RT",html);
+
+    /* =========================
+       FILTER
+    ========================= */
+
+    const periodeSelect=
+      document.getElementById(
+        "kasFilterPeriode"
+      );
+
+    const jenisSelect=
+      document.getElementById(
+        "kasFilterJenis"
+      );
+
+    const kategoriSelect=
+      document.getElementById(
+        "kasFilterKategori"
+      );
+
+    const customBox=
+      document.getElementById(
+        "kasCustomTanggal"
+      );
+
+    const tanggalMulai=
+      document.getElementById(
+        "kasTanggalMulai"
+      );
+
+    const tanggalAkhir=
+      document.getElementById(
+        "kasTanggalAkhir"
+      );
+
+    const items=
+      Array.from(
+        document.querySelectorAll(
+          ".kas-item"
+        )
+      );
+
+    function cocokTanggal(
+      tanggalTransaksi,
+      pilihan
+    ){
+
+      if(pilihan==="semua"){
+        return true;
+      }
+
+      if(!tanggalTransaksi){
+        return false;
+      }
+
+      const t=
+        new Date(
+          tanggalTransaksi+"T00:00:00"
+        );
+
+      const sekarang=
+        new Date();
+
+      if(Number.isNaN(t.getTime())){
+        return false;
+      }
+
+      if(pilihan==="hari"){
+
+        return (
+          t.getFullYear()===
+            sekarang.getFullYear() &&
+          t.getMonth()===
+            sekarang.getMonth() &&
+          t.getDate()===
+            sekarang.getDate()
+        );
+
+      }
+
+      if(pilihan==="bulan"){
+
+        return (
+          t.getFullYear()===
+            sekarang.getFullYear() &&
+          t.getMonth()===
+            sekarang.getMonth()
+        );
+
+      }
+
+      if(pilihan==="tahun"){
+
+        return (
+          t.getFullYear()===
+            sekarang.getFullYear()
+        );
+
+      }
+
+      if(pilihan==="minggu"){
+
+        const awal=
+          new Date(sekarang);
+
+        const hari=
+          awal.getDay();
+
+        const selisih=
+          hari===0
+          ? 6
+          : hari-1;
+
+        awal.setDate(
+          awal.getDate()-selisih
+        );
+
+        awal.setHours(
+          0,0,0,0
+        );
+
+        const akhir=
+          new Date(awal);
+
+        akhir.setDate(
+          akhir.getDate()+6
+        );
+
+        akhir.setHours(
+          23,59,59,999
+        );
+
+        return (
+          t>=awal &&
+          t<=akhir
+        );
+
+      }
+
+      if(pilihan==="custom"){
+
+        const mulai=
+          tanggalMulai.value;
+
+        const akhir=
+          tanggalAkhir.value;
+
+        if(!mulai && !akhir){
+          return true;
+        }
+
+        if(
+          mulai &&
+          tanggalTransaksi<mulai
+        ){
+          return false;
+        }
+
+        if(
+          akhir &&
+          tanggalTransaksi>akhir
+        ){
+          return false;
+        }
+
+        return true;
+      }
+
+      return true;
+    }
+
+    function cocokKategori(
+      item,
+      pilihan
+    ){
+
+      if(pilihan==="semua"){
+        return true;
+      }
+
+      const kategori=
+        item.dataset.category||"";
+
+      const components=
+        item.dataset.components||"";
+
+      /* KOMPONEN IURAN */
+
+      if(
+        pilihan==="keamanan" ||
+        pilihan==="sampah" ||
+        pilihan==="kas"
+      ){
+
+        return components
+          .split(",")
+          .includes(pilihan);
+
+      }
+
+      /* KATEGORI BIASA */
+
+      return (
+        kategori===pilihan
+      );
+    }
+
+    window.filterKasWarga=function(){
+
+      const pilihanPeriode=
+        periodeSelect.value;
+
+      const pilihanJenis=
+        jenisSelect.value;
+
+      const pilihanKategori=
+        kategoriSelect.value;
+
+      customBox.style.display=
+        pilihanPeriode==="custom"
+        ? "block"
+        : "none";
+
+      let jumlah=0;
+
+      items.forEach(item=>{
+
+        const cocokJenis=
+          pilihanJenis==="semua" ||
+          item.dataset.type===
+            pilihanJenis;
+
+        const cocokPeriod=
+          cocokTanggal(
+            item.dataset.date,
+            pilihanPeriode
+          );
+
+        const cocokKat=
+          cocokKategori(
+            item,
+            pilihanKategori
+          );
+
+        const tampil=
+          cocokJenis &&
+          cocokPeriod &&
+          cocokKat;
+
+        item.style.display=
+          tampil
+          ? ""
+          : "none";
+
+        if(tampil){
+          jumlah++;
+        }
+
+      });
+
+      const jumlahBox=
+        document.getElementById(
+          "kasJumlahFilter"
+        );
+
+      if(jumlahBox){
+
+        jumlahBox.textContent=
+          "Menampilkan "+
+          jumlah+
+          " transaksi";
+
+      }
+
+    };
+
+    periodeSelect.addEventListener(
+      "change",
+      window.filterKasWarga
+    );
+
+    jenisSelect.addEventListener(
+      "change",
+      window.filterKasWarga
+    );
+
+    kategoriSelect.addEventListener(
+      "change",
+      window.filterKasWarga
+    );
+
+    tanggalMulai.addEventListener(
+      "change",
+      window.filterKasWarga
+    );
+
+    tanggalAkhir.addEventListener(
+      "change",
+      window.filterKasWarga
+    );
+
   }catch(e){
-    alert(e.message || "Gagal mengambil data kas");
+
+    alert(
+      e.message ||
+      "Gagal mengambil data kas"
+    );
+
   }
 }
-
 
 
 async function myData(){
