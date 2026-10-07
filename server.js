@@ -114,62 +114,128 @@ function requireWarga(req, res, next) {
   req.session = session;
   next();
 }
+/* DAFTAR WARGA */
+app.post("/api/register-warga", async (req, res) => {
+  try {
+    const {
+      no_hp,
+      password,
+      nama_lengkap,
+      nik,
+      no_kk,
+      alamat
+    } = req.body;
 
+    if (
+      !no_hp ||
+      !password ||
+      !nama_lengkap ||
+      !nik ||
+      !no_kk ||
+      !alamat
+    ) {
+      return res.status(400).json({
+        ok: false,
+        message: "Semua data wajib diisi"
+      });
+    }
+
+    const existing = await supabaseRequest("warga", {
+      query:
+        `select=id` +
+        `&no_hp=eq.${encodeURIComponent(no_hp)}` +
+        `&limit=1`
+    });
+
+    if (Array.isArray(existing) && existing.length) {
+      return res.status(409).json({
+        ok: false,
+        message: "Nomor HP sudah terdaftar"
+      });
+    }
+
+    const data = await supabaseRequest("warga", {
+      method: "POST",
+      body: {
+        no_hp,
+        password,
+        nama_lengkap,
+        nik,
+        no_kk,
+        alamat,
+        status_warga: "aktif"
+      }
+    });
+
+    return res.json({
+      ok: true,
+      message: "Pendaftaran warga berhasil",
+      user: Array.isArray(data) ? data[0] : data
+    });
+  } catch (error) {
+    console.error("REGISTER WARGA ERROR:", error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "Gagal mendaftarkan warga"
+    });
+  }
+});
 /* LOGIN */
 app.post("/api/login", async (req, res) => {
   try {
     const { username, password, role } = req.body;
 
     if (role === "warga") {
-      if (!username || !password) {
-        return res.status(400).json({
-          ok: false,
-          message: "NIK dan No. KK wajib diisi"
-        });
-      }
+  if (!username || !password) {
+    return res.status(400).json({
+      ok: false,
+      message: "Nomor HP dan password wajib diisi"
+    });
+  }
 
-      const data = await supabaseRequest("warga", {
-        query:
-          `select=id,nik,no_kk,nama_lengkap,alamat,no_hp,status_warga` +
-          `&nik=eq.${encodeURIComponent(username)}` +
-          `&no_kk=eq.${encodeURIComponent(password)}` +
-          `&limit=1`
-      });
+  const data = await supabaseRequest("warga", {
+    query:
+      `select=id,nik,no_kk,nama_lengkap,alamat,no_hp,status_warga` +
+      `&no_hp=eq.${encodeURIComponent(username)}` +
+      `&password=eq.${encodeURIComponent(password)}` +
+      `&limit=1`
+  });
 
-      if (!Array.isArray(data) || !data.length) {
-        return res.status(401).json({
-          ok: false,
-          message: "NIK atau No. KK salah"
-        });
-      }
+  if (!Array.isArray(data) || !data.length) {
+    return res.status(401).json({
+      ok: false,
+      message: "Nomor HP atau password salah"
+    });
+  }
 
-      const warga = data[0];
-      const token = crypto.randomBytes(32).toString("hex");
+  const warga = data[0];
+  const token = crypto.randomBytes(32).toString("hex");
 
-      sessions.set(token, {
-        id: warga.id,
-        wargaId: warga.id,
-        username: warga.nik,
-        role: "warga",
-        nama: warga.nama_lengkap,
-        createdAt: Date.now()
-      });
+  sessions.set(token, {
+    id: warga.id,
+    wargaId: warga.id,
+    username: warga.no_hp,
+    role: "warga",
+    nama: warga.nama_lengkap,
+    createdAt: Date.now()
+  });
 
-      res.setHeader(
-        "Set-Cookie",
-        `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
-      );
+  res.setHeader(
+    "Set-Cookie",
+    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
+  );
 
-      return res.json({
-        ok: true,
-        user: {
-          id: warga.id,
-          username: warga.nik,
-          nama: warga.nama_lengkap,
-          role: "warga"
-        }
-      });
+  return res.json({
+    ok: true,
+    user: {
+      id: warga.id,
+      username: warga.no_hp,
+      nama: warga.nama_lengkap,
+      role: "warga"
     }
+  });
+}
 
     if (
       username !== ADMIN_USER ||
