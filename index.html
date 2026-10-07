@@ -847,83 +847,204 @@ async function bayarIuran(){
   }
   }
     async function kasWarga(){
+  layout("Kas RT",`
+    <div class="card">
+      <h2>💰 Transparansi Kas RT</h2>
+      <div class="muted">Taman Bali Kahuripan</div>
+    </div>
+
+    <div class="card">
+      <h3>📊 Ringkasan</h3>
+      <div id="kasRingkasan">Memuat...</div>
+    </div>
+
+    <div class="card">
+      <h3>📋 Rekap Kategori</h3>
+      <div id="kasKategori">Memuat...</div>
+    </div>
+
+    <div class="card">
+      <h3>📜 Riwayat Transaksi</h3>
+      <div id="kasRiwayat">Memuat...</div>
+    </div>
+  `);
+
   try{
-    const data=await api("/api/cash-warga");
+    const data = await api("/api/cash-warga");
+    const rows = Array.isArray(data) ? data : [];
 
-    let masuk=0;
-    let keluar=0;
+    let masuk = 0;
+    let keluar = 0;
 
-    if(Array.isArray(data)){
-      data.forEach(x=>{
-        const jumlah=Number(x.amount)||0;
+    const kategori = {};
 
-        if(x.type==="keluar"){
-          keluar+=jumlah;
-        }else{
-          masuk+=jumlah;
-        }
-      });
-    }
+    rows.forEach(x=>{
+      const jumlah = Number(x.amount) || 0;
 
-    const saldo=masuk-keluar;
+      if(x.type === "keluar"){
+        keluar += jumlah;
+      }else{
+        masuk += jumlah;
+      }
 
-    let html=`
-      <div class="card">
-        <h2>💰 Kas RT</h2>
-        <p class="muted">
-          Transparansi kas warga Taman Bali Kahuripan
-        </p>
+      const kat = x.kategori || "Lainnya";
+
+      if(!kategori[kat]){
+        kategori[kat] = {
+          masuk:0,
+          keluar:0
+        };
+      }
+
+      if(x.type === "keluar"){
+        kategori[kat].keluar += jumlah;
+      }else{
+        kategori[kat].masuk += jumlah;
+      }
+    });
+
+    const saldo = masuk - keluar;
+
+    document.getElementById("kasRingkasan").innerHTML = `
+      <div class="row">
+        <b>Saldo Awal</b>
+        <span>Rp0</span>
       </div>
 
-      <div class="card">
-        <div class="row">
-          <b>💵 Total Kas Masuk</b>
-          <span class="badge">${rupiah(masuk)}</span>
-        </div>
-
-        <div class="row">
-          <b>💸 Total Kas Keluar</b>
-          <span class="badge">${rupiah(keluar)}</span>
-        </div>
-
-        <div class="row">
-          <b>💰 Saldo Kas</b>
-          <span class="badge">${rupiah(saldo)}</span>
-        </div>
+      <div class="row">
+        <b>💵 Total Pemasukan</b>
+        <span>${rupiah(masuk)}</span>
       </div>
 
-      <div class="card">
-        <h3>📋 Riwayat Kas</h3>
+      <div class="row">
+        <b>💸 Total Pengeluaran</b>
+        <span>${rupiah(keluar)}</span>
+      </div>
+
+      <div class="row">
+        <b>💰 Saldo Akhir</b>
+        <span>${rupiah(saldo)}</span>
+      </div>
     `;
 
-    if(!Array.isArray(data) || data.length===0){
-      html+=`<p class="muted">Belum ada transaksi kas.</p>`;
-    }else{
-      data.forEach(x=>{
-        html+=`
+    const kategoriNama = [
+      "Keamanan",
+      "Sampah",
+      "Kas RT",
+      "Iuran Warga",
+      "Pemasukan Lainnya",
+      "Pengeluaran",
+      "Kegiatan RT",
+      "Sarana/Prasarana",
+      "Lainnya"
+    ];
+
+    document.getElementById("kasKategori").innerHTML =
+      kategoriNama.map(nama=>{
+        const item = kategori[nama] || {
+          masuk:0,
+          keluar:0
+        };
+
+        return `
           <div class="row">
-            <b>${x.type==="keluar"?"💸 Pengeluaran":"💵 Pemasukan"}</b>
-            <span class="badge">${rupiah(x.amount||0)}</span>
-            <div>${esc(x.description||"-")}</div>
+            <b>${esc(nama)}</b>
+            <span>
+              ${item.masuk ? "Masuk " + rupiah(item.masuk) : ""}
+              ${item.keluar ? "Keluar " + rupiah(item.keluar) : ""}
+              ${!item.masuk && !item.keluar ? "Rp0" : ""}
+            </span>
           </div>
         `;
-      });
+      }).join("");
+
+    if(!rows.length){
+      document.getElementById("kasRiwayat").innerHTML =
+        "<p class='muted'>Belum ada transaksi.</p>";
+      return;
     }
 
-    html+=`
-      </div>
+    document.getElementById("kasRiwayat").innerHTML =
+      rows.map((x,index)=>{
+        const waktu = x.waktu
+          ? new Date(x.waktu).toLocaleString("id-ID")
+          : "";
 
-      
-    `;
+        return `
+          <div class="row">
+            <b>${index + 1}. ${
+              x.type === "keluar"
+                ? "💸 Pengeluaran"
+                : "💵 Pemasukan"
+            }</b>
 
-    layout("Kas RT",html);
+            <span class="badge">
+              ${rupiah(x.amount)}
+            </span>
+
+            <div>
+              <b>Kategori:</b>
+              ${esc(x.kategori || "Lainnya")}
+            </div>
+
+            ${
+              x.nama_warga
+                ? `<div><b>Warga:</b> ${esc(x.nama_warga)}</div>`
+                : ""
+            }
+
+            ${
+              x.periode
+                ? `<div><b>Periode:</b> ${esc(x.periode)}</div>`
+                : ""
+            }
+
+            ${
+              x.total_iuran
+                ? `<div><b>Total Iuran:</b> ${rupiah(x.total_iuran)}</div>`
+                : ""
+            }
+
+            ${
+              x.status_iuran
+                ? `<div><b>Status:</b> ${esc(x.status_iuran)}</div>`
+                : ""
+            }
+
+            ${
+              x.diverifikasi_oleh
+                ? `<div><b>Diverifikasi oleh:</b> ${esc(x.diverifikasi_oleh)}</div>`
+                : ""
+            }
+
+            ${
+              x.diverifikasi_at
+                ? `<div><b>Waktu verifikasi:</b> ${new Date(x.diverifikasi_at).toLocaleString("id-ID")}</div>`
+                : ""
+            }
+
+            <div><b>Tanggal:</b> ${esc(x.tanggal || "")}</div>
+
+            ${
+              waktu
+                ? `<div><b>Waktu:</b> ${esc(waktu)}</div>`
+                : ""
+            }
+
+            <div><b>Keterangan:</b> ${esc(x.description || "")}</div>
+          </div>
+        `;
+      }).join("");
 
   }catch(e){
-    alert(e.message || "Gagal mengambil data kas");
+    document.getElementById("kasRingkasan").innerHTML =
+      `<div class="error">${esc(e.message)}</div>`;
+
+    document.getElementById("kasKategori").innerHTML = "";
+
+    document.getElementById("kasRiwayat").innerHTML = "";
   }
 }
-
-
 
 async function myData(){
   layout("Data Saya",`
