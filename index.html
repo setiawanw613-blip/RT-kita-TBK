@@ -84,7 +84,7 @@ function rupiah(value){
   return "Rp "+Number(value||0).toLocaleString("id-ID");
 }
 
-function layout(title,body){
+function layout(title,body,showBack=true){
   document.getElementById("app").innerHTML=`
     <div class="wrap">
       <div class="top">
