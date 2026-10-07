@@ -94,14 +94,12 @@ function layout(title,body){
         </div>
         <button class="btn secondary" onclick="logout()">Keluar</button>
       </div>
-
-      <div style="display:flex;gap:8px;margin-bottom:10px">
-        <button class="btn secondary" onclick="dashboard()">
-          ← Kembali ke Dashboard
-        </button>
-      </div>
-
-      ${body}
+${body}
+<div style="display:flex;gap:8px;margin-top:12px">
+  <button class="btn secondary" onclick="dashboard()">
+    ← Kembali ke Dashboard
+  </button>
+</div>
     </div>`;
 }
   function dashboard(){
