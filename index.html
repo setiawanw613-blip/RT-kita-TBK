@@ -1501,8 +1501,7 @@ function newLetter(){
 async function editMyData(){
   try{
     const w=await api("/api/my-data");
-    alert(JSON.stringify(w));
-
+    
     if(!w){
       alert("Data warga tidak ditemukan");
       return;
@@ -1563,9 +1562,7 @@ async function editMyData(){
 
       </div>
     `);
-
-    /* ISI NILAI SETELAH FORM DIBUAT */
-    document.getElementById("editJenisKelamin").value =
+        document.getElementById("editJenisKelamin").value =
       w.jenis_kelamin || "";
 
     document.getElementById("editTempatLahir").value =
@@ -1588,6 +1585,8 @@ async function editMyData(){
 
     document.getElementById("editPekerjaan").value =
       w.pekerjaan || "";
+
+    
 
   }catch(e){
     alert(e.message || "Gagal memuat data warga");
