@@ -541,15 +541,16 @@ app.get("/api/my-data", requireWarga, async (req, res) => {
 app.patch("/api/my-data", requireWarga, async (req, res) => {
   try {
     const {
-      jenis_kelamin,
-      tempat_lahir,
-      tanggal_lahir,
-      alamat,
-      rt,
-      rw,
-      status_perkawinan,
-      pekerjaan
-    } = req.body;
+  jenis_kelamin,
+  tempat_lahir,
+  tanggal_lahir,
+  alamat,
+  rt,
+  rw,
+  status_perkawinan,
+  pekerjaan,
+  status_hunian
+} = req.body;
 
     const data = await supabaseRequest("warga", {
       method: "PATCH",
@@ -563,7 +564,8 @@ app.patch("/api/my-data", requireWarga, async (req, res) => {
         rt: rt || "04",
         rw: rw || "01",
         status_perkawinan: status_perkawinan || null,
-        pekerjaan: pekerjaan || null
+pekerjaan: pekerjaan || null,
+status_hunian: status_hunian || null
       }
     });
 
