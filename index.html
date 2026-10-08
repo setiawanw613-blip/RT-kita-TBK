@@ -1513,46 +1513,41 @@ async function editMyData(){
         <label>Jenis Kelamin</label>
         <select id="editJenisKelamin">
           <option value="">-- Pilih --</option>
-          <option value="Laki-laki" ${w.jenis_kelamin==="Laki-laki"?"selected":""}>Laki-laki</option>
-          <option value="Perempuan" ${w.jenis_kelamin==="Perempuan"?"selected":""}>Perempuan</option>
+          <option value="Laki-laki">Laki-laki</option>
+          <option value="Perempuan">Perempuan</option>
         </select>
 
         <label>Tempat Lahir</label>
         <input id="editTempatLahir"
-          value="${esc(w.tempat_lahir||"")}"
           placeholder="Masukkan tempat lahir">
 
         <label>Tanggal Lahir</label>
         <input id="editTanggalLahir"
-          type="date"
-          value="${esc(w.tanggal_lahir||"")}">
+          type="date">
 
         <label>Alamat</label>
         <textarea id="editAlamat"
-          placeholder="Masukkan alamat tempat tinggal">${esc(w.alamat||"")}</textarea>
+          placeholder="Masukkan alamat tempat tinggal"></textarea>
 
         <label>RT</label>
         <input id="editRt"
-          value="${esc(w.rt||"04")}"
           inputmode="numeric">
 
         <label>RW</label>
         <input id="editRw"
-          value="${esc(w.rw||"01")}"
           inputmode="numeric">
 
         <label>Status Perkawinan</label>
         <select id="editStatusPerkawinan">
           <option value="">-- Pilih --</option>
-          <option value="Belum Kawin" ${w.status_perkawinan==="Belum Kawin"?"selected":""}>Belum Kawin</option>
-          <option value="Kawin" ${w.status_perkawinan==="Kawin"?"selected":""}>Kawin</option>
-          <option value="Cerai Hidup" ${w.status_perkawinan==="Cerai Hidup"?"selected":""}>Cerai Hidup</option>
-          <option value="Cerai Mati" ${w.status_perkawinan==="Cerai Mati"?"selected":""}>Cerai Mati</option>
+          <option value="Belum Kawin">Belum Kawin</option>
+          <option value="Kawin">Kawin</option>
+          <option value="Cerai Hidup">Cerai Hidup</option>
+          <option value="Cerai Mati">Cerai Mati</option>
         </select>
 
         <label>Pekerjaan</label>
         <input id="editPekerjaan"
-          value="${esc(w.pekerjaan||"")}"
           placeholder="Masukkan pekerjaan">
 
         <button class="btn" style="width:100%;margin-top:16px"
@@ -1567,6 +1562,31 @@ async function editMyData(){
 
       </div>
     `);
+
+    /* ISI NILAI SETELAH FORM DIBUAT */
+    document.getElementById("editJenisKelamin").value =
+      w.jenis_kelamin || "";
+
+    document.getElementById("editTempatLahir").value =
+      w.tempat_lahir || "";
+
+    document.getElementById("editTanggalLahir").value =
+      w.tanggal_lahir || "";
+
+    document.getElementById("editAlamat").value =
+      w.alamat || "";
+
+    document.getElementById("editRt").value =
+      w.rt || "04";
+
+    document.getElementById("editRw").value =
+      w.rw || "01";
+
+    document.getElementById("editStatusPerkawinan").value =
+      w.status_perkawinan || "";
+
+    document.getElementById("editPekerjaan").value =
+      w.pekerjaan || "";
 
   }catch(e){
     alert(e.message || "Gagal memuat data warga");
