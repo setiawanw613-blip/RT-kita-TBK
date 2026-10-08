@@ -382,7 +382,10 @@ async function residents(){
     }
 
     box.innerHTML=data.map(w=>`
-      <div class="row">
+      <div class="row"
+        style="cursor:pointer"
+        onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+
         <b>${esc(w.nama_lengkap||w.nama)}</b>
         <div class="muted">NIK: ${esc(w.nik)}</div>
         <div class="muted">No. KK: ${esc(w.no_kk)}</div>
@@ -395,7 +398,74 @@ async function residents(){
       `<div class="error">${esc(e.message)}</div>`;
   }
 }
+  
+function showResidentDetail(w){
+  layout("Detail Data Warga",`
+    <div class="card">
+      <h2>${esc(w.nama_lengkap||w.nama)}</h2>
 
+      <div class="row">
+        <b>NIK</b><br>
+        ${esc(w.nik)}
+      </div>
+
+      <div class="row">
+        <b>No. KK</b><br>
+        ${esc(w.no_kk)}
+      </div>
+
+      <div class="row">
+        <b>Jenis Kelamin</b><br>
+        ${esc(w.jenis_kelamin)}
+      </div>
+
+      <div class="row">
+        <b>Tempat/Tanggal Lahir</b><br>
+        ${esc(w.tempat_lahir)} / ${esc(w.tanggal_lahir)}
+      </div>
+
+      <div class="row">
+        <b>Alamat</b><br>
+        ${esc(w.alamat)}
+      </div>
+
+      <div class="row">
+        <b>RT/RW</b><br>
+        ${esc(w.rt)} / ${esc(w.rw)}
+      </div>
+
+      <div class="row">
+        <b>Status Perkawinan</b><br>
+        ${esc(w.status_perkawinan)}
+      </div>
+
+      <div class="row">
+        <b>Pekerjaan</b><br>
+        ${esc(w.pekerjaan)}
+      </div>
+
+      <div class="row">
+        <b>Status Hunian</b><br>
+        ${esc(w.status_hunian)}
+      </div>
+
+      <div class="row">
+        <b>No. HP</b><br>
+        ${esc(w.no_hp)}
+      </div>
+
+      <div class="row">
+        <b>Status Warga</b><br>
+        ${esc(w.status_warga)}
+      </div>
+    </div>
+
+    <button class="btn secondary"
+      onclick="residents()">
+      ← Kembali ke Data Warga
+    </button>
+  `);
+}
 function exportResidents(){
   window.location.href="/api/residents/export";
 }
