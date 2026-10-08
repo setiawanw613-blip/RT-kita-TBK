@@ -1411,18 +1411,24 @@ async function myData(){
     }
 
     box.innerHTML=`
-      <h3>${esc(w.nama_lengkap)}</h3>
-      <div class="row"><b>NIK</b><br>${esc(w.nik)}</div>
-      <div class="row"><b>No. KK</b><br>${esc(w.no_kk)}</div>
-      <div class="row"><b>Jenis Kelamin</b><br>${esc(w.jenis_kelamin)}</div>
-      <div class="row"><b>Tempat/Tanggal Lahir</b><br>${esc(w.tempat_lahir)} / ${esc(w.tanggal_lahir)}</div>
-      <div class="row"><b>Alamat</b><br>${esc(w.alamat)}</div>
-      <div class="row"><b>RT/RW</b><br>${esc(w.rt)} / ${esc(w.rw)}</div>
-      <div class="row"><b>Status Perkawinan</b><br>${esc(w.status_perkawinan)}</div>
-      <div class="row"><b>Pekerjaan</b><br>${esc(w.pekerjaan)}</div>
-      <div class="row"><b>No. HP</b><br>${esc(w.no_hp)}</div>
-      <div class="row"><b>Status Warga</b><br>${esc(w.status_warga)}</div>
-    `;
+  <h3>${esc(w.nama_lengkap)}</h3>
+  <div class="row"><b>NIK</b><br>${esc(w.nik)}</div>
+  <div class="row"><b>No. KK</b><br>${esc(w.no_kk)}</div>
+  <div class="row"><b>Jenis Kelamin</b><br>${esc(w.jenis_kelamin)}</div>
+  <div class="row"><b>Tempat/Tanggal Lahir</b><br>${esc(w.tempat_lahir)} / ${esc(w.tanggal_lahir)}</div>
+  <div class="row"><b>Alamat</b><br>${esc(w.alamat)}</div>
+  <div class="row"><b>RT/RW</b><br>${esc(w.rt)} / ${esc(w.rw)}</div>
+  <div class="row"><b>Status Perkawinan</b><br>${esc(w.status_perkawinan)}</div>
+  <div class="row"><b>Pekerjaan</b><br>${esc(w.pekerjaan)}</div>
+  <div class="row"><b>No. HP</b><br>${esc(w.no_hp)}</div>
+  <div class="row"><b>Status Warga</b><br>${esc(w.status_warga)}</div>
+
+  <button class="btn" style="width:100%;margin-top:16px"
+    onclick="editMyData()">
+    ✏️ Lengkapi Data
+  </button>
+`;
+      
   }catch(e){
     document.getElementById("myDataBox").innerHTML=
       `<div class="error">${esc(e.message)}</div>`;
@@ -1456,7 +1462,58 @@ function newLetter(){
     </div>
   `);
 }
+function editMyData(){
+  layout("Lengkapi Data",`
+    <div class="card">
 
+      <label>Jenis Kelamin</label>
+      <select id="editJenisKelamin">
+        <option value="">-- Pilih --</option>
+        <option value="Laki-laki">Laki-laki</option>
+        <option value="Perempuan">Perempuan</option>
+      </select>
+
+      <label>Tempat Lahir</label>
+      <input id="editTempatLahir" placeholder="Masukkan tempat lahir">
+
+      <label>Tanggal Lahir</label>
+      <input id="editTanggalLahir" type="date">
+
+      <label>Alamat</label>
+      <textarea id="editAlamat"
+        placeholder="Masukkan alamat tempat tinggal"></textarea>
+
+      <label>RT</label>
+      <input id="editRt" value="04" inputmode="numeric">
+
+      <label>RW</label>
+      <input id="editRw" value="01" inputmode="numeric">
+
+      <label>Status Perkawinan</label>
+      <select id="editStatusPerkawinan">
+        <option value="">-- Pilih --</option>
+        <option value="Belum Kawin">Belum Kawin</option>
+        <option value="Kawin">Kawin</option>
+        <option value="Cerai Hidup">Cerai Hidup</option>
+        <option value="Cerai Mati">Cerai Mati</option>
+      </select>
+
+      <label>Pekerjaan</label>
+      <input id="editPekerjaan" placeholder="Masukkan pekerjaan">
+
+      <button class="btn" style="width:100%;margin-top:16px"
+        onclick="saveMyData()">
+        💾 Simpan Data
+      </button>
+
+      <button class="btn secondary" style="width:100%;margin-top:10px"
+        onclick="myData()">
+        Kembali
+      </button>
+
+    </div>
+  `);
+}
 async function saveLetter(){
   try{
     await api("/api/letters",{
