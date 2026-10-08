@@ -1498,57 +1498,79 @@ function newLetter(){
     </div>
   `);
 }
-function editMyData(){
-  layout("Lengkapi Data",`
-    <div class="card">
+async function editMyData(){
+  try{
+    const w=await api("/api/my-data");
 
-      <label>Jenis Kelamin</label>
-      <select id="editJenisKelamin">
-        <option value="">-- Pilih --</option>
-        <option value="Laki-laki">Laki-laki</option>
-        <option value="Perempuan">Perempuan</option>
-      </select>
+    if(!w){
+      alert("Data warga tidak ditemukan");
+      return;
+    }
 
-      <label>Tempat Lahir</label>
-      <input id="editTempatLahir" placeholder="Masukkan tempat lahir">
+    layout("Lengkapi Data",`
+      <div class="card">
 
-      <label>Tanggal Lahir</label>
-      <input id="editTanggalLahir" type="date">
+        <label>Jenis Kelamin</label>
+        <select id="editJenisKelamin">
+          <option value="">-- Pilih --</option>
+          <option value="Laki-laki" ${w.jenis_kelamin==="Laki-laki"?"selected":""}>Laki-laki</option>
+          <option value="Perempuan" ${w.jenis_kelamin==="Perempuan"?"selected":""}>Perempuan</option>
+        </select>
 
-      <label>Alamat</label>
-      <textarea id="editAlamat"
-        placeholder="Masukkan alamat tempat tinggal"></textarea>
+        <label>Tempat Lahir</label>
+        <input id="editTempatLahir"
+          value="${esc(w.tempat_lahir||"")}"
+          placeholder="Masukkan tempat lahir">
 
-      <label>RT</label>
-      <input id="editRt" value="04" inputmode="numeric">
+        <label>Tanggal Lahir</label>
+        <input id="editTanggalLahir"
+          type="date"
+          value="${esc(w.tanggal_lahir||"")}">
 
-      <label>RW</label>
-      <input id="editRw" value="01" inputmode="numeric">
+        <label>Alamat</label>
+        <textarea id="editAlamat"
+          placeholder="Masukkan alamat tempat tinggal">${esc(w.alamat||"")}</textarea>
 
-      <label>Status Perkawinan</label>
-      <select id="editStatusPerkawinan">
-        <option value="">-- Pilih --</option>
-        <option value="Belum Kawin">Belum Kawin</option>
-        <option value="Kawin">Kawin</option>
-        <option value="Cerai Hidup">Cerai Hidup</option>
-        <option value="Cerai Mati">Cerai Mati</option>
-      </select>
+        <label>RT</label>
+        <input id="editRt"
+          value="${esc(w.rt||"04")}"
+          inputmode="numeric">
 
-      <label>Pekerjaan</label>
-      <input id="editPekerjaan" placeholder="Masukkan pekerjaan">
+        <label>RW</label>
+        <input id="editRw"
+          value="${esc(w.rw||"01")}"
+          inputmode="numeric">
 
-      <button class="btn" style="width:100%;margin-top:16px"
-        onclick="saveMyData()">
-        💾 Simpan Data
-      </button>
+        <label>Status Perkawinan</label>
+        <select id="editStatusPerkawinan">
+          <option value="">-- Pilih --</option>
+          <option value="Belum Kawin" ${w.status_perkawinan==="Belum Kawin"?"selected":""}>Belum Kawin</option>
+          <option value="Kawin" ${w.status_perkawinan==="Kawin"?"selected":""}>Kawin</option>
+          <option value="Cerai Hidup" ${w.status_perkawinan==="Cerai Hidup"?"selected":""}>Cerai Hidup</option>
+          <option value="Cerai Mati" ${w.status_perkawinan==="Cerai Mati"?"selected":""}>Cerai Mati</option>
+        </select>
 
-      <button class="btn secondary" style="width:100%;margin-top:10px"
-        onclick="myData()">
-        Kembali
-      </button>
+        <label>Pekerjaan</label>
+        <input id="editPekerjaan"
+          value="${esc(w.pekerjaan||"")}"
+          placeholder="Masukkan pekerjaan">
 
-    </div>
-  `);
+        <button class="btn" style="width:100%;margin-top:16px"
+          onclick="saveMyData()">
+          💾 Simpan Data
+        </button>
+
+        <button class="btn secondary" style="width:100%;margin-top:10px"
+          onclick="myData()">
+          Kembali
+        </button>
+
+      </div>
+    `);
+
+  }catch(e){
+    alert(e.message || "Gagal memuat data warga");
+  }
 }
 async function saveLetter(){
   try{
