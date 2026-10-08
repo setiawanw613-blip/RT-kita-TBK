@@ -1501,6 +1501,7 @@ function newLetter(){
 async function editMyData(){
   try{
     const w=await api("/api/my-data");
+    alert(JSON.stringify(w));
 
     if(!w){
       alert("Data warga tidak ditemukan");
