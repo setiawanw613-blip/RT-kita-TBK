@@ -498,7 +498,23 @@ function showResidentDetail(w){
     alert(e.message);
   }
 }
-function exportResidents(){
+async function deactivateResident(id){
+  if(!confirm("Nonaktifkan warga ini?")) return;
+
+  try{
+    await api(`/api/residents/${id}/deactivate`, {
+      method:"PATCH"
+    });
+
+    alert("Warga berhasil dinonaktifkan");
+    residents();
+
+  }catch(e){
+    alert(e.message);
+  }
+}
+
+  function exportResidents(){
   window.location.href="/api/residents/export";
 }
 
