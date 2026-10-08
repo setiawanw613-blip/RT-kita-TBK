@@ -356,7 +356,6 @@ async function adminHome(){
       `<div class="error">Gagal memuat dashboard</div>`;
   }
 }
-
 async function residents(){
   layout("Data Warga",`
     <div class="card">
@@ -391,14 +390,32 @@ async function residents(){
         <div class="muted">No. KK: ${esc(w.no_kk)}</div>
         <div class="muted">${esc(w.alamat)}</div>
         <div class="muted">${esc(w.no_hp)}</div>
+
+        <div class="muted" style="margin-top:6px">
+          Status: ${esc(w.status_warga || "")}
+        </div>
+
+        ${
+          w.status_warga === "menunggu_verifikasi"
+          ? `
+            <button
+              class="btn"
+              style="margin-top:8px"
+              onclick="event.stopPropagation(); verifyResident(${w.id})">
+              ✅ Verifikasi
+            </button>
+          `
+          : ""
+        }
+
       </div>
     `).join("");
+
   }catch(e){
     document.getElementById("residentList").innerHTML=
       `<div class="error">${esc(e.message)}</div>`;
   }
 }
-  
 function showResidentDetail(w){
   layout("Detail Data Warga",`
     <div class="card">
@@ -465,6 +482,21 @@ function showResidentDetail(w){
       ← Kembali ke Data Warga
     </button>
   `);
+}
+  async function verifyResident(id){
+  if(!confirm("Verifikasi warga ini?")) return;
+
+  try{
+    await api(`/api/residents/${id}/verify`, {
+      method:"PATCH"
+    });
+
+    alert("Warga berhasil diverifikasi");
+    residents();
+
+  }catch(e){
+    alert(e.message);
+  }
 }
 function exportResidents(){
   window.location.href="/api/residents/export";
