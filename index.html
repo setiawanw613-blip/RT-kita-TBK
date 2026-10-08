@@ -191,9 +191,18 @@ if(role==="warga"){
         <input id="regNik" inputmode="numeric" placeholder="Masukkan NIK">
 
         <label>No. KK</label>
-        <input id="regKk" inputmode="numeric" placeholder="Masukkan No. KK">
+<input id="regKk" inputmode="numeric" placeholder="Masukkan No. KK">
 
-        <label>Nomor HP</label>
+<label>Hubungan dalam Keluarga</label>
+<select id="regHubungan">
+  <option value="">Pilih hubungan</option>
+  <option value="Kepala Keluarga">Kepala Keluarga</option>
+  <option value="Istri">Istri</option>
+  <option value="Anak">Anak</option>
+  <option value="Anggota Keluarga Lain">Anggota Keluarga Lain</option>
+</select>
+
+<label>Nomor HP</label>
         <input id="regHp" inputmode="tel" placeholder="Masukkan nomor HP">
 
         <label>Password</label>
@@ -219,6 +228,7 @@ if(role==="warga"){
   const nama_lengkap=document.getElementById("regNama").value.trim();
   const nik=document.getElementById("regNik").value.trim();
   const no_kk=document.getElementById("regKk").value.trim();
+    const hubungan_keluarga=document.getElementById("regHubungan").value;
   const no_hp=document.getElementById("regHp").value.trim();
   const password=document.getElementById("regPassword").value.trim();
   const alamat=document.getElementById("regAlamat").value.trim();
@@ -231,14 +241,15 @@ if(role==="warga"){
   try{
     const data=await api("/api/register-warga",{
       method:"POST",
-      body:JSON.stringify({
-        nama_lengkap,
-        nik,
-        no_kk,
-        no_hp,
-        password,
-        alamat
-      })
+     body:JSON.stringify({
+  nama_lengkap,
+  nik,
+  no_kk,
+  hubungan_keluarga,
+  no_hp,
+  password,
+  alamat
+})
     });
 
     alert("Pendaftaran berhasil. Silakan masuk menggunakan nomor HP dan password.");
