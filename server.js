@@ -189,6 +189,19 @@ if (
         message: "Nomor HP sudah terdaftar"
       });
     }
+    const nikExisting = await supabaseRequest("warga", {
+  query:
+    `select=id` +
+    `&nik=eq.${encodeURIComponent(nik)}` +
+    `&limit=1`
+});
+
+if (nik && Array.isArray(nikExisting) && nikExisting.length) {
+  return res.status(409).json({
+    ok: false,
+    message: "NIK sudah terdaftar sebagai warga"
+  });
+}
 const keluargaExisting = await supabaseRequest("keluarga", {
   query:
     `select=id,kepala_keluarga` +
@@ -1204,6 +1217,8 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
         data: existing[0]
       });
     }
+   
+}
 
     const data = await supabaseRequest("iuran_warga", {
       method: "POST",
