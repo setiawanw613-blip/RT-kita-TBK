@@ -395,18 +395,28 @@ async function residents(){
           Status: ${esc(w.status_warga || "")}
         </div>
 
-        ${
-          w.status_warga === "menunggu_verifikasi"
-          ? `
-            <button
-              class="btn"
-              style="margin-top:8px"
-              onclick="event.stopPropagation(); verifyResident(${w.id})">
-              ✅ Verifikasi
-            </button>
-          `
-          : ""
-        }
+      
+         ${
+  w.status_warga === "menunggu_verifikasi"
+  ? `
+    <button
+      class="btn"
+      style="margin-top:8px"
+      onclick="event.stopPropagation(); verifyResident(${w.id})">
+      ✅ Verifikasi
+    </button>
+  `
+  : w.status_warga === "aktif"
+  ? `
+    <button
+      class="btn secondary"
+      style="margin-top:8px"
+      onclick="event.stopPropagation(); deactivateResident(${w.id})">
+      ⛔ Nonaktifkan
+    </button>
+  `
+  : ""
+}
 
       </div>
     `).join("");
