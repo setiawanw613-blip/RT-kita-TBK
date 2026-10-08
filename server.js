@@ -466,6 +466,34 @@ app.patch("/api/residents/:id/verify", requireAdmin, async (req, res) => {
     });
   }
 });
+/* NONAKTIFKAN WARGA - KETUA RT */
+app.patch("/api/residents/:id/deactivate", requireAdmin, async (req, res) => {
+  try {
+    const data = await supabaseRequest("warga", {
+      method: "PATCH",
+      query:
+        `id=eq.${encodeURIComponent(req.params.id)}`,
+      body: {
+        status_warga: "nonaktif"
+      }
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    res.json({
+      ok: true,
+      message: "Warga berhasil dinonaktifkan",
+      data: row
+    });
+  } catch (error) {
+    console.error("DEACTIVATE WARGA ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal menonaktifkan warga"
+    });
+  }
+});
 /* EXPORT DATA WARGA */
 app.get("/api/residents/export", requireAdmin, async (req, res) => {
   try {
