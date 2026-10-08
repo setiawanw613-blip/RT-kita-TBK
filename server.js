@@ -512,11 +512,11 @@ app.post("/api/residents", requireAdmin, async (req, res) => {
 app.get("/api/my-data", requireWarga, async (req, res) => {
   try {
     const data = await supabaseRequest("warga", {
-      query:
-        `select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_warga,created_at` +
-        `&id=eq.${encodeURIComponent(req.session.wargaId)}` +
-        `&limit=1`
-    });
+  query:
+    `select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,status_hunian,no_hp,status_warga,created_at` +
+    `&id=eq.${encodeURIComponent(req.session.wargaId)}` +
+    `&limit=1`
+});
 
     const row = Array.isArray(data) ? data[0] : data;
 
