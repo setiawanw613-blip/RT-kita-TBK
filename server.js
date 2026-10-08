@@ -537,7 +537,53 @@ app.get("/api/my-data", requireWarga, async (req, res) => {
     });
   }
 });
+/* UPDATE DATA SAYA - WARGA */
+app.patch("/api/my-data", requireWarga, async (req, res) => {
+  try {
+    const {
+      jenis_kelamin,
+      tempat_lahir,
+      tanggal_lahir,
+      alamat,
+      rt,
+      rw,
+      status_perkawinan,
+      pekerjaan
+    } = req.body;
 
+    const data = await supabaseRequest("warga", {
+      method: "PATCH",
+      query:
+        `id=eq.${encodeURIComponent(req.session.wargaId)}`,
+      body: {
+        jenis_kelamin: jenis_kelamin || null,
+        tempat_lahir: tempat_lahir || null,
+        tanggal_lahir: tanggal_lahir || null,
+        alamat: alamat || "",
+        rt: rt || "04",
+        rw: rw || "01",
+        status_perkawinan: status_perkawinan || null,
+        pekerjaan: pekerjaan || null
+      }
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    res.json({
+      ok: true,
+      message: "Data warga berhasil diperbarui",
+      data: row
+    });
+
+  } catch (error) {
+    console.error("UPDATE MY DATA ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal menyimpan data warga"
+    });
+  }
+});
 /* KAS - KETUA RT */
 app.get("/api/cash", requireAdmin, async (req, res) => {
   try {
