@@ -261,10 +261,17 @@ if (role === "warga") {
       message: "Nomor HP atau password salah"
     });
   }
-if (warga.status_warga !== "aktif") {
+if (warga.status_warga === "menunggu_verifikasi") {
   return res.status(403).json({
     ok: false,
     message: "Akun Anda masih menunggu verifikasi Ketua RT"
+  });
+}
+
+if (warga.status_warga !== "aktif") {
+  return res.status(403).json({
+    ok: false,
+    message: "Akun Anda sudah dinonaktifkan oleh Ketua RT"
   });
 }
   const token = crypto.randomBytes(32).toString("hex");
