@@ -336,6 +336,7 @@ async function adminHome(){
       <h3>Menu</h3>
       <div class="menu">
         <button onclick="residents()">👥 Data Warga</button>
+        <button onclick="keluargaAdmin()">👨‍👩‍👧 Data Keluarga</button>
         <button onclick="cash()">💰 Kas RT</button>
         <button onclick="letters()">📄 Surat</button>
         <button onclick="complaints()">📢 Pengaduan</button>
@@ -440,6 +441,63 @@ async function residents(){
 
   }catch(e){
     document.getElementById("residentList").innerHTML=
+      `<div class="error">${esc(e.message)}</div>`;
+  }
+}
+  async function keluargaAdmin(){
+  layout("Data Keluarga",`
+    <div class="card" id="keluargaList">Memuat...</div>
+  `);
+
+  try{
+    const data = await api("/api/residents");
+    const box = document.getElementById("keluargaList");
+
+    if(!data.length){
+      box.innerHTML="<p class='muted'>Belum ada data keluarga</p>";
+      return;
+    }
+
+    const keluarga = {};
+
+    data.forEach(w=>{
+      const key = w.keluarga_id || `kk-${w.no_kk || w.id}`;
+
+      if(!keluarga[key]){
+        keluarga[key] = {
+          no_kk: w.no_kk || "-",
+          anggota: []
+        };
+      }
+
+      keluarga[key].anggota.push(w);
+    });
+
+    box.innerHTML = Object.values(keluarga).map(k=>{
+      return `
+        <div class="row">
+          <b>🏠 No. KK: ${esc(k.no_kk)}</b>
+
+          <div class="muted" style="margin-top:8px">
+            Jumlah anggota: ${k.anggota.length}
+          </div>
+
+          <div style="margin-top:10px">
+            ${k.anggota.map(w=>`
+              <div style="padding:8px 0;border-top:1px solid #ddd">
+                <b>${esc(w.nama_lengkap || w.nama)}</b><br>
+                <span class="muted">
+                  ${esc(w.hubungan_keluarga || "Belum diisi")}
+                </span>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+  }catch(e){
+    document.getElementById("keluargaList").innerHTML =
       `<div class="error">${esc(e.message)}</div>`;
   }
 }
