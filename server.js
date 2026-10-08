@@ -438,6 +438,34 @@ app.get("/api/residents", requireAdmin, async (req, res) => {
     });
   }
 });
+/* VERIFIKASI WARGA - KETUA RT */
+app.patch("/api/residents/:id/verify", requireAdmin, async (req, res) => {
+  try {
+    const data = await supabaseRequest("warga", {
+      method: "PATCH",
+      query:
+        `id=eq.${encodeURIComponent(req.params.id)}`,
+      body: {
+        status_warga: "aktif"
+      }
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    res.json({
+      ok: true,
+      message: "Warga berhasil diverifikasi",
+      data: row
+    });
+  } catch (error) {
+    console.error("VERIFY WARGA ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal memverifikasi warga"
+    });
+  }
+});
 /* EXPORT DATA WARGA */
 app.get("/api/residents/export", requireAdmin, async (req, res) => {
   try {
