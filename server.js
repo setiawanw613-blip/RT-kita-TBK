@@ -143,28 +143,38 @@ function requireWarga(req, res, next) {
 /* DAFTAR WARGA */
 app.post("/api/register-warga", async (req, res) => {
   try {
-    const {
-      no_hp,
-      password,
-      nama_lengkap,
-      nik,
-      no_kk,
-      alamat
-    } = req.body;
-
+   const {
+  no_hp,
+  password,
+  nama_lengkap,
+  nik,
+  no_kk,
+  alamat,
+  hubungan_keluarga
+} = req.body;
     if (
-      !no_hp ||
-      !password ||
-      !nama_lengkap ||
-      !nik ||
-      !no_kk ||
-      !alamat
-    ) {
-      return res.status(400).json({
-        ok: false,
-        message: "Semua data wajib diisi"
-      });
-    }
+  !no_hp ||
+  !password ||
+  !nama_lengkap ||
+  !no_kk ||
+  !alamat ||
+  !hubungan_keluarga
+) {
+  return res.status(400).json({
+    ok: false,
+    message: "Semua data wajib diisi"
+  });
+}
+
+if (
+  hubungan_keluarga !== "Anak" &&
+  !nik
+) {
+  return res.status(400).json({
+    ok: false,
+    message: "NIK wajib diisi untuk hubungan ini"
+  });
+}
 
     const existing = await supabaseRequest("warga", {
       query:
@@ -179,18 +189,62 @@ app.post("/api/register-warga", async (req, res) => {
         message: "Nomor HP sudah terdaftar"
       });
     }
+const keluargaExisting = await supabaseRequest("keluarga", {
+  query:
+    `select=id,kepala_keluarga` +
+    `&no_kk=eq.${encodeURIComponent(no_kk)}` +
+    `&limit=1`
+});
 
+let keluarga_id = null;
+
+if (Array.isArray(keluargaExisting) && keluargaExisting.length) {
+  if (hubungan_keluarga === "Kepala Keluarga") {
+    return res.status(400).json({
+      ok: false,
+      message: "No. KK tersebut sudah memiliki Kepala Keluarga"
+    });
+  }
+
+  keluarga_id = keluargaExisting[0].id;
+} else {
+  if (hubungan_keluarga !== "Kepala Keluarga") {
+    return res.status(400).json({
+      ok: false,
+      message: "Untuk No. KK baru, pendaftar pertama harus menjadi Kepala Keluarga"
+    });
+  }
+
+  const keluargaBaru = await supabaseRequest("keluarga", {
+    method: "POST",
+    body: {
+      no_kk,
+      kepala_keluarga: nama_lengkap,
+      alamat,
+      rt: "04",
+      rw: "01"
+    }
+  });
+
+  const keluargaRow = Array.isArray(keluargaBaru)
+    ? keluargaBaru[0]
+    : keluargaBaru;
+
+  keluarga_id = keluargaRow.id;
+}
     const data = await supabaseRequest("warga", {
       method: "POST",
-      body: {
-        no_hp,
-        password: hashPassword(password),
-        nama_lengkap,
-        nik,
-        no_kk,
-        alamat,
-        status_warga: "menunggu_verifikasi"
-      }
+    body: {
+  no_hp,
+  password: hashPassword(password),
+  nama_lengkap,
+  nik,
+  no_kk,
+  alamat,
+  hubungan_keluarga,
+   keluarga_id,
+  status_warga: "menunggu_verifikasi"
+}
     });
 
     return res.json({
