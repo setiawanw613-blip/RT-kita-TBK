@@ -12,6 +12,32 @@ const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+
+  const hash = crypto
+    .scryptSync(password, salt, 64)
+    .toString("hex");
+
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, storedPassword) {
+  if (!storedPassword || !storedPassword.includes(":")) {
+    return false;
+  }
+
+  const [salt, storedHash] = storedPassword.split(":");
+
+  const hash = crypto
+    .scryptSync(password, salt, 64)
+    .toString("hex");
+
+  return crypto.timingSafeEqual(
+    Buffer.from(hash, "hex"),
+    Buffer.from(storedHash, "hex")
+  );
+}
 
 const sessions = new Map();
 const complaintsMemory = [];
@@ -158,7 +184,7 @@ app.post("/api/register-warga", async (req, res) => {
       method: "POST",
       body: {
         no_hp,
-        password,
+        password: hashPassword(password),
         nama_lengkap,
         nik,
         no_kk,
@@ -185,8 +211,7 @@ app.post("/api/register-warga", async (req, res) => {
 app.post("/api/login", async (req, res) => {
   try {
     const { username, password, role } = req.body;
-
-    if (role === "warga") {
+if (role === "warga") {
   if (!username || !password) {
     return res.status(400).json({
       ok: false,
@@ -196,9 +221,8 @@ app.post("/api/login", async (req, res) => {
 
   const data = await supabaseRequest("warga", {
     query:
-      `select=id,nik,no_kk,nama_lengkap,alamat,no_hp,status_warga` +
+      `select=id,nik,no_kk,nama_lengkap,alamat,no_hp,status_warga,password` +
       `&no_hp=eq.${encodeURIComponent(username)}` +
-      `&password=eq.${encodeURIComponent(password)}` +
       `&limit=1`
   });
 
@@ -210,6 +234,34 @@ app.post("/api/login", async (req, res) => {
   }
 
   const warga = data[0];
+  const storedPassword = warga.password;
+
+  let passwordValid = false;
+
+  if (storedPassword && storedPassword.includes(":")) {
+    passwordValid = verifyPassword(password, storedPassword);
+  } else {
+    passwordValid = password === storedPassword;
+
+    if (passwordValid) {
+      await supabaseRequest("warga", {
+        method: "PATCH",
+        query:
+          `id=eq.${encodeURIComponent(warga.id)}`,
+        body: {
+          password: hashPassword(password)
+        }
+      });
+    }
+  }
+
+  if (!passwordValid) {
+    return res.status(401).json({
+      ok: false,
+      message: "Nomor HP atau password salah"
+    });
+  }
+
   const token = crypto.randomBytes(32).toString("hex");
 
   sessions.set(token, {
@@ -236,7 +288,6 @@ app.post("/api/login", async (req, res) => {
     }
   });
 }
-
     if (
       username !== ADMIN_USER ||
       password !== ADMIN_PASSWORD
