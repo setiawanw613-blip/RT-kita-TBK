@@ -233,10 +233,15 @@ if(role==="warga"){
   const password=document.getElementById("regPassword").value.trim();
   const alamat=document.getElementById("regAlamat").value.trim();
 
-  if(!nama_lengkap || !nik || !no_kk || !no_hp || !password || !alamat){
-    alert("Semua data wajib diisi");
-    return;
-  }
+ if(!nama_lengkap || !no_kk || !no_hp || !password || !alamat || !hubungan_keluarga){
+  alert("Semua data wajib diisi");
+  return;
+}
+
+if(hubungan_keluarga !== "Anak" && !nik){
+  alert("NIK wajib diisi untuk hubungan ini");
+  return;
+}
 
   try{
     const data=await api("/api/register-warga",{
