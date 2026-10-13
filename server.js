@@ -88,6 +88,38 @@ async function supabaseRequest(table, options = {}) {
   return data;
 }
 
+
+async function uploadBuktiPengeluaran(fileName, fileBuffer, contentType) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error("Supabase belum terhubung");
+  }
+
+  const safeName = String(fileName).replace(/[^a-zA-Z0-9._-]/g, "_");
+  const path = `${Date.now()}-${safeName}`;
+  const url =
+    `${SUPABASE_URL}/storage/v1/object/bukti-pengeluaran/${path}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      "Content-Type": contentType,
+      "x-upsert": "false"
+    },
+    body: fileBuffer
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    console.error("UPLOAD BUKTI ERROR:", response.status, detail);
+    throw new Error("Gagal mengunggah bukti pengeluaran");
+  }
+
+  return path;
+}
+
+
 function getToken(req) {
   const cookie = req.headers.cookie || "";
   const match = cookie.match(/rt_token=([^;]+)/);
