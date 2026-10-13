@@ -927,12 +927,9 @@ app.get("/api/cash-warga", requireWarga, async (req, res) => {
         }
       }
 
-   
-if (row.jenis === "keluar") {
-  kategori = "Pengeluaran";
-} else {
-  kategori = row.kategori || kategori || "Pemasukan Lainnya";
-}
+
+kategori = row.kategori || kategori || "Pemasukan Lainnya";
+
 
       result.push({
         id: row.id,
