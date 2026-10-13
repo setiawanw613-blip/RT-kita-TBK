@@ -777,7 +777,7 @@ app.get("/api/cash", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("kas_rt", {
       query:
-        "select=id,tanggal,jenis,keterangan,jumlah,created_at&order=created_at.desc"
+     "select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at&order=created_at.desc"
     });
 
     const rows = Array.isArray(data)
@@ -869,7 +869,8 @@ app.get("/api/cash-warga", requireWarga, async (req, res) => {
   try {
     const data = await supabaseRequest("kas_rt", {
       query:
-        "select=id,tanggal,jenis,keterangan,jumlah,created_at&order=created_at.desc"
+
+"select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at&order=created_at.desc"
     });
 
     const rows = Array.isArray(data) ? data : [];
@@ -907,7 +908,8 @@ app.get("/api/cash-warga", requireWarga, async (req, res) => {
           statusIuran = iuran.status || "";
           diverifikasiAt = iuran.diverifikasi_at || "";
           diverifikasiOleh = iuran.diverifikasi_oleh || "";
-          kategori = "Iuran Warga";
+
+          kategori = row.kategori || "Iuran Warga";
 
           if (iuran.warga_id) {
             const wargaData = await supabaseRequest("warga", {
