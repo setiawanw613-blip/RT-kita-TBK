@@ -85,7 +85,10 @@ function rupiah(value){
   return "Rp "+Number(value||0).toLocaleString("id-ID");
 }
 
+
 function layout(title,body,showBack=true){
+  const isWarga = currentUser?.role === "warga";
+
   document.getElementById("app").innerHTML=`
     <div class="wrap">
       <div class="top">
@@ -98,15 +101,16 @@ function layout(title,body,showBack=true){
 
       ${body}
 
-      ${showBack ? `
-  <div style="display:flex;gap:8px;margin-top:12px">
-    <button class="btn secondary" onclick="dashboard()">
-      ← Kembali ke Dashboard
-    </button>
-  </div>
-` : ""}
+      ${showBack && !isWarga ? `
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn secondary" onclick="dashboard()">
+            ← Kembali ke Dashboard
+          </button>
+        </div>
+      ` : ""}
     </div>`;
 }
+
 
 function dashboard(){
   boot();
