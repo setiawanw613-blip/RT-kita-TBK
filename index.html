@@ -1542,28 +1542,62 @@ async function kasWarga(){
         ? new Date(x.diverifikasi_at).toLocaleString("id-ID")
         : "-";
 
-      document.getElementById("kasDetailModal").innerHTML = `
-        <div class="card" style="border:1px solid #cfe0f5">
-          <h3>🔎 Detail Transaksi</h3>
-          <div class="row"><b>Jenis</b><span>${x.type === "keluar" ? "Pengeluaran" : "Pemasukan"}</span></div>
-          <div class="row"><b>Nominal</b><b>${rupiah(x.amount)}</b></div>
-          <div class="row"><b>Kategori</b><span>${esc(x.kategori || "Lainnya")}</span></div>
-          <div class="row"><b>Warga</b><span>${esc(x.nama_warga || "-")}</span></div>
-          <div class="row"><b>Periode</b><span>${esc(x.periode || "-")}</span></div>
-          <div class="row"><b>Total Iuran</b><span>${x.total_iuran ? rupiah(x.total_iuran) : "-"}</span></div>
-          <div class="row"><b>Status</b><span>${esc(x.status_iuran || "-")}</span></div>
-          <div class="row"><b>Tanggal Transaksi</b><span>${esc(x.tanggal || "-")}</span></div>
-          <div class="row"><b>Waktu Transaksi</b><span>${esc(waktu)}</span></div>
-          <div class="row"><b>Diverifikasi oleh</b><span>${esc(x.diverifikasi_oleh || "-")}</span></div>
-          <div class="row"><b>Waktu Verifikasi</b><span>${esc(verifikasi)}</span></div>
-          <div style="margin-top:10px"><b>Keterangan</b><div style="overflow-wrap:anywhere;margin-top:5px">${esc(x.description || "-")}</div></div>
-          <button class="btn" style="width:100%;margin-top:14px" onclick="document.getElementById('kasDetailModal').innerHTML=''">Tutup Detail</button>
+    ```js
+document.getElementById("kasDetailModal").innerHTML = `
+  <div class="card" style="border:1px solid #cfe0f5;padding:18px">
+    <h3 style="margin:0 0 6px;color:#1267c9">🔎 Detail Transaksi</h3>
+    <p style="margin:0 0 16px;color:#64748b;font-size:13px">
+      Rincian transaksi kas RT secara transparan
+    </p>
+
+    <div style="background:#eef5ff;padding:16px;border-radius:12px;margin-bottom:16px">
+      <div style="font-size:13px;color:#64748b">Nominal Transaksi</div>
+      <div style="font-size:26px;font-weight:700;color:#1267c9;margin-top:4px">
+        ${rupiah(x.amount)}
+      </div>
+      <div style="margin-top:8px;font-size:13px">
+        ${x.type === "keluar" ? "💸 Pengeluaran" : "💵 Pemasukan"}
+        · ${esc(x.kategori || "Lainnya")}
+      </div>
+    </div>
+
+    <div style="display:grid;gap:0">
+      ${[
+        ["Warga", x.nama_warga || "-"],
+        ["Periode", x.periode || "-"],
+        ["Total Iuran", x.total_iuran ? rupiah(x.total_iuran) : "-"],
+        ["Status", x.status_iuran || "-"],
+        ["Tanggal Transaksi", x.tanggal || "-"],
+        ["Waktu Transaksi", waktu],
+        ["Diverifikasi oleh", x.diverifikasi_oleh || "-"],
+        ["Waktu Verifikasi", verifikasi]
+      ].map(([label, value]) => `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px solid #e5e7eb">
+          <span style="color:#64748b;font-size:13px;flex:1">${esc(label)}</span>
+          <span style="font-weight:600;text-align:right;overflow-wrap:anywhere;max-width:60%;font-size:13px">${esc(value)}</span>
         </div>
-      `;
-      document.getElementById("kasDetailModal").scrollIntoView({behavior:"smooth",block:"start"});
+      `).join("")}
+    </div>
+
+    <div style="margin-top:16px;background:#f8fafc;padding:12px;border-radius:10px">
+      <div style="font-weight:700;margin-bottom:6px">📝 Keterangan</div>
+      <div style="overflow-wrap:anywhere;color:#475569;font-size:13px;line-height:1.6">
+        ${esc(x.description || "-")}
+      </div>
+    </div>
+
+    <button class="btn" style="width:100%;margin-top:16px"
+      onclick="document.getElementById('kasDetailModal').innerHTML=''">
+      Tutup Detail
+    </button>
+  </div>
+`;
+
+document.getElementById("kasDetailModal").scrollIntoView({behavior:"smooth",block:"start"});
     };
 
   }catch(e){
+
     document.getElementById("kasSaldoBesar").textContent = "Belum tersedia";
     document.getElementById("kasRingkasan").innerHTML =
       `<div class="error">${esc(e.message)}</div>`;
