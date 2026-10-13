@@ -919,6 +919,7 @@ function filterCashAdmin(){
 }
 
 
+
 function renderCashAdmin(rows){
   const box = document.getElementById("cashList");
 
@@ -930,142 +931,205 @@ function renderCashAdmin(rows){
     return;
   }
 
+  const rupiah = jumlah =>
+    "Rp " + Number(jumlah || 0).toLocaleString("id-ID");
+
+  const escapeHTML = value =>
+    String(value ?? "").replace(/[&<>"']/g, char => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    }[char]));
+
+  const isiTransaksi = rows.map(x => {
+    const id = Number(x.id) || 0;
+    const jenis = String(x.type || "").toLowerCase();
+    const keluar = jenis === "keluar";
+    const kategori = getCashCategory(x);
+    const tanggal = x.date || x.tanggal || "-";
+    const keterangan = x.description || x.keterangan || "-";
+    const jumlah = Number(x.amount ?? x.jumlah) || 0;
+
+    const tombolBukti =
+      keluar && x.bukti_path
+        ? `<button class="btn secondary"
+             onclick="lihatBuktiCash(${id})">
+             📎 Lihat Bukti
+           </button>`
+        : keluar
+          ? "<span class='muted'>Bukti tidak tersedia</span>"
+          : "-";
+
+    return `
+      <tr>
+        <td>${escapeHTML(tanggal)}</td>
+        <td>
+          <span style="color:${keluar ? "#dc2626" : "#16a34a"}">
+            ${keluar ? "Pengeluaran" : "Pemasukan"}
+          </span>
+        </td>
+        <td>${escapeHTML(kategori)}</td>
+        <td>${escapeHTML(keterangan)}</td>
+        <td style="text-align:right;white-space:nowrap">
+          ${rupiah(jumlah)}
+        </td>
+        <td>${tombolBukti}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const kartuTransaksi = rows.map(x => {
+    const id = Number(x.id) || 0;
+    const jenis = String(x.type || "").toLowerCase();
+    const keluar = jenis === "keluar";
+    const kategori = getCashCategory(x);
+    const tanggal = x.date || x.tanggal || "-";
+    const keterangan = x.description || x.keterangan || "-";
+    const jumlah = Number(x.amount ?? x.jumlah) || 0;
+
+    const tombolBukti =
+      keluar && x.bukti_path
+        ? `<button class="btn secondary"
+             style="width:100%;margin-top:10px"
+             onclick="lihatBuktiCash(${id})">
+             📎 Lihat Bukti Pengeluaran
+           </button>`
+        : keluar
+          ? "<p class='muted'>Bukti tidak tersedia</p>"
+          : "";
+
+    return `
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;gap:10px">
+          <strong>${escapeHTML(keterangan)}</strong>
+          <strong style="color:${keluar ? "#dc2626" : "#16a34a"};white-space:nowrap">
+            ${keluar ? "-" : "+"}${rupiah(jumlah)}
+          </strong>
+        </div>
+
+        <p class="muted" style="font-size:13px;margin:8px 0">
+          ${escapeHTML(tanggal)}
+        </p>
+
+        <p style="margin:5px 0">
+          ${keluar ? "Pengeluaran" : "Pemasukan"} ·
+          ${escapeHTML(kategori)}
+        </p>
+
+        ${tombolBukti}
+      </div>
+    `;
+  }).join("");
+
   box.innerHTML = `
     <style>
       .cash-admin-table-wrap{
         width:100%;
         overflow-x:auto;
       }
+
       .cash-admin-table{
         width:100%;
         border-collapse:collapse;
-        font-size:13px;
+        min-width:720px;
       }
-      .cash-admin-table th{
-        background:#eff6ff;
-        color:#1e40af;
-        text-align:left;
-        padding:12px 10px;
-        white-space:nowrap;
-      }
+
+      .cash-admin-table th,
       .cash-admin-table td{
-        padding:12px 10px;
+        padding:10px;
         border-bottom:1px solid #e5e7eb;
+        text-align:left;
         vertical-align:top;
       }
-      .cash-admin-table tr:hover td{
+
+      .cash-admin-table th{
         background:#f8fafc;
       }
-      .cash-admin-cards{
+
+      .cash-admin-desktop{
+        display:block;
+      }
+
+      .cash-admin-mobile{
         display:none;
       }
-      .cash-admin-card{
-        border:1px solid #e2e8f0;
-        border-radius:12px;
-        padding:14px;
-        margin-bottom:10px;
-        background:#fff;
-        overflow-wrap:anywhere;
-      }
-      .cash-admin-card-head{
-        display:flex;
-        justify-content:space-between;
-        align-items:flex-start;
-        gap:10px;
-        margin-bottom:12px;
-      }
-      .cash-admin-amount{
-        font-weight:800;
-        color:#1267c9;
-        overflow-wrap:anywhere;
-        text-align:right;
-      }
-      .cash-admin-info{
-        display:grid;
-        gap:8px;
-        font-size:13px;
-      }
-      .cash-admin-info div{
-        overflow-wrap:anywhere;
-      }
-      @media(max-width:640px){
-        .cash-admin-table-wrap{
+
+      @media(max-width:700px){
+        .cash-admin-desktop{
           display:none;
         }
-        .cash-admin-cards{
+
+        .cash-admin-mobile{
           display:block;
         }
       }
     </style>
 
-    <div class="cash-admin-table-wrap">
-      <table class="cash-admin-table">
-        <thead>
-          <tr>
-            <th>No.</th>
-            <th>Jenis</th>
-            <th>Kategori</th>
-            <th>Tanggal</th>
-            <th>Keterangan</th>
-            <th>Nominal</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${rows.map((x,index)=>{
-            const kategori = getCashCategory(x);
-            const keluar = x.type === "keluar";
-
-            return `
-              <tr>
-                <td>${index + 1}</td>
-                <td>${keluar ? "💸 Keluar" : "💵 Masuk"}</td>
-                <td>${esc(kategori)}</td>
-                <td>${esc(x.date || "-")}</td>
-                <td>${esc(x.description || "-")}</td>
-                <td style="font-weight:700;white-space:nowrap;color:${keluar ? "#be123c" : "#166534"}">
-                  ${rupiah(Number(x.amount) || 0)}
-                </td>
-              </tr>
-            `;
-          }).join("")}
-        </tbody>
-      </table>
+    <div class="cash-admin-desktop">
+      <div class="cash-admin-table-wrap">
+        <table class="cash-admin-table">
+          <thead>
+            <tr>
+              <th>Tanggal</th>
+              <th>Jenis</th>
+              <th>Kategori</th>
+              <th>Keterangan</th>
+              <th>Jumlah</th>
+              <th>Bukti</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${isiTransaksi}
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <div class="cash-admin-cards">
-      ${rows.map((x,index)=>{
-        const kategori = getCashCategory(x);
-        const keluar = x.type === "keluar";
-
-        return `
-          <div class="cash-admin-card">
-            <div class="cash-admin-card-head">
-              <div style="font-weight:700">
-                ${index + 1}. ${keluar ? "💸 Pengeluaran" : "💵 Pemasukan"}
-                <div style="font-size:12px;color:#64748b;font-weight:400;margin-top:5px">
-                  ${esc(kategori)}
-                </div>
-              </div>
-              <div class="cash-admin-amount" style="color:${keluar ? "#be123c" : "#166534"}">
-                ${rupiah(Number(x.amount) || 0)}
-              </div>
-            </div>
-
-            <div class="cash-admin-info">
-              <div>
-                <span style="color:#64748b">📅 Tanggal:</span>
-                <b>${esc(x.date || "-")}</b>
-              </div>
-              <div>
-                <span style="color:#64748b">📝 Keterangan:</span>
-                ${esc(x.description || "-")}
-              </div>
-            </div>
-          </div>
-        `;
-      }).join("")}
+    <div class="cash-admin-mobile">
+      ${kartuTransaksi}
     </div>
   `;
+}
+
+  
+async function lihatBuktiCash(id){
+  let tab = null;
+
+  try{
+    if(!id || !Number.isInteger(Number(id))){
+      alert("ID transaksi tidak valid.");
+      return;
+    }
+
+    tab = window.open("about:blank", "_blank");
+
+    const hasil = await api(
+      `/api/cash/proof/${encodeURIComponent(id)}`
+    );
+
+    if(!hasil || !hasil.ok || !hasil.url){
+      throw new Error(
+        hasil?.message || "Bukti pengeluaran tidak ditemukan."
+      );
+    }
+
+    if(tab){
+      tab.location.href = hasil.url;
+    }else{
+      window.location.href = hasil.url;
+    }
+
+  }catch(e){
+    if(tab){
+      tab.close();
+    }
+
+    alert(
+      e.message || "Gagal membuka bukti pengeluaran."
+    );
+  }
 }
 
 
