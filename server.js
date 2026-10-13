@@ -805,26 +805,28 @@ status_hunian: status_hunian || null
   }
 });
 
+
 /* KAS - KETUA RT */
 app.get("/api/cash", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("kas_rt", {
       query:
-        "select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at&order=created_at.desc"
+        "select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at,bukti_path&order=created_at.desc"
     });
 
     const rows = Array.isArray(data)
-  ? data.map(row => ({
-      ...row,
-      description: row.keterangan,
-      date: row.tanggal,
-      type:
-        String(row.jenis || "").toLowerCase().includes("keluar")
-          ? "keluar"
-          : "masuk",
-      amount: row.jumlah
-    }))
-  : [];
+      ? data.map(row => ({
+          ...row,
+          description: row.keterangan,
+          date: row.tanggal,
+          type:
+            String(row.jenis || "").toLowerCase().includes("keluar")
+              ? "keluar"
+              : "masuk",
+          amount: row.jumlah
+        }))
+      : [];
+
     res.json(rows);
   } catch (error) {
     console.error("CASH ERROR:", error);
@@ -924,6 +926,82 @@ app.post(
   }
 );
 
+
+/* LIHAT BUKTI PENGELUARAN - KETUA RT */
+app.get("/api/cash/proof/:id", requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+
+    if (!/^\d+$/.test(id)) {
+      return res.status(400).json({
+        ok: false,
+        message: "ID transaksi tidak valid"
+      });
+    }
+
+    const data = await supabaseRequest("kas_rt", {
+      query:
+        "select=id,bukti_path" +
+        `&id=eq.${encodeURIComponent(id)}&limit=1`
+    });
+
+    const row = Array.isArray(data) ? data[0] : null;
+
+    if (!row || !row.bukti_path) {
+      return res.status(404).json({
+        ok: false,
+        message: "Bukti pengeluaran tidak ditemukan"
+      });
+    }
+
+    const path = String(row.bukti_path);
+
+    if (!/^\d+-bukti\.(jpg|png|webp)$/.test(path)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Lokasi bukti tidak valid"
+      });
+    }
+
+    const response = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/sign/bukti-pengeluaran/${path}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          expiresIn: 300
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.signedURL) {
+      console.error("SIGNED PROOF ERROR:", result);
+
+      return res.status(500).json({
+        ok: false,
+        message: "Gagal membuat tautan bukti"
+      });
+    }
+
+    return res.json({
+      ok: true,
+      url: `${SUPABASE_URL}/storage/v1${result.signedURL}`
+    });
+  } catch (error) {
+    console.error("VIEW PROOF ERROR:", error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "Gagal membuka bukti pengeluaran"
+    });
+  }
+});
 
 
 /* TAMBAH TRANSAKSI KAS - KETUA RT */
