@@ -1137,23 +1137,49 @@ function ubahFormCash(){
   bungkus.style.display = pengeluaran ? "block" : "none";
   bukti.required = pengeluaran;
 }
+
 async function saveCash(){
   try{
+    const type = document.getElementById("cashType").value;
+    const category = document.getElementById("cashCategory").value;
+    const date = document.getElementById("cashDate").value;
+    const description = document.getElementById("cashDesc").value.trim();
+    const amount = document.getElementById("cashAmount").value;
+    const proofInput = document.getElementById("cashProof");
+
+    if(!category || !date || !description || !amount || Number(amount) <= 0){
+      alert("Lengkapi kategori, tanggal, keterangan, dan jumlah.");
+      return;
+    }
+
+    if(type === "keluar" && (!proofInput || !proofInput.files.length)){
+      alert("Bukti pengeluaran wajib dilampirkan.");
+      return;
+    }
+
+    if(type === "keluar"){
+      alert("Form sudah diperiksa, tetapi penyimpanan bukti foto belum selesai. Transaksi belum disimpan.");
+      return;
+    }
+
     await api("/api/cash",{
       method:"POST",
       body:JSON.stringify({
-        type:document.getElementById("cashType").value,
-        description:document.getElementById("cashDesc").value.trim(),
-        amount:document.getElementById("cashAmount").value
+        type,
+        category,
+        date,
+        description,
+        amount
       })
     });
 
+    alert("Transaksi berhasil disimpan.");
     cash();
-    alert("Transaksi berhasil disimpan");
   }catch(e){
-    alert(e.message);
+    alert(e.message || "Gagal menyimpan transaksi.");
   }
 }
+
 
 async function letters(){
   layout("Surat Masuk",`
