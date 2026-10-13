@@ -1405,11 +1405,17 @@ async function bayarIuran(){
     alert(e.message || "Gagal mengambil data iuran");
   }
   }
-    async function kasWarga(){
+  
+async function kasWarga(){
   layout("Kas RT",`
     <div class="card">
-      <h2>💰 Transparansi Kas RT</h2>
       <div class="muted">Taman Bali Kahuripan</div>
+      <h2 style="margin:8px 0">💰 Transparansi Kas RT</h2>
+      <div style="background:linear-gradient(135deg,#1267c9,#0752a5);color:white;padding:20px;border-radius:16px;margin-top:12px">
+        <div>Saldo Kas RT</div>
+        <div id="kasSaldoBesar" style="font-size:clamp(25px,7vw,34px);font-weight:800;margin:6px 0">Memuat...</div>
+        <div style="font-size:13px;opacity:.9">Kas RT untuk kegiatan warga</div>
+      </div>
     </div>
 
     <div class="card">
@@ -1424,8 +1430,11 @@ async function bayarIuran(){
 
     <div class="card">
       <h3>📜 Riwayat Transaksi</h3>
+      <div class="muted" style="margin-bottom:12px">Pilih transaksi untuk melihat detailnya.</div>
       <div id="kasRiwayat">Memuat...</div>
     </div>
+
+    <div id="kasDetailModal"></div>
   `);
 
   try{
@@ -1434,85 +1443,55 @@ async function bayarIuran(){
 
     let masuk = 0;
     let keluar = 0;
-
     const kategori = {};
 
     rows.forEach(x=>{
       const jumlah = Number(x.amount) || 0;
-
-      if(x.type === "keluar"){
-        keluar += jumlah;
-      }else{
-        masuk += jumlah;
-      }
-
       const kat = x.kategori || "Lainnya";
 
-      if(!kategori[kat]){
-        kategori[kat] = {
-          masuk:0,
-          keluar:0
-        };
-      }
+      if(x.type === "keluar") keluar += jumlah;
+      else masuk += jumlah;
 
-      if(x.type === "keluar"){
-        kategori[kat].keluar += jumlah;
-      }else{
-        kategori[kat].masuk += jumlah;
-      }
+      if(!kategori[kat]) kategori[kat] = {masuk:0,keluar:0};
+
+      if(x.type === "keluar") kategori[kat].keluar += jumlah;
+      else kategori[kat].masuk += jumlah;
     });
 
     const saldo = masuk - keluar;
 
+    document.getElementById("kasSaldoBesar").textContent = rupiah(saldo);
+
     document.getElementById("kasRingkasan").innerHTML = `
-      <div class="row">
-        <b>Saldo Awal</b>
-        <span>Rp0</span>
-      </div>
-
-      <div class="row">
-        <b>💵 Total Pemasukan</b>
-        <span>${rupiah(masuk)}</span>
-      </div>
-
-      <div class="row">
-        <b>💸 Total Pengeluaran</b>
-        <span>${rupiah(keluar)}</span>
-      </div>
-
-      <div class="row">
-        <b>💰 Saldo Akhir</b>
-        <span>${rupiah(saldo)}</span>
-      </div>
+      <div class="row"><b>Saldo Awal</b><span>${rupiah(0)}</span></div>
+      <div class="row"><b>💵 Total Pemasukan</b><span style="color:#16834a">${rupiah(masuk)}</span></div>
+      <div class="row"><b>💸 Total Pengeluaran</b><span style="color:#c62828">${rupiah(keluar)}</span></div>
+      <div class="row"><b>💰 Saldo Akhir</b><span style="color:#1267c9;font-weight:800">${rupiah(saldo)}</span></div>
     `;
 
     const kategoriNama = [
-      "Keamanan",
-      "Sampah",
-      "Kas RT",
-      "Iuran Warga",
-      "Pemasukan Lainnya",
-      "Pengeluaran",
-      "Kegiatan RT",
-      "Sarana/Prasarana",
-      "Lainnya"
+      "Keamanan","Sampah","Kas RT","Iuran Warga",
+      "Pemasukan Lainnya","Pengeluaran","Kegiatan RT",
+      "Sarana/Prasarana","Lainnya"
     ];
 
     document.getElementById("kasKategori").innerHTML =
       kategoriNama.map(nama=>{
-        const item = kategori[nama] || {
-          masuk:0,
-          keluar:0
-        };
+        const item = kategori[nama] || {masuk:0,keluar:0};
+        const jumlah = item.masuk - item.keluar;
+        const warna = nama === "Keamanan" ? "#16834a"
+          : nama === "Sampah" ? "#d97706"
+          : nama === "Kas RT" ? "#1267c9" : "#53657d";
 
         return `
-          <div class="row">
-            <b>${esc(nama)}</b>
-            <span>
-              ${item.masuk ? "Masuk " + rupiah(item.masuk) : ""}
-              ${item.keluar ? "Keluar " + rupiah(item.keluar) : ""}
-              ${!item.masuk && !item.keluar ? "Rp0" : ""}
-            </span>
+          <div class="row" style="gap:8px;padding:12px 0">
+            <div style="min-width:0;flex:1">
+              <b>${esc(nama)}</b>
+              <div class="muted" style="font-size:12px">
+                Masuk ${rupiah(item.masuk)} · Keluar ${rupiah(item.keluar)}
+              </div>
+            </div>
+            <b style="color:${warna};white-space:nowrap">${rupiah(jumlah)}</b>
           </div>
         `;
       }).join("");
@@ -1528,82 +1507,71 @@ async function bayarIuran(){
         const waktu = x.waktu
           ? new Date(x.waktu).toLocaleString("id-ID")
           : "";
+        const tanggal = x.tanggal || "";
+        const status = String(x.status_iuran || "").toLowerCase();
+        const lunas = status === "lunas";
 
         return `
-          <div class="row">
-            <b>${index + 1}. ${
-              x.type === "keluar"
-                ? "💸 Pengeluaran"
-                : "💵 Pemasukan"
-            }</b>
-
-            <span class="badge">
-              ${rupiah(x.amount)}
-            </span>
-
-            <div>
-              <b>Kategori:</b>
-              ${esc(x.kategori || "Lainnya")}
+          <button type="button"
+            class="card"
+            style="display:block;width:100%;text-align:left;border:1px solid #e2ecf8;padding:14px;margin-bottom:10px;color:inherit;background:#fff"
+            onclick="detailKasWarga(${index})">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:start">
+              <div style="min-width:0">
+                <b>${index+1}. ${x.type === "keluar" ? "💸 Pengeluaran" : "💵 Pemasukan"}</b>
+                <div class="muted" style="font-size:13px;margin-top:5px">${esc(x.kategori || "Lainnya")}</div>
+              </div>
+              <b style="color:${x.type === "keluar" ? "#c62828" : "#1267c9"};white-space:nowrap">${rupiah(x.amount)}</b>
             </div>
-
-            ${
-              x.nama_warga
-                ? `<div><b>Warga:</b> ${esc(x.nama_warga)}</div>`
-                : ""
-            }
-
-            ${
-              x.periode
-                ? `<div><b>Periode:</b> ${esc(x.periode)}</div>`
-                : ""
-            }
-
-            ${
-              x.total_iuran
-                ? `<div><b>Total Iuran:</b> ${rupiah(x.total_iuran)}</div>`
-                : ""
-            }
-
-            ${
-              x.status_iuran
-                ? `<div><b>Status:</b> ${esc(x.status_iuran)}</div>`
-                : ""
-            }
-
-            ${
-              x.diverifikasi_oleh
-                ? `<div><b>Diverifikasi oleh:</b> ${esc(x.diverifikasi_oleh)}</div>`
-                : ""
-            }
-
-            ${
-              x.diverifikasi_at
-                ? `<div><b>Waktu verifikasi:</b> ${new Date(x.diverifikasi_at).toLocaleString("id-ID")}</div>`
-                : ""
-            }
-
-            <div><b>Tanggal:</b> ${esc(x.tanggal || "")}</div>
-
-            ${
-              waktu
-                ? `<div><b>Waktu:</b> ${esc(waktu)}</div>`
-                : ""
-            }
-
-            <div><b>Keterangan:</b> ${esc(x.description || "")}</div>
-          </div>
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:10px">
+              <span class="muted" style="font-size:12px">${esc(tanggal)}</span>
+              ${status ? `<span class="badge" style="${lunas ? "background:#dcfce7;color:#166534" : ""}">${esc(x.status_iuran)}</span>` : ""}
+            </div>
+            ${x.nama_warga ? `<div style="margin-top:7px;font-size:13px">Warga: ${esc(x.nama_warga)}</div>` : ""}
+            <div style="text-align:right;color:#1267c9;font-size:12px;margin-top:8px">Lihat detail ›</div>
+          </button>
         `;
       }).join("");
 
+    window.detailKasWarga = function(index){
+      const x = rows[index];
+      if(!x) return;
+
+      const waktu = x.waktu ? new Date(x.waktu).toLocaleString("id-ID") : "-";
+      const verifikasi = x.diverifikasi_at
+        ? new Date(x.diverifikasi_at).toLocaleString("id-ID")
+        : "-";
+
+      document.getElementById("kasDetailModal").innerHTML = `
+        <div class="card" style="border:1px solid #cfe0f5">
+          <h3>🔎 Detail Transaksi</h3>
+          <div class="row"><b>Jenis</b><span>${x.type === "keluar" ? "Pengeluaran" : "Pemasukan"}</span></div>
+          <div class="row"><b>Nominal</b><b>${rupiah(x.amount)}</b></div>
+          <div class="row"><b>Kategori</b><span>${esc(x.kategori || "Lainnya")}</span></div>
+          <div class="row"><b>Warga</b><span>${esc(x.nama_warga || "-")}</span></div>
+          <div class="row"><b>Periode</b><span>${esc(x.periode || "-")}</span></div>
+          <div class="row"><b>Total Iuran</b><span>${x.total_iuran ? rupiah(x.total_iuran) : "-"}</span></div>
+          <div class="row"><b>Status</b><span>${esc(x.status_iuran || "-")}</span></div>
+          <div class="row"><b>Tanggal Transaksi</b><span>${esc(x.tanggal || "-")}</span></div>
+          <div class="row"><b>Waktu Transaksi</b><span>${esc(waktu)}</span></div>
+          <div class="row"><b>Diverifikasi oleh</b><span>${esc(x.diverifikasi_oleh || "-")}</span></div>
+          <div class="row"><b>Waktu Verifikasi</b><span>${esc(verifikasi)}</span></div>
+          <div style="margin-top:10px"><b>Keterangan</b><div style="overflow-wrap:anywhere;margin-top:5px">${esc(x.description || "-")}</div></div>
+          <button class="btn" style="width:100%;margin-top:14px" onclick="document.getElementById('kasDetailModal').innerHTML=''">Tutup Detail</button>
+        </div>
+      `;
+      document.getElementById("kasDetailModal").scrollIntoView({behavior:"smooth",block:"start"});
+    };
+
   }catch(e){
+    document.getElementById("kasSaldoBesar").textContent = "Belum tersedia";
     document.getElementById("kasRingkasan").innerHTML =
       `<div class="error">${esc(e.message)}</div>`;
-
     document.getElementById("kasKategori").innerHTML = "";
-
     document.getElementById("kasRiwayat").innerHTML = "";
   }
 }
+
 
 async function myData(){
   layout("Data Saya",`
