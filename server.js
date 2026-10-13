@@ -803,6 +803,79 @@ app.get("/api/cash", requireAdmin, async (req, res) => {
     });
   }
 });
+
+/* TAMBAH TRANSAKSI KAS - KETUA RT */
+app.post("/api/cash", requireAdmin, async (req, res) => {
+  try {
+    const {
+      type,
+      category,
+      date,
+      description,
+      amount,
+      proof
+    } = req.body;
+
+    const jenis = String(type || "").toLowerCase();
+    const kategori = String(category || "").trim();
+    const keterangan = String(description || "").trim();
+    const jumlah = Number(amount);
+
+    if (!["masuk", "keluar"].includes(jenis)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Jenis transaksi tidak valid"
+      });
+    }
+
+    if (!kategori || !keterangan || !date ||
+        !Number.isFinite(jumlah) || jumlah <= 0) {
+      return res.status(400).json({
+        ok: false,
+        message: "Kategori, tanggal, keterangan, dan jumlah wajib diisi"
+      });
+    }
+
+    if (jenis === "keluar" && !proof) {
+      return res.status(400).json({
+        ok: false,
+        message: "Bukti pengeluaran wajib dilampirkan"
+      });
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Tanggal transaksi tidak valid"
+      });
+    }
+
+    const data = await supabaseRequest("kas_rt", {
+      method: "POST",
+      body: {
+        tanggal: date,
+        jenis,
+        kategori,
+        keterangan,
+        jumlah
+      }
+    });
+
+    return res.json({
+      ok: true,
+      message: "Transaksi berhasil disimpan",
+      data: Array.isArray(data) ? data[0] : data
+    });
+  } catch (error) {
+    console.error("ADD CASH ERROR:", error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "Gagal menyimpan transaksi kas"
+    });
+  }
+});
+
 /* EXPORT KAS RT */
 app.get("/api/cash/export", requireAdmin, async (req, res) => {
   try {
