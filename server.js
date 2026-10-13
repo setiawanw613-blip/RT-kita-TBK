@@ -1124,12 +1124,13 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
   }
 });
 
+
 /* EXPORT KAS RT */
 app.get("/api/cash/export", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("kas_rt", {
       query:
-        "select=id,tanggal,jenis,keterangan,jumlah,created_at&order=created_at.desc"
+        "select=id,tanggal,jenis,keterangan,jumlah,kategori,bukti_path,created_at&order=created_at.desc"
     });
 
     const rows = Array.isArray(data) ? data : [];
@@ -1138,8 +1139,10 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
       "No",
       "Tanggal",
       "Jenis",
+      "Kategori",
       "Keterangan",
-      "Jumlah",
+      "Jumlah (Rp)",
+      "Bukti Pengeluaran",
       "Tanggal Dibuat"
     ];
 
@@ -1147,8 +1150,10 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
       index + 1,
       row.tanggal || "",
       row.jenis || "",
+      row.kategori || "",
       row.keterangan || "",
       row.jumlah || 0,
+      row.bukti_path || "",
       row.created_at || ""
     ]);
 
@@ -1158,10 +1163,10 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
     ]
       .map(row =>
         row.map(value =>
-          `"${String(value).replace(/"/g, '""')}"`
+          `"${String(value ?? "").replace(/"/g, '""')}"`
         ).join(",")
       )
-      .join("\n");
+      .join("\r\n");
 
     res.setHeader(
       "Content-Type",
@@ -1184,7 +1189,6 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
     });
   }
 });
-
 
 /* KAS - WARGA - TRANSPARANSI LENGKAP */
 app.get("/api/cash-warga", requireWarga, async (req, res) => {
