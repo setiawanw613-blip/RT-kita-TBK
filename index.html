@@ -1075,28 +1075,68 @@ function exportCash(){
 function addCash(){
   layout("Catat Transaksi Kas",`
     <div class="card">
+      <h3 style="margin-top:0">📝 Catat Transaksi</h3>
+      <p class="muted" style="font-size:13px">
+        Catat pemasukan atau pengeluaran sesuai dana.
+      </p>
+
       <label>Jenis transaksi</label>
-      <select id="cashType">
-        <option value="masuk">Masuk</option>
-        <option value="keluar">Keluar</option>
+      <select id="cashType" onchange="ubahFormCash()">
+        <option value="masuk">💵 Pemasukan</option>
+        <option value="keluar">💸 Pengeluaran</option>
       </select>
 
-      <label>Keterangan</label>
-      <input id="cashDesc">
+      <label style="display:block;margin-top:14px">Kategori dana</label>
+      <select id="cashCategory">
+        <option value="Keamanan">🛡️ Keamanan</option>
+        <option value="Sampah">🗑️ Sampah</option>
+        <option value="Kas RT">🏘️ Kas RT</option>
+        <option value="Kegiatan RT">🎉 Kegiatan RT</option>
+        <option value="Sarana/Prasarana">🏠 Sarana/Prasarana</option>
+        <option value="Pemasukan Lainnya">📥 Pemasukan Lainnya</option>
+      </select>
 
-      <label>Jumlah</label>
-      <input id="cashAmount" type="number" inputmode="numeric">
+      <label style="display:block;margin-top:14px">Tanggal transaksi</label>
+      <input id="cashDate" type="date" value="${new Date().toLocaleDateString('en-CA')}">
 
-      <button class="btn" style="margin-top:16px" onclick="saveCash()">
+      <label style="display:block;margin-top:14px">Keterangan</label>
+      <input id="cashDesc" placeholder="Contoh: bayar perbaikan lampu">
+
+      <label style="display:block;margin-top:14px">Jumlah (Rp)</label>
+      <input id="cashAmount" type="number" min="1" step="1" inputmode="numeric" placeholder="Masukkan nominal">
+
+      <div id="cashProofWrap" style="display:none;margin-top:14px">
+        <label>Bukti pengeluaran (wajib)</label>
+        <input id="cashProof" type="file" accept="image/*">
+        <div class="muted" style="font-size:12px;margin-top:5px">
+          Lampirkan foto kuitansi atau bukti transfer.
+        </div>
+      </div>
+
+      <button class="btn" style="width:100%;margin-top:18px" onclick="saveCash()">
         Simpan transaksi
       </button>
-      <button class="btn secondary" style="margin-top:8px" onclick="cash()">
+
+      <button class="btn secondary" style="width:100%;margin-top:8px" onclick="cash()">
         Kembali
       </button>
     </div>
   `);
+
+  ubahFormCash();
 }
 
+function ubahFormCash(){
+  const jenis = document.getElementById("cashType");
+  const bungkus = document.getElementById("cashProofWrap");
+  const bukti = document.getElementById("cashProof");
+
+  if(!jenis || !bungkus || !bukti) return;
+
+  const pengeluaran = jenis.value === "keluar";
+  bungkus.style.display = pengeluaran ? "block" : "none";
+  bukti.required = pengeluaran;
+}
 async function saveCash(){
   try{
     await api("/api/cash",{
