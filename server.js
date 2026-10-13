@@ -772,12 +772,13 @@ status_hunian: status_hunian || null
     });
   }
 });
+
 /* KAS - KETUA RT */
 app.get("/api/cash", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("kas_rt", {
       query:
-     "select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at&order=created_at.desc"
+        "select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at&order=created_at.desc"
     });
 
     const rows = Array.isArray(data)
@@ -869,11 +870,11 @@ app.get("/api/cash-warga", requireWarga, async (req, res) => {
   try {
     const data = await supabaseRequest("kas_rt", {
       query:
-
-"select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at&order=created_at.desc"
+        "select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at&order=tanggal.desc,created_at.desc"
     });
 
     const rows = Array.isArray(data) ? data : [];
+
 
     const result = [];
 
