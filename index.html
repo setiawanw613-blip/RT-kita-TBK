@@ -1611,32 +1611,36 @@ async function kasWarga(){
       <div class="row"><b>💰 Saldo Akhir</b><span style="color:#1267c9;font-weight:800">${rupiah(saldo)}</span></div>
     `;
 
-    const kategoriNama = [
-      "Keamanan","Sampah","Kas RT","Iuran Warga",
-      "Pemasukan Lainnya","Pengeluaran","Kegiatan RT",
-      "Sarana/Prasarana","Lainnya"
-    ];
+   
+const kategoriUtama = [
+  {nama:"Keamanan", ikon:"🛡️", warna:"#16834a", latar:"#eaf8ef"},
+  {nama:"Sampah", ikon:"🗑️", warna:"#d97706", latar:"#fff5e6"},
+  {nama:"Kas RT", ikon:"🏘️", warna:"#1267c9", latar:"#eaf2ff"}
+];
 
-    document.getElementById("kasKategori").innerHTML =
-      kategoriNama.map(nama=>{
-        const item = kategori[nama] || {masuk:0,keluar:0};
-        const jumlah = item.masuk - item.keluar;
-        const warna = nama === "Keamanan" ? "#16834a"
-          : nama === "Sampah" ? "#d97706"
-          : nama === "Kas RT" ? "#1267c9" : "#53657d";
+document.getElementById("kasKategori").innerHTML =
+  kategoriUtama.map(itemKategori=>{
+    const item = kategori[itemKategori.nama] || {masuk:0,keluar:0};
+    const saldoKategori = item.masuk - item.keluar;
 
-        return `
-          <div class="row" style="gap:8px;padding:12px 0">
-            <div style="min-width:0;flex:1">
-              <b>${esc(nama)}</b>
-              <div class="muted" style="font-size:12px">
-                Masuk ${rupiah(item.masuk)} · Keluar ${rupiah(item.keluar)}
-              </div>
+    return `
+      <div class="card"
+        style="padding:16px;border:1px solid #e2eaf5;border-radius:16px;margin-bottom:12px;background:${itemKategori.latar}">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="font-size:28px">${itemKategori.ikon}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700">${itemKategori.nama}</div>
+            <div style="font-size:12px;color:#64748b;margin-top:4px">
+              Masuk ${rupiah(item.masuk)} · Keluar ${rupiah(item.keluar)}
             </div>
-            <b style="color:${warna};white-space:nowrap">${rupiah(jumlah)}</b>
           </div>
-        `;
-      }).join("");
+          <div style="font-size:15px;font-weight:800;color:${itemKategori.warna};white-space:nowrap">
+            ${rupiah(saldoKategori)}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
 
     if(!rows.length){
       document.getElementById("kasRiwayat").innerHTML =
