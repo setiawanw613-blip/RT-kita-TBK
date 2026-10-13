@@ -1548,7 +1548,7 @@ async function kasWarga(){
         : "-";
 
 document.getElementById("kasDetailModal").innerHTML = `
-  <div class="card" style="border:1px solid #cfe0f5;padding:18px">
+ <div class="card" style="border:1px solid #cfe0f5;padding:clamp(12px,3.5vw,20px);border-radius:16px;width:100%;max-width:100%;box-sizing:border-box;overflow-wrap:anywhere">
     <h3 style="margin:0 0 6px;color:#1267c9">🔎 Detail Transaksi</h3>
     <p style="margin:0 0 16px;color:#64748b;font-size:13px">
       Rincian transaksi kas RT secara transparan
@@ -1556,7 +1556,7 @@ document.getElementById("kasDetailModal").innerHTML = `
 
     <div style="background:#eef5ff;padding:16px;border-radius:12px;margin-bottom:16px">
       <div style="font-size:13px;color:#64748b">Nominal Transaksi</div>
-      <div style="font-size:26px;font-weight:700;color:#1267c9;margin-top:4px">
+      <div style="font-size:clamp(22px,5vw,28px);font-weight:700;color:#1267c9;margin-top:4px;overflow-wrap:anywhere">
         ${rupiah(x.amount)}
       </div>
       <div style="margin-top:8px;font-size:13px">
@@ -1576,7 +1576,7 @@ document.getElementById("kasDetailModal").innerHTML = `
         ["Diverifikasi oleh", x.diverifikasi_oleh || "-"],
         ["Waktu Verifikasi", verifikasi]
       ].map(([label, value]) => `
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:11px 0;border-bottom:1px solid #e5e7eb">
+       <div style="display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:6px 12px;padding:12px 0;border-bottom:1px solid #e5e7eb">
           <span style="color:#64748b;font-size:13px;flex:1">${esc(label)}</span>
           <span style="font-weight:600;text-align:right;overflow-wrap:anywhere;max-width:60%;font-size:13px">${esc(value)}</span>
         </div>
@@ -1590,7 +1590,7 @@ document.getElementById("kasDetailModal").innerHTML = `
       </div>
     </div>
 
-    <button class="btn" style="width:100%;margin-top:16px"
+   <button class="btn" style="width:100%;margin-top:16px;min-height:46px;font-size:15px;border-radius:12px"
       onclick="document.getElementById('kasDetailModal').innerHTML=''">
       Tutup Detail
     </button>
