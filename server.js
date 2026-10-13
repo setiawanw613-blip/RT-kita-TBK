@@ -836,6 +836,96 @@ app.get("/api/cash", requireAdmin, async (req, res) => {
   }
 });
 
+/* UPLOAD BUKTI PENGELUARAN - KETUA RT */
+app.post(
+  "/api/cash/proof",
+  requireAdmin,
+  express.raw({
+    type: ["image/jpeg", "image/png", "image/webp"],
+    limit: "5mb"
+  }),
+  async (req, res) => {
+    try {
+      const contentType = String(req.headers["content-type"] || "")
+        .split(";")[0]
+        .trim()
+        .toLowerCase();
+
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+      ];
+
+      if (!allowedTypes.includes(contentType)) {
+        return res.status(400).json({
+          ok: false,
+          message: "Format bukti harus JPG, PNG, atau WebP"
+        });
+      }
+
+      if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({
+          ok: false,
+          message: "File bukti belum diterima"
+        });
+      }
+
+      const signatures = {
+        "image/jpeg": [0xff, 0xd8, 0xff],
+        "image/png": [0x89, 0x50, 0x4e, 0x47],
+        "image/webp": [0x52, 0x49, 0x46, 0x46]
+      };
+
+      const signature = signatures[contentType];
+
+      if (!signature.every((byte, index) => req.body[index] === byte)) {
+        return res.status(400).json({
+          ok: false,
+          message: "Isi file tidak sesuai dengan format gambar"
+        });
+      }
+
+      if (
+        contentType === "image/webp" &&
+        req.body.toString("ascii", 8, 12) !== "WEBP"
+      ) {
+        return res.status(400).json({
+          ok: false,
+          message: "File WebP tidak valid"
+        });
+      }
+
+      const extension = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp"
+      }[contentType];
+
+      const path = await uploadBuktiPengeluaran(
+        `bukti.${extension}`,
+        req.body,
+        contentType
+      );
+
+      return res.json({
+        ok: true,
+        message: "Bukti berhasil diunggah",
+        path
+      });
+    } catch (error) {
+      console.error("UPLOAD BUKTI ERROR:", error);
+
+      return res.status(500).json({
+        ok: false,
+        message: "Gagal mengunggah bukti. Periksa konfigurasi Storage."
+      });
+    }
+  }
+);
+
+
+
 /* TAMBAH TRANSAKSI KAS - KETUA RT */
 app.post("/api/cash", requireAdmin, async (req, res) => {
   try {
@@ -848,7 +938,7 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
       proof
     } = req.body;
 
-    const jenis = String(type || "").toLowerCase();
+    const jenis = String(type || "").toLowerCase().trim();
     const kategori = String(category || "").trim();
     const keterangan = String(description || "").trim();
     const jumlah = Number(amount);
@@ -860,18 +950,16 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
       });
     }
 
-    if (!kategori || !keterangan || !date ||
-        !Number.isFinite(jumlah) || jumlah <= 0) {
+    if (
+      !kategori ||
+      !keterangan ||
+      !date ||
+      !Number.isFinite(jumlah) ||
+      jumlah <= 0
+    ) {
       return res.status(400).json({
         ok: false,
         message: "Kategori, tanggal, keterangan, dan jumlah wajib diisi"
-      });
-    }
-
-    if (jenis === "keluar" && !proof) {
-      return res.status(400).json({
-        ok: false,
-        message: "Bukti pengeluaran wajib dilampirkan"
       });
     }
 
@@ -882,15 +970,65 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
       });
     }
 
+    if (
+      jenis === "keluar" &&
+      (
+        typeof proof !== "string" ||
+        !/^\d+-bukti\.(jpg|png|webp)$/.test(proof)
+      )
+    ) {
+      return res.status(400).json({
+        ok: false,
+        message: "Unggah bukti pengeluaran terlebih dahulu"
+      });
+    }
+
+    // Ambil riwayat dana pada kategori yang dipilih.
+    const riwayat = await supabaseRequest("kas_rt", {
+      query:
+        "select=jenis,jumlah,kategori" +
+        `&kategori=eq.${encodeURIComponent(kategori)}`
+    });
+
+    let saldoKategori = 0;
+
+    if (Array.isArray(riwayat)) {
+      for (const row of riwayat) {
+        const nilai = Number(row.jumlah) || 0;
+        const jenisLama = String(row.jenis || "").toLowerCase();
+
+        if (jenisLama.includes("keluar")) {
+          saldoKategori -= nilai;
+        } else {
+          saldoKategori += nilai;
+        }
+      }
+    }
+
+    if (jenis === "keluar" && jumlah > saldoKategori) {
+      return res.status(400).json({
+        ok: false,
+        message:
+          `Saldo kategori ${kategori} tidak mencukupi. ` +
+          `Saldo tersedia Rp${Math.max(0, saldoKategori).toLocaleString("id-ID")}.`
+      });
+    }
+
+    const transaksi = {
+      tanggal: date,
+      jenis,
+      kategori,
+      keterangan,
+      jumlah
+    };
+
+    if (jenis === "keluar") {
+      transaksi.bukti_path = proof;
+    }
+
     const data = await supabaseRequest("kas_rt", {
       method: "POST",
-      body: {
-        tanggal: date,
-        jenis,
-        kategori,
-        keterangan,
-        jumlah
-      }
+      body: transaksi
     });
 
     return res.json({
