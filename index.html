@@ -830,9 +830,13 @@ async function cash(){
   }
 }
 
+
 function getCashCategory(x){
+  if (x.kategori) return x.kategori;
+
   const keterangan =
     String(x.description || "").toLowerCase();
+
 
   if(
     keterangan.includes("kas rt dari iuran") &&
