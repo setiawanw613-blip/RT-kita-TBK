@@ -1147,40 +1147,85 @@ async function saveCash(){
     const amount = document.getElementById("cashAmount").value;
     const proofInput = document.getElementById("cashProof");
 
-    if(!category || !date || !description || !amount || Number(amount) <= 0){
+    if(
+      !category ||
+      !date ||
+      !description ||
+      !amount ||
+      !Number.isFinite(Number(amount)) ||
+      Number(amount) <= 0
+    ){
       alert("Lengkapi kategori, tanggal, keterangan, dan jumlah.");
       return;
     }
 
-    if(type === "keluar" && (!proofInput || !proofInput.files.length)){
-      alert("Bukti pengeluaran wajib dilampirkan.");
-      return;
-    }
+    let proofPath = null;
 
     if(type === "keluar"){
-      alert("Form sudah diperiksa, tetapi penyimpanan bukti foto belum selesai. Transaksi belum disimpan.");
-      return;
+      if(!proofInput || !proofInput.files.length){
+        alert("Bukti pengeluaran wajib dilampirkan.");
+        return;
+      }
+
+      const file = proofInput.files[0];
+      const allowedTypes = [
+        "image/jpeg",
+        "image/png",
+        "image/webp"
+      ];
+
+      if(!allowedTypes.includes(file.type)){
+        alert("Bukti harus berupa JPG, PNG, atau WebP.");
+        return;
+      }
+
+      if(file.size > 5 * 1024 * 1024){
+        alert("Ukuran foto maksimal 5 MB.");
+        return;
+      }
+
+      const uploadResponse = await fetch("/api/cash/proof", {
+        method: "POST",
+        headers: {
+          "Content-Type": file.type
+        },
+        body: file
+      });
+
+      const uploadResult = await uploadResponse.json();
+
+      if(
+        !uploadResponse.ok ||
+        !uploadResult.ok ||
+        !uploadResult.path
+      ){
+        throw new Error(
+          uploadResult.message || "Gagal mengunggah bukti."
+        );
+      }
+
+      proofPath = uploadResult.path;
     }
 
-    await api("/api/cash",{
-      method:"POST",
-      body:JSON.stringify({
+    await api("/api/cash", {
+      method: "POST",
+      body: JSON.stringify({
         type,
         category,
         date,
         description,
-        amount
+        amount,
+        proof: proofPath
       })
     });
 
     alert("Transaksi berhasil disimpan.");
     cash();
+
   }catch(e){
     alert(e.message || "Gagal menyimpan transaksi.");
   }
 }
-
-
 async function letters(){
   layout("Surat Masuk",`
     <div class="card" id="letterList">Memuat...</div>
