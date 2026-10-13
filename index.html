@@ -738,27 +738,37 @@ async function cash(){
 
     const saldo = masuk - keluar;
 
-    document.getElementById("cashSummary").innerHTML = `
-      <div class="row">
-        <b>Saldo Awal</b>
-        <span>Rp0</span>
-      </div>
+   
+document.getElementById("cashSummary").innerHTML = `
+  <div style="background:linear-gradient(135deg,#1267c9,#073b83);color:white;padding:20px;border-radius:16px;margin-bottom:14px">
+    <div style="font-size:13px;opacity:.85">💰 Saldo Kas Tersedia</div>
+    <div style="font-size:clamp(25px,4vw,34px);font-weight:800;margin-top:6px;overflow-wrap:anywhere">
+      ${rupiah(saldo)}
+    </div>
+    <div style="font-size:12px;opacity:.8;margin-top:5px">Taman Bali Kahuripan</div>
+  </div>
 
-      <div class="row">
-        <b>💵 Total Pemasukan</b>
-        <span>${rupiah(masuk)}</span>
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+    <div style="background:#ecfdf5;border:1px solid #bbf7d0;padding:14px;border-radius:12px;min-width:0">
+      <div style="font-size:12px;color:#166534">💵 Total Pemasukan</div>
+      <div style="font-size:clamp(16px,2.5vw,21px);font-weight:800;color:#166534;margin-top:6px;overflow-wrap:anywhere">
+        ${rupiah(masuk)}
       </div>
+    </div>
 
-      <div class="row">
-        <b>💸 Total Pengeluaran</b>
-        <span>${rupiah(keluar)}</span>
+    <div style="background:#fff1f2;border:1px solid #fecdd3;padding:14px;border-radius:12px;min-width:0">
+      <div style="font-size:12px;color:#9f1239">💸 Total Pengeluaran</div>
+      <div style="font-size:clamp(16px,2.5vw,21px);font-weight:800;color:#9f1239;margin-top:6px;overflow-wrap:anywhere">
+        ${rupiah(keluar)}
       </div>
+    </div>
+  </div>
 
-      <div class="row">
-        <b>💰 Saldo Akhir</b>
-        <span>${rupiah(saldo)}</span>
-      </div>
-    `;
+  <div style="display:flex;justify-content:space-between;gap:10px;padding:12px 2px 0;align-items:center">
+    <span class="muted" style="font-size:13px">Saldo awal</span>
+    <b>Rp0</b>
+  </div>
+`;
 
     filterCashAdmin();
     
@@ -784,47 +794,69 @@ async function cash(){
       }
     });
 
-    document.getElementById("cashCategorySummary").innerHTML = `
-      <div class="row">
-        <b>Keamanan</b>
-        <span>${rupiah(kategoriJumlah["Keamanan"])}</span>
-      </div>
+    
+document.getElementById("cashCategorySummary").innerHTML = `
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:10px">
 
-      <div class="row">
-        <b>Sampah</b>
-        <span>${rupiah(kategoriJumlah["Sampah"])}</span>
+    <div style="padding:14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px">
+      <div style="font-size:13px;color:#1d4ed8">🛡️ Keamanan</div>
+      <div style="font-size:20px;font-weight:800;color:#1e40af;margin-top:6px;overflow-wrap:anywhere">
+        ${rupiah(kategoriJumlah["Keamanan"])}
       </div>
+    </div>
 
-      <div class="row">
-        <b>Kas RT</b>
-        <span>${rupiah(kategoriJumlah["Kas RT"])}</span>
+    <div style="padding:14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px">
+      <div style="font-size:13px;color:#166534">🗑️ Sampah</div>
+      <div style="font-size:20px;font-weight:800;color:#166534;margin-top:6px;overflow-wrap:anywhere">
+        ${rupiah(kategoriJumlah["Sampah"])}
       </div>
+    </div>
 
-      <div class="row">
-        <b>Iuran Warga</b>
-        <span>${rupiah(kategoriJumlah["Iuran Warga"])}</span>
+    <div style="padding:14px;background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px">
+      <div style="font-size:13px;color:#6d28d9">💰 Kas RT</div>
+      <div style="font-size:20px;font-weight:800;color:#6d28d9;margin-top:6px;overflow-wrap:anywhere">
+        ${rupiah(kategoriJumlah["Kas RT"])}
       </div>
+    </div>
 
-      <div class="row">
-        <b>Kegiatan RT</b>
-        <span>${rupiah(kategoriJumlah["Kegiatan RT"])}</span>
+    <div style="padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px">
+      <div style="font-size:13px;color:#475569">👥 Iuran Warga</div>
+      <div style="font-size:20px;font-weight:800;margin-top:6px;overflow-wrap:anywhere">
+        ${rupiah(kategoriJumlah["Iuran Warga"])}
       </div>
+    </div>
 
-      <div class="row">
-        <b>Sarana/Prasarana</b>
-        <span>${rupiah(kategoriJumlah["Sarana/Prasarana"])}</span>
+    <div style="padding:14px;background:#fffbeb;border:1px solid #fde68a;border-radius:12px">
+      <div style="font-size:13px;color:#92400e">🎉 Kegiatan RT</div>
+      <div style="font-size:20px;font-weight:800;color:#92400e;margin-top:6px;overflow-wrap:anywhere">
+        ${rupiah(kategoriJumlah["Kegiatan RT"])}
       </div>
+    </div>
 
-      <div class="row">
-        <b>Pemasukan Lainnya</b>
-        <span>${rupiah(kategoriJumlah["Pemasukan Lainnya"])}</span>
+    <div style="padding:14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px">
+      <div style="font-size:13px;color:#475569">🏠 Sarana/Prasarana</div>
+      <div style="font-size:20px;font-weight:800;margin-top:6px;overflow-wrap:anywhere">
+        ${rupiah(kategoriJumlah["Sarana/Prasarana"])}
       </div>
+    </div>
 
-      <div class="row">
-        <b>Pengeluaran</b>
-        <span>${rupiah(kategoriJumlah["Pengeluaran"])}</span>
+    <div style="padding:14px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:12px">
+      <div style="font-size:13px;color:#0f766e">📥 Pemasukan Lainnya</div>
+      <div style="font-size:20px;font-weight:800;color:#0f766e;margin-top:6px;overflow-wrap:anywhere">
+        ${rupiah(kategoriJumlah["Pemasukan Lainnya"])}
       </div>
-    `;
+    </div>
+
+    <div style="padding:14px;background:#fff1f2;border:1px solid #fecdd3;border-radius:12px">
+      <div style="font-size:13px;color:#9f1239">📤 Pengeluaran</div>
+      <div style="font-size:20px;font-weight:800;color:#9f1239;margin-top:6px;overflow-wrap:anywhere">
+        ${rupiah(kategoriJumlah["Pengeluaran"])}
+      </div>
+    </div>
+
+  </div>
+`;
+
 
     filterCashAdmin();
   }catch(e){
@@ -906,8 +938,11 @@ function filterCashAdmin(){
   renderCashAdmin(filtered);
 }
 
+
 function renderCashAdmin(rows){
   const box = document.getElementById("cashList");
+
+  if(!box) return;
 
   if(!rows.length){
     box.innerHTML =
@@ -915,42 +950,144 @@ function renderCashAdmin(rows){
     return;
   }
 
-  box.innerHTML = rows.map((x,index)=>{
-    const kategori = getCashCategory(x);
+  box.innerHTML = `
+    <style>
+      .cash-admin-table-wrap{
+        width:100%;
+        overflow-x:auto;
+      }
+      .cash-admin-table{
+        width:100%;
+        border-collapse:collapse;
+        font-size:13px;
+      }
+      .cash-admin-table th{
+        background:#eff6ff;
+        color:#1e40af;
+        text-align:left;
+        padding:12px 10px;
+        white-space:nowrap;
+      }
+      .cash-admin-table td{
+        padding:12px 10px;
+        border-bottom:1px solid #e5e7eb;
+        vertical-align:top;
+      }
+      .cash-admin-table tr:hover td{
+        background:#f8fafc;
+      }
+      .cash-admin-cards{
+        display:none;
+      }
+      .cash-admin-card{
+        border:1px solid #e2e8f0;
+        border-radius:12px;
+        padding:14px;
+        margin-bottom:10px;
+        background:#fff;
+        overflow-wrap:anywhere;
+      }
+      .cash-admin-card-head{
+        display:flex;
+        justify-content:space-between;
+        align-items:flex-start;
+        gap:10px;
+        margin-bottom:12px;
+      }
+      .cash-admin-amount{
+        font-weight:800;
+        color:#1267c9;
+        overflow-wrap:anywhere;
+        text-align:right;
+      }
+      .cash-admin-info{
+        display:grid;
+        gap:8px;
+        font-size:13px;
+      }
+      .cash-admin-info div{
+        overflow-wrap:anywhere;
+      }
+      @media(max-width:640px){
+        .cash-admin-table-wrap{
+          display:none;
+        }
+        .cash-admin-cards{
+          display:block;
+        }
+      }
+    </style>
 
-    return `
-      <div class="row">
-        <b>
-          ${index + 1}.
-          ${
-            x.type === "keluar"
-              ? "💸 Pengeluaran"
-              : "💵 Pemasukan"
-          }
-        </b>
+    <div class="cash-admin-table-wrap">
+      <table class="cash-admin-table">
+        <thead>
+          <tr>
+            <th>No.</th>
+            <th>Jenis</th>
+            <th>Kategori</th>
+            <th>Tanggal</th>
+            <th>Keterangan</th>
+            <th>Nominal</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((x,index)=>{
+            const kategori = getCashCategory(x);
+            const keluar = x.type === "keluar";
 
-        <span class="badge">
-          ${rupiah(Number(x.amount) || 0)}
-        </span>
+            return `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${keluar ? "💸 Keluar" : "💵 Masuk"}</td>
+                <td>${esc(kategori)}</td>
+                <td>${esc(x.date || "-")}</td>
+                <td>${esc(x.description || "-")}</td>
+                <td style="font-weight:700;white-space:nowrap;color:${keluar ? "#be123c" : "#166534"}">
+                  ${rupiah(Number(x.amount) || 0)}
+                </td>
+              </tr>
+            `;
+          }).join("")}
+        </tbody>
+      </table>
+    </div>
 
-        <div>
-          <b>Kategori:</b>
-          ${esc(kategori)}
-        </div>
+    <div class="cash-admin-cards">
+      ${rows.map((x,index)=>{
+        const kategori = getCashCategory(x);
+        const keluar = x.type === "keluar";
 
-        <div>
-          <b>Tanggal:</b>
-          ${esc(x.date || "")}
-        </div>
+        return `
+          <div class="cash-admin-card">
+            <div class="cash-admin-card-head">
+              <div style="font-weight:700">
+                ${index + 1}. ${keluar ? "💸 Pengeluaran" : "💵 Pemasukan"}
+                <div style="font-size:12px;color:#64748b;font-weight:400;margin-top:5px">
+                  ${esc(kategori)}
+                </div>
+              </div>
+              <div class="cash-admin-amount" style="color:${keluar ? "#be123c" : "#166534"}">
+                ${rupiah(Number(x.amount) || 0)}
+              </div>
+            </div>
 
-        <div>
-          <b>Keterangan:</b>
-          ${esc(x.description || "")}
-        </div>
-      </div>
-    `;
-  }).join("");
+            <div class="cash-admin-info">
+              <div>
+                <span style="color:#64748b">📅 Tanggal:</span>
+                <b>${esc(x.date || "-")}</b>
+              </div>
+              <div>
+                <span style="color:#64748b">📝 Keterangan:</span>
+                ${esc(x.description || "-")}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("")}
+    </div>
+  `;
 }
+
 
 function exportCash(){
   window.location.href="/api/cash/export";
