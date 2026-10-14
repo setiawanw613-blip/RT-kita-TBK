@@ -1207,12 +1207,14 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
       ...csvRows,
       ...rekapRows
     ]
-      .map(row =>
-        row.map(value =>
-          `"${String(value ?? "").replace(/"/g, '""')}"`
-        ).join(",")
-      )
-      .join("\r\n");
+     
+.map(row =>
+  row.map(value =>
+    '"' + String(value ?? "").replace(/"/g, '""') + '"'
+  ).join(",")
+)
+.join("\r\n");
+
 
     res.setHeader(
       "Content-Type",
