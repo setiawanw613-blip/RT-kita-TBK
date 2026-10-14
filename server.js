@@ -1568,20 +1568,23 @@ app.get("/api/iuran", requireAdmin, async (req, res) => {
 /* BAYAR IURAN - WARGA */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
-    const bulan = String(req.body.bulan || "").slice(0, 7) + "-01";
-    if (!bulan) {
+    const inputBulan = String(req.body.bulan || "").slice(0, 7);
+
+    if (!/^\d{4}-\d{2}$/.test(inputBulan)) {
       return res.status(400).json({
         ok: false,
         message: "Bulan iuran wajib diisi"
       });
     }
 
+    const bulan = inputBulan + "-01";
+
     const existing = await supabaseRequest("iuran_warga", {
       query:
-        `select=id,status,total_amount` +
+        "select=id,status,total_amount" +
         `&warga_id=eq.${encodeURIComponent(req.session.wargaId)}` +
         `&bulan=eq.${encodeURIComponent(bulan)}` +
-        `&limit=1`
+        "&limit=1"
     });
 
     if (Array.isArray(existing) && existing.length) {
@@ -1590,8 +1593,6 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
         data: existing[0]
       });
     }
-   
-
 
     const data = await supabaseRequest("iuran_warga", {
       method: "POST",
@@ -1602,23 +1603,22 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
         total_amount: 35000
       }
     });
-  }
+
     const row = Array.isArray(data) ? data[0] : data;
 
-    res.json({
+    return res.json({
       ok: true,
       data: row
     });
   } catch (error) {
     console.error("BAYAR IURAN ERROR:", error);
 
-    res.status(500).json({
+    return res.status(500).json({
       ok: false,
       message: "Gagal menyimpan pembayaran iuran"
     });
   }
 });
-
 
 /* VERIFIKASI IURAN - KETUA RT */
 app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
