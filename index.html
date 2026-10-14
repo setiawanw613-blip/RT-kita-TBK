@@ -466,7 +466,11 @@ async function residents(){
     const keluarga = {};
 
     data.forEach(w=>{
-      const key = w.keluarga_id || `kk-${w.no_kk || w.id}`;
+      
+const key = w.no_kk
+  ? `kk-${String(w.no_kk).trim()}`
+  : (w.keluarga_id || `warga-${w.id}`);
+
 
       if(!keluarga[key]){
         keluarga[key] = {
