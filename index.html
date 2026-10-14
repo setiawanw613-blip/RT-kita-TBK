@@ -620,15 +620,12 @@ async function saveResident(event,id){
   const body = {};
 
   for(const key of keys){
-    const el = document.getElementById("edit_"+key);
+  const el = document.getElementById("edit_"+key);
 
-    if(!el){
-      alert("Kolom "+key+" tidak ditemukan. Perubahan belum disimpan.");
-      return;
-    }
-
+  if(el){
     body[key] = el.value.trim();
   }
+}
 
   try{
     const result = await api(`/api/residents/${encodeURIComponent(id)}`,{
