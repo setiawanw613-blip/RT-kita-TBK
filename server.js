@@ -1648,14 +1648,11 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
 
     const iuran = existing[0];
 
-    // Cegah verifikasi ulang untuk iuran yang sudah lunas
-    if (
-      String(iuran.status || "").toLowerCase() === "lunas"
-    ) {
+    if (String(iuran.status || "").toLowerCase() === "lunas") {
       return res.json({
         ok: true,
         already_verified: true,
-        message: "Iuran ini sudah berstatus lunas. Tidak ada transaksi baru yang ditambahkan."
+        message: "Iuran ini sudah lunas. Tidak ada transaksi baru."
       });
     }
 
@@ -1665,7 +1662,6 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
       { kategori: "Kas RT", jumlah: 5000 }
     ];
 
- 
     for (const item of dana) {
       const keterangan =
         `${item.kategori} dari iuran ${iuran.bulan} - iuran_id ${iuran.id}`;
@@ -1678,36 +1674,21 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
       });
 
       if (!Array.isArray(kasExisting) || !kasExisting.length) {
-        try {
-          await supabaseRequest("kas_rt", {
-            method: "POST",
-            body: {
-              tanggal: new Date().toISOString().slice(0, 10),
-              jenis: "masuk",
-              kategori: item.kategori,
-              keterangan,
-              jumlah: item.jumlah
-            }
-          });
-        } catch (error) {
-          const cekUlang = await supabaseRequest("kas_rt", {
-            query:
-              "select=id,kategori" +
-              `&keterangan=eq.${encodeURIComponent(keterangan)}` +
-              "&limit=1"
-          });
-
-          if (!Array.isArray(cekUlang) || !cekUlang.length) {
-            throw error;
+        await supabaseRequest("kas_rt", {
+          method: "POST",
+          body: {
+            tanggal: new Date().toISOString().slice(0, 10),
+            jenis: "masuk",
+            kategori: item.kategori,
+            keterangan,
+            jumlah: item.jumlah
           }
-        }
+        });
       } else if (!kasExisting[0].kategori) {
         await supabaseRequest("kas_rt", {
           method: "PATCH",
           query: `id=eq.${encodeURIComponent(kasExisting[0].id)}`,
-          body: {
-            kategori: item.kategori
-          }
+          body: { kategori: item.kategori }
         });
       }
     }
@@ -1718,26 +1699,23 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
       body: {
         status: "lunas",
         diverifikasi_at: new Date().toISOString(),
-        diverifikasi_oleh:
-          req.session.adminUser || "Ketua RT"
+        diverifikasi_oleh: req.session.adminUser || "Ketua RT"
       }
     });
 
     res.json({
       ok: true,
-      message: "Iuran berhasil diverifikasi dan pencatatan tiga dana diperiksa",
+      message: "Iuran berhasil diverifikasi",
       data: Array.isArray(data) ? data[0] : data
     });
   } catch (error) {
     console.error("VERIFIKASI IURAN ERROR:", error);
-
     res.status(500).json({
       ok: false,
       message: "Gagal memverifikasi iuran"
     });
   }
 });
-
 /* HEALTH CHECK */
 app.get("/health", (req, res) => {
   res.json({
