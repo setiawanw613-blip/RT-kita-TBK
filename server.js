@@ -1268,12 +1268,14 @@ app.get("/api/cash-warga", requireWarga, async (req, res) => {
       if (match) {
         const iuranId = match[1];
 
-        const iuranData = await supabaseRequest("iuran_warga", {
-          query:
-            `select=id,warga_id,bulan,total_amount,status,diverifikasi_at,diverifikasi_oleh` +
-            `&id=eq.${encodeURIComponent(iuranId)}` +
-            `&limit=1`
-        });
+      
+const iuranData = await supabaseRequest("iuran_warga", {
+  query:
+    "select=id,warga_id,bulan,total_amount,status,diverifikasi_at,diverifikasi_oleh" +
+    "&id=eq." + encodeURIComponent(iuranId) +
+    "&limit=1"
+});
+
 
         if (Array.isArray(iuranData) && iuranData.length) {
           const iuran = iuranData[0];
