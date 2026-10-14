@@ -866,18 +866,9 @@ document.getElementById("cashCategorySummary").innerHTML = `
 
 
 function getCashCategory(x){
-  if (x.kategori) return x.kategori;
-
+  const kategori = String(x.kategori || "").trim();
   const keterangan =
-    String(x.description || "").toLowerCase();
-
-
-  if(
-    keterangan.includes("kas rt dari iuran") &&
-    keterangan.includes("iuran_id")
-  ){
-    return "Iuran Warga";
-  }
+    String(x.description || x.keterangan || "").toLowerCase();
 
   if(keterangan.includes("keamanan")){
     return "Keamanan";
@@ -889,6 +880,10 @@ function getCashCategory(x){
 
   if(keterangan.includes("kas rt")){
     return "Kas RT";
+  }
+
+  if(kategori){
+    return kategori;
   }
 
   if(keterangan.includes("kegiatan")){
@@ -903,10 +898,9 @@ function getCashCategory(x){
   }
 
   return x.type === "masuk"
-  ? "Pemasukan Lainnya"
-  : "Pengeluaran";
+    ? "Pemasukan Lainnya"
+    : "Pengeluaran";
 }
-  
 function renderCashMonthly() {
   const filter = document.getElementById("cashMonthFilter");
   const target = document.getElementById("cashMonthlySummary");
