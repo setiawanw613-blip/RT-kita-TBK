@@ -283,7 +283,7 @@ if (Array.isArray(keluargaExisting) && keluargaExisting.length) {
   no_hp,
   password: hashPassword(password),
   nama_lengkap,
-  nik,
+  nik: nik || null,
   no_kk,
   alamat,
   hubungan_keluarga,
