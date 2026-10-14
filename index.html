@@ -606,21 +606,29 @@ function editResident(w){
   `);
 }
 
+
 async function saveResident(event,id){
   event.preventDefault();
 
   const keys = [
-    "nik","no_kk","nama_lengkap","jenis_kelamin",
+    "nik","no_kk","nama_lengkap",
     "tempat_lahir","tanggal_lahir","alamat","rt","rw",
-    "status_perkawinan","pekerjaan","no_hp",
-    "status_hunian","hubungan_keluarga"
+    "pekerjaan","no_hp","jenis_kelamin",
+    "status_perkawinan","status_hunian","hubungan_keluarga"
   ];
 
   const body = {};
-  keys.forEach(key => {
+
+  for(const key of keys){
     const el = document.getElementById("edit_"+key);
-    if(el) body[key] = el.value.trim();
-  });
+
+    if(!el){
+      alert("Kolom "+key+" tidak ditemukan. Perubahan belum disimpan.");
+      return;
+    }
+
+    body[key] = el.value.trim();
+  }
 
   try{
     const result = await api(`/api/residents/${encodeURIComponent(id)}`,{
@@ -639,6 +647,7 @@ async function saveResident(event,id){
     alert("Gagal menyimpan data: "+error.message);
   }
 }
+
 
 function showResidentDetail(w){
   layout("Detail Data Warga",`
