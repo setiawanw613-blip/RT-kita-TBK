@@ -379,6 +379,7 @@ async function adminHome(){
       `<div class="error">Gagal memuat dashboard</div>`;
   }
 }
+
 async function residents(){
   layout("Data Warga",`
     <div class="card">
@@ -386,69 +387,106 @@ async function residents(){
         + Tambah data warga
       </button>
 
-      <button class="btn" style="margin-top:8px" onclick="exportResidents()">
+      <button class="btn" style="margin-top:8px"
+        onclick="exportResidents()">
         📥 Export Data Warga
       </button>
+    </div>
+
+    <div class="card">
+      <input
+        id="residentSearch"
+        type="search"
+        placeholder="🔎 Cari nama, NIK, No. KK, atau HP..."
+        oninput="filterResidents()"
+        style="width:100%;box-sizing:border-box;margin-bottom:8px"
+      />
+      <div id="residentCount" class="muted"></div>
     </div>
 
     <div class="card" id="residentList">Memuat...</div>
   `);
 
   try{
-    const data=await api("/api/residents");
-    const box=document.getElementById("residentList");
-
-    if(!data.length){
-      box.innerHTML="<p class='muted'>Belum ada data warga</p>";
-      return;
-    }
-
-    box.innerHTML=data.map(w=>`
-      <div class="row"
-        style="cursor:pointer"
-        onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
-
-        <b>${esc(w.nama_lengkap||w.nama)}</b>
-        <div class="muted">NIK: ${esc(w.nik)}</div>
-        <div class="muted">No. KK: ${esc(w.no_kk)}</div>
-        <div class="muted">${esc(w.alamat)}</div>
-        <div class="muted">${esc(w.no_hp)}</div>
-
-        <div class="muted" style="margin-top:6px">
-          Status: ${esc(w.status_warga || "")}
-        </div>
-
-      
-         ${
-  w.status_warga === "menunggu_verifikasi"
-  ? `
-    <button
-      class="btn"
-      style="margin-top:8px"
-      onclick="event.stopPropagation(); verifyResident(${w.id})">
-      ✅ Verifikasi
-    </button>
-  `
-  : w.status_warga === "aktif"
-  ? `
-    <button
-      class="btn secondary"
-      style="margin-top:8px"
-      onclick="event.stopPropagation(); deactivateResident(${w.id})">
-      ⛔ Nonaktifkan
-    </button>
-  `
-  : ""
-}
-
-      </div>
-    `).join("");
-
+    const data = await api("/api/residents");
+    window._residentRows = Array.isArray(data) ? data : [];
+    filterResidents();
   }catch(e){
-    document.getElementById("residentList").innerHTML=
+    document.getElementById("residentList").innerHTML =
       `<div class="error">${esc(e.message)}</div>`;
   }
 }
+
+function filterResidents(){
+  const data = Array.isArray(window._residentRows)
+    ? window._residentRows
+    : [];
+
+  const input = document.getElementById("residentSearch");
+  const box = document.getElementById("residentList");
+  const count = document.getElementById("residentCount");
+
+  if(!input || !box) return;
+
+  const q = input.value.trim().toLowerCase();
+
+  const filtered = data.filter(w => [
+    w.nama_lengkap,
+    w.nama,
+    w.nik,
+    w.no_kk,
+    w.no_hp,
+    w.alamat,
+    w.status_warga
+  ].some(v => String(v || "").toLowerCase().includes(q)));
+
+  if(count){
+    count.textContent =
+      `Menampilkan ${filtered.length} dari ${data.length} warga`;
+  }
+
+  if(!filtered.length){
+    box.innerHTML =
+      "<p class='muted'>Warga tidak ditemukan.</p>";
+    return;
+  }
+
+  box.innerHTML = filtered.map(w=>`
+    <div class="row"
+      style="cursor:pointer"
+      onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+
+      <b>${esc(w.nama_lengkap||w.nama)}</b>
+      <div class="muted">NIK: ${esc(w.nik)}</div>
+      <div class="muted">No. KK: ${esc(w.no_kk)}</div>
+      <div class="muted">${esc(w.alamat)}</div>
+      <div class="muted">${esc(w.no_hp)}</div>
+
+      <div class="muted" style="margin-top:6px">
+        Status: ${esc(w.status_warga || "")}
+      </div>
+
+      ${
+        w.status_warga === "menunggu_verifikasi"
+        ? `
+          <button class="btn" style="margin-top:8px"
+            onclick="event.stopPropagation(); verifyResident(${w.id})">
+            ✅ Verifikasi
+          </button>
+        `
+        : w.status_warga === "aktif"
+        ? `
+          <button class="btn secondary" style="margin-top:8px"
+            onclick="event.stopPropagation(); deactivateResident(${w.id})">
+            ⛔ Nonaktifkan
+          </button>
+        `
+        : ""
+      }
+    </div>
+  `).join("");
+}
+
   async function keluargaAdmin(){
   layout("Data Keluarga",`
     <div class="card" id="keluargaList">Memuat...</div>
