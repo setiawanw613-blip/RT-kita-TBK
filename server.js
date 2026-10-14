@@ -646,17 +646,17 @@ app.get("/api/residents/export", requireAdmin, async (req, res) => {
       row.created_at || ""
     ]);
 
-    const csv = [
+       const csv = [
       header,
-      ...csvRows
+      ...csvRows,
+      ...rekapRows
     ]
       .map(row =>
         row.map(value =>
-          `"${String(value).replace(/"/g, '""')}"`
+          '"' + String(value ?? "").replace(/"/g, '""') + '"'
         ).join(",")
       )
-      .join("\n");
-
+      .join("\r\n");
     res.setHeader(
       "Content-Type",
       "text/csv; charset=utf-8"
