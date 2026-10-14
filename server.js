@@ -1276,35 +1276,33 @@ const iuranData = await supabaseRequest("iuran_warga", {
     "&limit=1"
 });
 
+if (Array.isArray(iuranData) && iuranData.length) {
+  const iuran = iuranData[0];
 
-        if (Array.isArray(iuranData) && iuranData.length) {
-          const iuran = iuranData[0];
+  periode = iuran.bulan || "";
+  totalIuran = Number(iuran.total_amount) || 0;
+  statusIuran = iuran.status || "";
+  diverifikasiAt = iuran.diverifikasi_at || "";
+  diverifikasiOleh = iuran.diverifikasi_oleh || "";
 
-          periode = iuran.bulan || "";
-          totalIuran = Number(iuran.total_amount) || 0;
-          statusIuran = iuran.status || "";
-          diverifikasiAt = iuran.diverifikasi_at || "";
-          diverifikasiOleh = iuran.diverifikasi_oleh || "";
+  kategori = row.kategori || "Iuran Warga";
 
-          kategori = row.kategori || "Iuran Warga";
+  if (iuran.warga_id) {
+    const wargaData = await supabaseRequest("warga", {
+      query:
+        "select=id,nama_lengkap" +
+        "&id=eq." + encodeURIComponent(iuran.warga_id) +
+        "&limit=1"
+    });
 
-          if (iuran.warga_id) {
-            const wargaData = await supabaseRequest("warga", {
-              query:
-                `select=id,nama_lengkap` +
-                `&id=eq.${encodeURIComponent(iuran.warga_id)}` +
-                `&limit=1`
-            });
-
-            if (Array.isArray(wargaData) && wargaData.length) {
-              namaWarga = wargaData[0].nama_lengkap || "";
-            }
-          }
-        }
-      }
-
+    if (Array.isArray(wargaData) && wargaData.length) {
+      namaWarga = wargaData[0].nama_lengkap || "";
+    }
+  }
+}
 
 kategori = row.kategori || kategori || "Pemasukan Lainnya";
+
 
 
       result.push({
