@@ -1519,8 +1519,11 @@ async function iuranAdmin(){
         hasil?.message || "Gagal memverifikasi iuran"
       );
     }
-
-    alert("Pembayaran berhasil diverifikasi.");
+if (hasil.already_verified) {
+  alert("Iuran ini sudah lunas. Tidak ada transaksi baru yang ditambahkan.");
+} else {
+  alert("Pembayaran berhasil diverifikasi.");
+}
     await iuranAdmin();
 
   }catch(e){
