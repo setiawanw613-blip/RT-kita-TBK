@@ -1602,7 +1602,7 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
         total_amount: 35000
       }
     });
-
+  }
     const row = Array.isArray(data) ? data[0] : data;
 
     res.json({
@@ -1665,6 +1665,7 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
       { kategori: "Kas RT", jumlah: 5000 }
     ];
 
+ 
     for (const item of dana) {
       const keterangan =
         `${item.kategori} dari iuran ${iuran.bulan} - iuran_id ${iuran.id}`;
@@ -1677,16 +1678,29 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
       });
 
       if (!Array.isArray(kasExisting) || !kasExisting.length) {
-        await supabaseRequest("kas_rt", {
-          method: "POST",
-          body: {
-            tanggal: new Date().toISOString().slice(0, 10),
-            jenis: "masuk",
-            kategori: item.kategori,
-            keterangan,
-            jumlah: item.jumlah
+        try {
+          await supabaseRequest("kas_rt", {
+            method: "POST",
+            body: {
+              tanggal: new Date().toISOString().slice(0, 10),
+              jenis: "masuk",
+              kategori: item.kategori,
+              keterangan,
+              jumlah: item.jumlah
+            }
+          });
+        } catch (error) {
+          const cekUlang = await supabaseRequest("kas_rt", {
+            query:
+              "select=id,kategori" +
+              `&keterangan=eq.${encodeURIComponent(keterangan)}` +
+              "&limit=1"
+          });
+
+          if (!Array.isArray(cekUlang) || !cekUlang.length) {
+            throw error;
           }
-        });
+        }
       } else if (!kasExisting[0].kategori) {
         await supabaseRequest("kas_rt", {
           method: "PATCH",
