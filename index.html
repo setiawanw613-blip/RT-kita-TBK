@@ -549,6 +549,97 @@ const key = w.no_kk
   }
 }
 
+function editResident(w){
+  const fields = [
+    ["nik","NIK"],
+    ["no_kk","Nomor KK"],
+    ["nama_lengkap","Nama Lengkap"],
+    ["tempat_lahir","Tempat Lahir"],
+    ["tanggal_lahir","Tanggal Lahir"],
+    ["alamat","Alamat"],
+    ["rt","RT"],
+    ["rw","RW"],
+    ["pekerjaan","Pekerjaan"],
+    ["no_hp","Nomor HP"]
+  ];
+
+  const inputField = ([key,label]) => `
+    <label style="display:block;margin:12px 0 5px">${label}</label>
+    <input
+      id="edit_${key}"
+      name="${key}"
+      value="${esc(w[key] || "")}"
+      style="width:100%;box-sizing:border-box;padding:10px"
+    />
+  `;
+
+  layout("Edit Data Warga", `
+    <div class="card">
+      <form id="editResidentForm" onsubmit="saveResident(event,'${String(w.id).replace(/'/g,"")}');return false">
+        ${fields.map(inputField).join("")}
+
+        <label style="display:block;margin:12px 0 5px">Jenis Kelamin</label>
+        <select id="edit_jenis_kelamin" style="width:100%;padding:10px">
+          <option value="Laki-laki" ${w.jenis_kelamin==="Laki-laki"?"selected":""}>Laki-laki</option>
+          <option value="Perempuan" ${w.jenis_kelamin==="Perempuan"?"selected":""}>Perempuan</option>
+        </select>
+
+        <label style="display:block;margin:12px 0 5px">Status Perkawinan</label>
+        <select id="edit_status_perkawinan" style="width:100%;padding:10px">
+          ${["Belum Kawin","Kawin","Cerai Hidup","Cerai Mati"].map(v=>`<option value="${v}" ${w.status_perkawinan===v?"selected":""}>${v}</option>`).join("")}
+        </select>
+
+        <label style="display:block;margin:12px 0 5px">Status Hunian</label>
+        <select id="edit_status_hunian" style="width:100%;padding:10px">
+          ${["Warga Tetap","Warga Kontrak"].map(v=>`<option value="${v}" ${w.status_hunian===v?"selected":""}>${v}</option>`).join("")}
+        </select>
+
+        <label style="display:block;margin:12px 0 5px">Hubungan Keluarga</label>
+        <select id="edit_hubungan_keluarga" style="width:100%;padding:10px">
+          ${["Kepala Keluarga","Ayah","Ibu / Istri","Anak","Saudara","Anggota Keluarga Lain"].map(v=>`<option value="${v}" ${w.hubungan_keluarga===v?"selected":""}>${v}</option>`).join("")}
+        </select>
+
+        <button class="btn" type="submit" style="margin-top:16px">💾 Simpan Perubahan</button>
+        <button class="btn secondary" type="button" onclick="residents()">Batal</button>
+      </form>
+    </div>
+  `);
+}
+
+async function saveResident(event,id){
+  event.preventDefault();
+
+  const keys = [
+    "nik","no_kk","nama_lengkap","jenis_kelamin",
+    "tempat_lahir","tanggal_lahir","alamat","rt","rw",
+    "status_perkawinan","pekerjaan","no_hp",
+    "status_hunian","hubungan_keluarga"
+  ];
+
+  const body = {};
+  keys.forEach(key => {
+    const el = document.getElementById("edit_"+key);
+    if(el) body[key] = el.value.trim();
+  });
+
+  try{
+    const result = await api(`/api/residents/${encodeURIComponent(id)}`,{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify(body)
+    });
+
+    if(result && result.ok === false){
+      throw new Error(result.message || "Gagal menyimpan data");
+    }
+
+    alert("Data warga berhasil diperbarui.");
+    residents();
+  }catch(error){
+    alert("Gagal menyimpan data: "+error.message);
+  }
+}
+
 function showResidentDetail(w){
   layout("Detail Data Warga",`
     <div class="card">
