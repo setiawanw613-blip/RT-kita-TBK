@@ -1613,9 +1613,41 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   } catch (error) {
     console.error("BAYAR IURAN ERROR:", error);
 
+    // Jika data sudah dibuat oleh permintaan bersamaan,
+    // ambil kembali data iuran yang tersimpan.
+    try {
+      const inputBulan = String(req.body.bulan || "").slice(0, 7);
+
+      if (
+        error &&
+        (error.code === "23505" ||
+         String(error.message || "").includes("23505")) &&
+        /^\d{4}-\d{2}$/.test(inputBulan)
+      ) {
+        const bulan = inputBulan + "-01";
+
+        const existing = await supabaseRequest("iuran_warga", {
+          query:
+            "select=id,status,total_amount" +
+            `&warga_id=eq.${encodeURIComponent(req.session.wargaId)}` +
+            `&bulan=eq.${encodeURIComponent(bulan)}` +
+            "&limit=1"
+        });
+
+        if (Array.isArray(existing) && existing.length) {
+          return res.json({
+            ok: true,
+            data: existing[0]
+          });
+        }
+      }
+    } catch (recoveryError) {
+      console.error("PEMULIHAN IURAN ERROR:", recoveryError);
+    }
+
     return res.status(500).json({
       ok: false,
-      message: "Gagal menyimpan pembayaran iuran"
+      message: "Gagal menyimpan pembayaran iuran. Silakan coba lagi."
     });
   }
 });
