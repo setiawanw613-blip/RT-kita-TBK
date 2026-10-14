@@ -1626,12 +1626,12 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
     try {
       const inputBulan = String(req.body.bulan || "").slice(0, 7);
 
-      if (
-        error &&
-        (error.code === "23505" ||
-         String(error.message || "").includes("23505")) &&
-        /^\d{4}-\d{2}$/.test(inputBulan)
-      ) {
+     
+if (
+  getSupabaseErrorCode(error) === "23505" &&
+  /^\d{4}-\d{2}$/.test(inputBulan)
+) {
+
         const bulan = inputBulan + "-01";
 
         const existing = await supabaseRequest("iuran_warga", {
