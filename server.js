@@ -1125,7 +1125,7 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
 });
 
 
-```js
+
 /* EXPORT KAS RT */
 app.get("/api/cash/export", requireAdmin, async (req, res) => {
   try {
@@ -1202,11 +1202,10 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
       ["Dana Kas RT", "", "", "", "", saldoKategori["Kas RT"]]
     ];
 
-    const csv = [
-      header,
-      ...csvRows,
-      ...rekapRows
-    ]
+  const csv = [
+  header,
+  ...csvRows
+]
      
 .map(row =>
   row.map(value =>
@@ -1302,6 +1301,7 @@ if (Array.isArray(iuranData) && iuranData.length) {
 }
 
 kategori = row.kategori || kategori || "Pemasukan Lainnya";
+}
 
 
 
