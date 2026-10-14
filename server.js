@@ -1125,6 +1125,7 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
 });
 
 
+```js
 /* EXPORT KAS RT */
 app.get("/api/cash/export", requireAdmin, async (req, res) => {
   try {
@@ -1146,20 +1147,65 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
       "Tanggal Dibuat"
     ];
 
-    const csvRows = rows.map((row, index) => [
-      index + 1,
-      row.tanggal || "",
-      row.jenis || "",
-      row.kategori || "",
-      row.keterangan || "",
-      row.jumlah || 0,
-      row.bukti_path || "",
-      row.created_at || ""
-    ]);
+    let totalMasuk = 0;
+    let totalKeluar = 0;
+
+    const saldoKategori = {
+      "Keamanan": 0,
+      "Sampah": 0,
+      "Kas RT": 0
+    };
+
+    const csvRows = rows.map((row, index) => {
+      const jumlah = Number(row.jumlah) || 0;
+      const jenis = String(row.jenis || "").toLowerCase();
+      const kategori = String(row.kategori || "").trim();
+
+      if (jenis.includes("keluar")) {
+        totalKeluar += jumlah;
+
+        if (Object.prototype.hasOwnProperty.call(saldoKategori, kategori)) {
+          saldoKategori[kategori] -= jumlah;
+        }
+      } else {
+        totalMasuk += jumlah;
+
+        if (Object.prototype.hasOwnProperty.call(saldoKategori, kategori)) {
+          saldoKategori[kategori] += jumlah;
+        }
+      }
+
+      return [
+        index + 1,
+        row.tanggal || "",
+        row.jenis || "",
+        kategori,
+        row.keterangan || "",
+        jumlah,
+        row.bukti_path || "",
+        row.created_at || ""
+      ];
+    });
+
+    const saldoAkhir = totalMasuk - totalKeluar;
+
+    const rekapRows = [
+      [],
+      ["REKAPITULASI KAS RT"],
+      ["Total Pemasukan", "", "", "", "", totalMasuk],
+      ["Total Pengeluaran", "", "", "", "", totalKeluar],
+      ["SALDO AKHIR", "", "", "", "", saldoAkhir],
+      [],
+      ["RINCIAN SALDO DANA"],
+      ["Dana Keamanan", "", "", "", "", saldoKategori["Keamanan"]],
+      ["Dana Sampah", "", "", "", "", saldoKategori["Sampah"]],
+      ["Dana Kas RT", "", "", "", "", saldoKategori["Kas RT"]]
+    ];
 
     const csv = [
       header,
-      ...csvRows
+      ...csvRows,
+      ...rekapRows
     ]
       .map(row =>
         row.map(value =>
@@ -1189,6 +1235,7 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
     });
   }
 });
+
 
 /* KAS - WARGA - TRANSPARANSI LENGKAP */
 app.get("/api/cash-warga", requireWarga, async (req, res) => {
