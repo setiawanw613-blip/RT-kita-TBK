@@ -608,6 +608,92 @@ app.patch("/api/residents/:id/deactivate", requireAdmin, async (req, res) => {
     });
   }
 });
+
+/* EDIT DATA WARGA - KETUA RT */
+app.patch("/api/residents/:id", requireAdmin, async (req, res) => {
+  try {
+    const allowed = [
+      "nik",
+      "no_kk",
+      "nama_lengkap",
+      "jenis_kelamin",
+      "tempat_lahir",
+      "tanggal_lahir",
+      "alamat",
+      "rt",
+      "rw",
+      "status_perkawinan",
+      "pekerjaan",
+      "no_hp",
+      "status_hunian",
+      "hubungan_keluarga"
+    ];
+
+    const body = {};
+
+    for (const key of allowed) {
+      if (Object.prototype.hasOwnProperty.call(req.body, key)) {
+        body[key] = req.body[key];
+      }
+    }
+
+    if (!Object.keys(body).length) {
+      return res.status(400).json({
+        ok: false,
+        message: "Tidak ada data yang diubah"
+      });
+    }
+
+    if (body.nik !== undefined && String(body.nik).trim()) {
+      const nik = String(body.nik).trim();
+      const existing = await supabaseRequest("warga", {
+        query: `select=id&nik=eq.${encodeURIComponent(nik)}&id=neq.${encodeURIComponent(req.params.id)}&limit=1`
+      });
+
+      if (Array.isArray(existing) && existing.length) {
+        return res.status(409).json({
+          ok: false,
+          message: "NIK sudah digunakan warga lain"
+        });
+      }
+
+      body.nik = nik;
+    }
+
+    if (body.no_kk !== undefined) {
+      body.no_kk = String(body.no_kk).trim();
+    }
+
+    const data = await supabaseRequest("warga", {
+      method: "PATCH",
+      query: `id=eq.${encodeURIComponent(req.params.id)}`,
+      body
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    if (!row) {
+      return res.status(404).json({
+        ok: false,
+        message: "Data warga tidak ditemukan"
+      });
+    }
+
+    res.json({
+      ok: true,
+      message: "Data warga berhasil diperbarui",
+      data: row
+    });
+  } catch (error) {
+    console.error("EDIT WARGA ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal memperbarui data warga"
+    });
+  }
+});
+
 /* EXPORT DATA WARGA */
 app.get("/api/residents/export", requireAdmin, async (req, res) => {
   try {
