@@ -575,7 +575,7 @@ function editResident(w){
 
   layout("Edit Data Warga", `
     <div class="card">
-      <form id="editResidentForm" onsubmit="saveResident(event,'${String(w.id).replace(/'/g,"")}');return false">
+     <form id="editResidentForm" onsubmit="saveResident(event, ${w.id}); return false">
         ${fields.map(inputField).join("")}
 
         <label style="display:block;margin:12px 0 5px">Jenis Kelamin</label>
