@@ -674,6 +674,21 @@ async function cash(){
       <h3>📊 Ringkasan Kas</h3>
       <div id="cashSummary">Memuat...</div>
     </div>
+    
+<div class="card">
+  <h3>📅 Rekap Kas Bulanan</h3>
+
+  <label for="cashMonthFilter">Pilih bulan</label>
+  <input
+    type="month"
+    id="cashMonthFilter"
+    value="2026-10"
+    onchange="renderCashMonthly()"
+  >
+
+  <div id="cashMonthlySummary">Memuat rekap bulanan...</div>
+</div>
+
         <div class="card">
       <h3>📋 Rekap Kategori</h3>
       <div id="cashCategorySummary">Memuat...</div>
@@ -722,6 +737,7 @@ async function cash(){
 
     window._cashAdminRows =
       Array.isArray(data) ? data : [];
+    renderCashMonthly();
 
     let masuk = 0;
     let keluar = 0;
@@ -890,6 +906,83 @@ function getCashCategory(x){
   ? "Pemasukan Lainnya"
   : "Pengeluaran";
 }
+  
+function renderCashMonthly() {
+  const filter = document.getElementById("cashMonthFilter");
+  const target = document.getElementById("cashMonthlySummary");
+
+  if (!filter || !target) return;
+
+  const bulan = filter.value;
+  const rows = Array.isArray(window._cashAdminRows)
+    ? window._cashAdminRows
+    : [];
+
+  const transaksiBulan = rows.filter(x =>
+    String(x.date || x.tanggal || "").slice(0, 7) === bulan
+  );
+
+  let masuk = 0;
+  let keluar = 0;
+
+  const dana = {
+    "Keamanan": { masuk: 0, keluar: 0 },
+    "Sampah": { masuk: 0, keluar: 0 },
+    "Kas RT": { masuk: 0, keluar: 0 }
+  };
+
+  transaksiBulan.forEach(x => {
+    const jumlah = Number(x.amount ?? x.jumlah) || 0;
+    const jenis = x.type || x.jenis;
+    const kategori = getCashCategory(x);
+
+    if (jenis === "keluar") {
+      keluar += jumlah;
+      if (dana[kategori]) dana[kategori].keluar += jumlah;
+    } else {
+      masuk += jumlah;
+      if (dana[kategori]) dana[kategori].masuk += jumlah;
+    }
+  });
+
+  const saldo = masuk - keluar;
+
+  target.innerHTML = `
+    <div style="background:#1267c9;color:white;padding:16px;border-radius:14px;margin-top:12px">
+      <div style="font-size:13px">Saldo bersih bulan ini</div>
+      <div style="font-size:28px;font-weight:800;margin-top:6px">
+        ${rupiah(saldo)}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px">
+      <div style="padding:14px;background:#ecfdf5;border-radius:12px">
+        <div style="font-size:12px;color:#166534">Total Pemasukan</div>
+        <b style="color:#166534">${rupiah(masuk)}</b>
+      </div>
+      <div style="padding:14px;background:#fff1f2;border-radius:12px">
+        <div style="font-size:12px;color:#9f1239">Total Pengeluaran</div>
+        <b style="color:#9f1239">${rupiah(keluar)}</b>
+      </div>
+    </div>
+
+    <h4 style="margin:16px 0 8px">Rincian Tiga Dana</h4>
+    ${Object.keys(dana).map(nama => {
+      const saldoDana = dana[nama].masuk - dana[nama].keluar;
+      return `
+        <div style="display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid #e5e7eb">
+          <span>${esc(nama)}</span>
+          <b>${rupiah(saldoDana)}</b>
+        </div>
+      `;
+    }).join("")}
+
+    <div style="font-size:12px;color:#64748b;margin-top:10px">
+      Dihitung dari transaksi pada bulan ${esc(bulan)}.
+    </div>
+  `;
+}
+
 
 function filterCashAdmin(){
   const rows = Array.isArray(window._cashAdminRows)
