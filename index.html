@@ -47,6 +47,17 @@ textarea{min-height:110px;resize:vertical}
 
 <script>
 let currentUser=null;
+  
+window.onerror = function(message, source, line, column, error) {
+  alert(
+    "PELACAK ERROR RT KITA\n\n" +
+    "Pesan: " + message + "\n" +
+    "Baris: " + line + "\n" +
+    "Kolom: " + column + "\n" +
+    "Sumber: " + source
+  );
+};
+
 
 async function api(url,options={}){
   const res=await fetch(url,{
@@ -731,7 +742,7 @@ function addResident(){
   `);
 }
 
-async function saveResident(){
+async function addResident(){
   try{
     await api("/api/residents",{
       method:"POST",
