@@ -628,15 +628,24 @@ async function saveResident(event,id){
     "status_perkawinan","status_hunian","hubungan_keluarga"
   ];
 
-  const body = {};
+  
+const body = {};
 
-  for(const key of keys){
+for(const key of keys){
   const el = document.getElementById("edit_"+key);
 
   if(el){
-    body[key] = el.value.trim();
+    const value = el.value.trim();
+
+    if(key === "tanggal_lahir"){
+      body[key] = value || null;
+    }else{
+      body[key] = value;
+    }
   }
 }
+
+try{
 
   try{
     const result = await api(`/api/residents/${encodeURIComponent(id)}`,{
