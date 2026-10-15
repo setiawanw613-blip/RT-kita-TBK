@@ -29,7 +29,25 @@ textarea{min-height:110px;resize:vertical}
 .stat{padding:14px;border-radius:14px;background:#eef5ff;min-width:0;overflow-wrap:anywhere}
 .stat b{display:block;font-size:clamp(18px,5vw,25px);color:#1267c9;overflow-wrap:anywhere}
 .menu{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0}
-.menu button{padding:15px;border:1px solid #dbe3ee;border-radius:12px;background:white;text-align:left;font-weight:700}
+
+.menu button{
+  display:flex;
+  align-items:center;
+  min-height:76px;
+  padding:16px 14px;
+  border:1px solid #e1eaf5;
+  border-radius:16px;
+  background:linear-gradient(145deg,#ffffff,#f7faff);
+  box-shadow:0 3px 10px rgba(18,103,201,.07);
+  text-align:left;
+  font-weight:700;
+  font-size:14px;
+  line-height:1.5;
+  color:#183452;
+  cursor:pointer;
+  transition:transform .15s ease,box-shadow .15s ease;
+}
+
 .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px}
 .hidden{display:none!important}
 .row{padding:13px 0;border-bottom:1px solid #e8edf3}
