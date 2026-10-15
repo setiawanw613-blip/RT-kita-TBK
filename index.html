@@ -102,12 +102,35 @@ function layout(title,body,showBack=true){
 
   document.getElementById("app").innerHTML=`
     <div class="wrap">
-      <div class="top">
-        <div>
-          <b style="color:#1267c9">RT Kita</b>
-          <div class="muted">${esc(title)}</div>
+      <div style="
+        background:linear-gradient(135deg,#1267c9,#0750a4);
+        color:white;
+        padding:20px 18px;
+        border-radius:18px;
+        margin-bottom:18px;
+        box-shadow:0 5px 16px #1267c926;
+      ">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+          <div>
+            <div style="font-size:25px;font-weight:800;letter-spacing:.3px">
+              RT Kita
+            </div>
+            <div style="font-size:13px;opacity:.92">
+              Pelayanan warga digital
+            </div>
+            <div style="font-size:14px;font-weight:700;margin-top:7px">
+              Dari Warga, Untuk Warga
+            </div>
+          </div>
+          <button class="btn secondary" onclick="logout()">Keluar</button>
         </div>
-        <button class="btn secondary" onclick="logout()">Keluar</button>
+        <div style="font-size:12px;margin-top:14px;opacity:.9">
+          RT 04 / RW 01 · Taman Bali Kahuripan
+        </div>
+      </div>
+
+      <div style="font-size:20px;font-weight:800;margin:0 0 14px">
+        ${esc(title)}
       </div>
 
       ${body}
@@ -119,10 +142,19 @@ function layout(title,body,showBack=true){
           </button>
         </div>
       ` : ""}
+
+      <div style="
+        text-align:center;
+        color:#8791a1;
+        font-size:11px;
+        padding:24px 8px 12px;
+        margin-top:18px;
+        border-top:1px solid #e3e9f1;
+      ">
+        RT Kita — Dari Warga, Untuk Warga — Created by ayah CiaraChana
+      </div>
     </div>`;
 }
-
-
 function dashboard(){
   boot();
 }
