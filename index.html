@@ -102,6 +102,7 @@ function layout(title,body,showBack=true){
 
   document.getElementById("app").innerHTML=`
     <div class="wrap">
+
       <div style="
         background:linear-gradient(135deg,#1267c9,#0750a4);
         color:white;
@@ -110,9 +111,14 @@ function layout(title,body,showBack=true){
         margin-bottom:18px;
         box-shadow:0 5px 16px #1267c926;
       ">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
-          <div>
-            <div style="font-size:25px;font-weight:800;letter-spacing:.3px">
+        <div style="
+          display:flex;
+          justify-content:space-between;
+          align-items:center;
+          gap:12px;
+        ">
+          <div style="min-width:0">
+            <div style="font-size:25px;font-weight:800">
               RT Kita
             </div>
             <div style="font-size:13px;opacity:.92">
@@ -122,8 +128,32 @@ function layout(title,body,showBack=true){
               Dari Warga, Untuk Warga
             </div>
           </div>
-          <button class="btn secondary" onclick="logout()">Keluar</button>
+
+          <div style="display:flex;align-items:center;gap:8px">
+            <button
+              type="button"
+              aria-label="Notifikasi"
+              title="Notifikasi"
+              onclick="alert('Notifikasi akan diaktifkan setelah desain selesai.')"
+              style="
+                position:relative;
+                width:42px;
+                height:42px;
+                flex-shrink:0;
+                border:1px solid #ffffff70;
+                border-radius:12px;
+                background:#ffffff20;
+                color:white;
+                font-size:21px;
+              "
+               >🔔</button>
+
+            <button class="btn secondary" onclick="logout()">
+              Keluar
+            </button>
+          </div>
         </div>
+
         <div style="font-size:12px;margin-top:14px;opacity:.9">
           RT 04 / RW 01 · Taman Bali Kahuripan
         </div>
