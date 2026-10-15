@@ -53,12 +53,15 @@ textarea{min-height:110px;resize:vertical}
 
 .menu button{
   display:flex;
-  align-items:center;
-  min-height:76px;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:center;
+  gap:10px;
+  min-height:100px;
   padding:16px 14px;
   border:1px solid #e1eaf5;
   border-radius:16px;
-  background:linear-gradient(145deg,#ffffff,#f7faff);
+  background:linear-gradient(145deg,#ffffff,#f5f9ff);
   box-shadow:0 3px 10px rgba(18,103,201,.07);
   text-align:left;
   font-weight:700;
@@ -67,6 +70,18 @@ textarea{min-height:110px;resize:vertical}
   color:#183452;
   cursor:pointer;
   transition:transform .15s ease,box-shadow .15s ease;
+}
+
+.menu button:active{
+  transform:scale(.98);
+  box-shadow:0 1px 4px rgba(18,103,201,.10);
+}
+
+.menu button span{
+  display:block;
+  font-size:13px;
+  font-weight:700;
+  line-height:1.4;
 }
 
 .top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:15px}
@@ -462,9 +477,22 @@ async function logout(){
 
 async function adminHome(){
   layout("Dashboard Ketua RT",`
-    <div class="card">
-      <h2>Selamat datang, Ketua RT</h2>
-      <p class="muted">Kelola data dan pelayanan warga dari sini.</p>
+    <div style="
+      padding:20px;
+      margin-bottom:14px;
+      border-radius:18px;
+      background:linear-gradient(135deg,#eaf3ff,#ffffff);
+      border:1px solid #dce9fa;
+    ">
+      <div style="font-size:13px;color:#687386">
+        PANEL PENGELOLAAN RT
+      </div>
+      <h2 style="margin:8px 0;color:#174a82">
+        Selamat datang, Ketua RT 👋
+      </h2>
+      <p class="muted" style="margin:0;font-size:14px">
+        Kelola data dan pelayanan warga dengan mudah.
+      </p>
     </div>
 
     <div id="stats" class="grid">
@@ -474,40 +502,72 @@ async function adminHome(){
       <div class="stat"><span>Saldo kas</span><b>...</b></div>
     </div>
 
-    <div class="card">
-      <h3>Menu</h3>
-      <div class="menu">
-        <button onclick="residents()">👥 Data Warga</button>
-        <button onclick="keluargaAdmin()">👨‍👩‍👧 Data Keluarga</button>
-        <button onclick="cash()">💰 Kas RT</button>
-        <button onclick="letters()">📄 Surat</button>
-        <button onclick="complaints()">📢 Pengaduan</button>
-        <button onclick="announcements()">📣 Pengumuman</button>
-        <button onclick="iuranAdmin()">💳 Iuran Warga</button>
-      </div>
+    <div class="card" style="
+      border:1px solid #e1eaf5;
+      border-radius:18px;
+      padding:18px;
+    ">
+      <h3 style="margin-bottom:5px">Layanan Administrasi</h3>
+      <p class="muted" style="font-size:13px;margin-top:0">
+        Pilih layanan yang ingin dikelola.
+      </p>
+<div class="menu">
+      <button onclick="residents()">
+  <span style="font-size:26px">👥</span>
+  <span>Data Warga</span>
+</button>
+
+<button onclick="keluargaAdmin()">
+  <span style="font-size:26px">👨‍👩‍👧</span>
+  <span>Data Keluarga</span>
+</button>
+
+<button onclick="cash()">
+  <span style="font-size:26px">💰</span>
+  <span>Kas RT</span>
+</button>
+
+<button onclick="letters()">
+  <span style="font-size:26px">📄</span>
+  <span>Surat</span>
+</button>
+
+<button onclick="complaints()">
+  <span style="font-size:26px">📢</span>
+  <span>Pengaduan</span>
+</button>
+
+<button onclick="announcements()">
+  <span style="font-size:26px">📣</span>
+  <span>Pengumuman</span>
+</button>
+
+<button onclick="iuranAdmin()">
+  <span style="font-size:26px">💳</span>
+  <span>Iuran Warga</span>
+</button>
+
     </div>
-  
   `,false);
 
-  
   try{
     const d=await api("/api/dashboard");
 
     document.getElementById("stats").innerHTML=`
       <div class="stat">
-        <span>Warga aktif</span>
+        <span>👥 Warga aktif</span>
         <b>${d.residents||0}</b>
       </div>
       <div class="stat">
-        <span>Surat diajukan</span>
+        <span>📄 Surat diajukan</span>
         <b>${d.letters||0}</b>
       </div>
       <div class="stat">
-        <span>Pengaduan baru</span>
+        <span>📢 Pengaduan baru</span>
         <b>${d.complaints||0}</b>
       </div>
       <div class="stat">
-        <span>Saldo kas</span>
+        <span>💰 Saldo kas</span>
         <b>${rupiah(d.balance)}</b>
       </div>
     `;
@@ -516,7 +576,6 @@ async function adminHome(){
       `<div class="error">Gagal memuat dashboard</div>`;
   }
 }
-
 async function residents(){
   layout("Data Warga",`
     <div class="card">
