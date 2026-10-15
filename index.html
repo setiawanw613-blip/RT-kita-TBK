@@ -61,6 +61,19 @@ textarea{min-height:110px;resize:vertical}
   overflow-wrap:anywhere;
 }
 .menu{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0}
+  /* Perbaikan statistik khusus layar HP */
+@media screen and (max-width: 700px) {
+  #stats {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    width: 100% !important;
+  }
+
+  #stats > .stat {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+}
 
 .menu button{
   display:flex;
