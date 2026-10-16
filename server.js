@@ -740,11 +740,12 @@ app.get("/api/residents/export", requireAdmin, async (req, res) => {
       row.created_at || ""
     ]);
 
-       const csv = [
-      header,
-      ...csvRows,
-      ...rekapRows
-    ]
+const csv = [
+  header,
+  ...csvRows
+]
+
+       
       .map(row =>
         row.map(value =>
           '"' + String(value ?? "").replace(/"/g, '""') + '"'
