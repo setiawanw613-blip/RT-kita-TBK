@@ -670,6 +670,42 @@ app.patch("/api/residents/:id/deactivate", requireAdmin, async (req, res) => {
   }
 });
 
+/* AKTIFKAN KEMBALI WARGA - KETUA RT */
+app.patch("/api/residents/:id/activate", requireAdmin, async (req, res) => {
+  try {
+    const data = await supabaseRequest("warga", {
+      method: "PATCH",
+      query: `id=eq.${encodeURIComponent(req.params.id)}`,
+      body: {
+        status_warga: "aktif"
+      }
+    });
+
+    const row = Array.isArray(data) ? data[0] : data;
+
+    if (!row) {
+      return res.status(404).json({
+        ok: false,
+        message: "Data warga tidak ditemukan"
+      });
+    }
+
+    res.json({
+      ok: true,
+      message: "Warga berhasil diaktifkan kembali",
+      data: row
+    });
+  } catch (error) {
+    console.error("ACTIVATE WARGA ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengaktifkan warga"
+    });
+  }
+});
+
+
 /* EDIT DATA WARGA - KETUA RT */
 app.patch("/api/residents/:id", requireAdmin, async (req, res) => {
   try {
