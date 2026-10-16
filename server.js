@@ -481,7 +481,7 @@ app.post("/api/logout", (req, res) => {
 
   res.setHeader(
     "Set-Cookie",
-    "rt_token=; Path=/; HttpOnly; Max-Age=0; SameSite=Lax"
+   "rt_token=; Path=/; HttpOnly; Secure; Max-Age=0; SameSite=Lax"
   );
 
   res.json({ ok: true });
