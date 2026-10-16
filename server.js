@@ -1499,8 +1499,9 @@ kategori = row.kategori || kategori || "Pemasukan Lainnya";
 
       result.push({
         id: row.id,
-        tanggal: row.tanggal || "",
-        waktu: row.created_at || "",
+      tanggal: row.tanggal || "",
+      waktu: row.created_at || "",
+       bukti_path: row.bukti_path || "",
         type: row.jenis === "keluar" ? "keluar" : "masuk",
         amount: Number(row.jumlah) || 0,
         description: keterangan,
