@@ -834,6 +834,28 @@ function editResident(w){
   `);
 }
 
+async function activateResident(id){
+  if (!confirm("Aktifkan kembali warga ini?")) return;
+
+  try {
+    const result = await api(
+      `/api/residents/${encodeURIComponent(id)}/activate`,
+      { method: "PATCH" }
+    );
+
+    if (!result || result.ok !== true) {
+      alert(result?.message || "Gagal mengaktifkan warga");
+      return;
+    }
+
+    alert("Warga berhasil diaktifkan kembali");
+    residents();
+  } catch (error) {
+    console.error("ACTIVATE RESIDENT ERROR:", error);
+    alert("Gagal mengaktifkan warga. Silakan coba lagi.");
+  }
+}
+
 
 
 async function saveResident(event,id){
@@ -881,6 +903,7 @@ async function saveResident(event,id){
 }
 
 
+
 function showResidentDetail(w){
   layout("Detail Data Warga",`
     <div class="card">
@@ -898,10 +921,17 @@ function showResidentDetail(w){
       <div class="row"><b>No. HP</b><br>${esc(w.no_hp)}</div>
       <div class="row"><b>Status Warga</b><br>${esc(w.status_warga)}</div>
     </div>
+
     <button class="btn" onclick='editResident(${JSON.stringify(w).replace(/'/g,"&#39;")})'>✏️ Edit Data Warga</button>
+
+    ${String(w.status_warga).toLowerCase() === "nonaktif"
+      ? `<button class="btn" onclick="activateResident('${String(w.id).replace(/'/g,"&#39;")}')">✅ Aktifkan Kembali</button>`
+      : ""}
+
     <button class="btn secondary" onclick="residents()">← Kembali ke Data Warga</button>
   `);
 }
+
 
   async function verifyResident(id){
   if(!confirm("Verifikasi warga ini?")) return;
