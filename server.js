@@ -11,7 +11,8 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString("hex");
 
@@ -407,6 +408,12 @@ if (warga.status_warga !== "aktif") {
     }
   });
 }
+   if (!ADMIN_PASSWORD) {
+  return res.status(500).json({
+    ok: false,
+    message: "Login belum dikonfigurasi"
+  });
+} 
     if (
       username !== ADMIN_USER ||
       password !== ADMIN_PASSWORD
