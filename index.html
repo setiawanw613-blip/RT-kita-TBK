@@ -2184,10 +2184,13 @@ async function bayarIuran(){
       </button>
     `);
 
+
   }catch(e){
     alert(e.message || "Gagal menyimpan pembayaran iuran");
+    await iuranWarga();
   }
 }
+
   async function iuranWarga(){
   const security=15000;
   const sampah=15000;
