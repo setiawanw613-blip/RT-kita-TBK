@@ -1749,18 +1749,20 @@ function ubahFormCash(){
 
 let cashSaving = false;
 
+
 async function saveCash(){
-  if(cashSaving) return;
-  cashSaving = true;
+  if (cashSaving) return;
 
   const tombolSimpan = document.getElementById("cashSaveBtn");
+  if (!tombolSimpan) return;
 
-  if(tombolSimpan){
-    tombolSimpan.disabled = true;
-    tombolSimpan.textContent = "Menyimpan...";
-  }
+  cashSaving = true;
+  tombolSimpan.disabled = true;
+  tombolSimpan.textContent = "Menyimpan...";
 
-  try{
+  let transaksiBerhasil = false;
+
+  try {
     const type = document.getElementById("cashType").value;
     const category = document.getElementById("cashCategory").value;
     const date = document.getElementById("cashDate").value;
@@ -1768,22 +1770,22 @@ async function saveCash(){
     const amount = document.getElementById("cashAmount").value;
     const proofInput = document.getElementById("cashProof");
 
-    if(
+    if (
       !category ||
       !date ||
       !description ||
       !amount ||
       !Number.isFinite(Number(amount)) ||
       Number(amount) <= 0
-    ){
+    ) {
       alert("Lengkapi kategori, tanggal, keterangan, dan jumlah.");
       return;
     }
 
     let proofPath = null;
 
-    if(type === "keluar"){
-      if(!proofInput || !proofInput.files.length){
+    if (type === "keluar") {
+      if (!proofInput || !proofInput.files.length) {
         alert("Bukti pengeluaran wajib dilampirkan.");
         return;
       }
@@ -1795,15 +1797,17 @@ async function saveCash(){
         "image/webp"
       ];
 
-      if(!allowedTypes.includes(file.type)){
+      if (!allowedTypes.includes(file.type)) {
         alert("Bukti harus berupa JPG, PNG, atau WebP.");
         return;
       }
 
-      if(file.size > 5 * 1024 * 1024){
+      if (file.size > 5 * 1024 * 1024) {
         alert("Ukuran foto maksimal 5 MB.");
         return;
       }
+
+      tombolSimpan.textContent = "Mengunggah bukti...";
 
       const uploadResponse = await fetch("/api/cash/proof", {
         method: "POST",
@@ -1815,11 +1819,11 @@ async function saveCash(){
 
       const uploadResult = await uploadResponse.json();
 
-      if(
+      if (
         !uploadResponse.ok ||
         !uploadResult.ok ||
         !uploadResult.path
-      ){
+      ) {
         throw new Error(
           uploadResult.message || "Gagal mengunggah bukti."
         );
@@ -1827,6 +1831,8 @@ async function saveCash(){
 
       proofPath = uploadResult.path;
     }
+
+    tombolSimpan.textContent = "Menyimpan transaksi...";
 
     await api("/api/cash", {
       method: "POST",
@@ -1840,22 +1846,29 @@ async function saveCash(){
       })
     });
 
-    alert("Transaksi berhasil disimpan.");
-    cash();
+    transaksiBerhasil = true;
 
-  }catch(e){
-    alert(e.message || "Gagal menyimpan transaksi.");
-  }finally{
+    alert("Transaksi berhasil disimpan.");
+    await cash();
+
+  } catch (e) {
+    alert(
+      e.message ||
+      "Hasil penyimpanan belum dapat dipastikan. Periksa riwayat kas sebelum mencoba lagi."
+    );
+  } finally {
     cashSaving = false;
 
-    const tombolSimpan = document.getElementById("cashSaveBtn");
+    // Pulihkan tombol hanya jika formulir masih ditampilkan.
+    const tombolSaatIni = document.getElementById("cashSaveBtn");
 
-    if(tombolSimpan){
-      tombolSimpan.disabled = false;
-      tombolSimpan.textContent = "Simpan transaksi";
+    if (tombolSaatIni && !transaksiBerhasil) {
+      tombolSaatIni.disabled = false;
+      tombolSaatIni.textContent = "Simpan transaksi";
     }
   }
 }
+
 async function letters(){
   layout("Surat Masuk",`
     <div class="card" id="letterList">Memuat...</div>
