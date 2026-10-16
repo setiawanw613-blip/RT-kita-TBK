@@ -137,7 +137,22 @@ function getToken(req) {
 
 function getSession(req) {
   const token = getToken(req);
-  return token ? sessions.get(token) : null;
+  if (!token) return null;
+
+  const session = sessions.get(token);
+  if (!session) return null;
+
+  const SESSION_MAX_AGE = 8 * 60 * 60 * 1000;
+
+  if (
+    !session.createdAt ||
+    Date.now() - session.createdAt > SESSION_MAX_AGE
+  ) {
+    sessions.delete(token);
+    return null;
+  }
+
+  return session;
 }
 
 function requireLogin(req, res, next) {
