@@ -1722,9 +1722,9 @@ function addCash(){
         </div>
       </div>
 
-      <button class="btn" style="width:100%;margin-top:18px" onclick="saveCash()">
-        Simpan transaksi
-      </button>
+      <button id="cashSaveBtn" class="btn" style="width:100%;margin-top:18px" onclick="saveCash()">
+  Simpan transaksi
+</button>
 
       <button class="btn secondary" style="width:100%;margin-top:8px" onclick="cash()">
         Kembali
@@ -1752,6 +1752,13 @@ let cashSaving = false;
 async function saveCash(){
   if(cashSaving) return;
   cashSaving = true;
+
+  const tombolSimpan = document.getElementById("cashSaveBtn");
+
+  if(tombolSimpan){
+    tombolSimpan.disabled = true;
+    tombolSimpan.textContent = "Menyimpan...";
+  }
 
   try{
     const type = document.getElementById("cashType").value;
@@ -1840,6 +1847,13 @@ async function saveCash(){
     alert(e.message || "Gagal menyimpan transaksi.");
   }finally{
     cashSaving = false;
+
+    const tombolSimpan = document.getElementById("cashSaveBtn");
+
+    if(tombolSimpan){
+      tombolSimpan.disabled = false;
+      tombolSimpan.textContent = "Simpan transaksi";
+    }
   }
 }
 async function letters(){
