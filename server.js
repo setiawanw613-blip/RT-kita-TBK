@@ -183,7 +183,8 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-function requireWarga(req, res, next) {
+
+async function requireWarga(req, res, next) {
   const session = getSession(req);
 
   if (!session || session.role !== "warga") {
@@ -193,9 +194,47 @@ function requireWarga(req, res, next) {
     });
   }
 
-  req.session = session;
-  next();
+  try {
+    const data = await supabaseRequest("warga", {
+      query:
+        `select=id,status_warga` +
+        `&id=eq.${encodeURIComponent(session.wargaId)}` +
+        `&limit=1`
+    });
+
+    if (!Array.isArray(data) || !data.length) {
+      return res.status(403).json({
+        ok: false,
+        message: "Akun warga tidak ditemukan"
+      });
+    }
+
+    if (data[0].status_warga !== "aktif") {
+      sessions.delete(getToken(req));
+
+      res.setHeader(
+        "Set-Cookie",
+        "rt_token=; Path=/; HttpOnly; Secure; Max-Age=0; SameSite=Lax"
+      );
+
+      return res.status(403).json({
+        ok: false,
+        message: "Akun Anda sudah tidak aktif. Silakan hubungi Ketua RT."
+      });
+    }
+
+    req.session = session;
+    next();
+  } catch (error) {
+    console.error("CEK STATUS WARGA ERROR:", error);
+
+    return res.status(503).json({
+      ok: false,
+      message: "Status akun belum dapat diperiksa. Silakan coba lagi."
+    });
+  }
 }
+
 /* DAFTAR WARGA */
 app.post("/api/register-warga", async (req, res) => {
   try {
