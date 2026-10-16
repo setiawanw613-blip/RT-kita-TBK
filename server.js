@@ -98,6 +98,13 @@ function getSupabaseErrorCode(error) {
   }
 }
 
+function hashBuktiPengeluaran(fileBuffer) {
+  return crypto
+    .createHash("sha256")
+    .update(fileBuffer)
+    .digest("hex");
+}
+
 async function uploadBuktiPengeluaran(fileName, fileBuffer, contentType) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error("Supabase belum terhubung");
@@ -1096,17 +1103,20 @@ app.post(
         "image/webp": "webp"
       }[contentType];
 
-      const path = await uploadBuktiPengeluaran(
-        `bukti.${extension}`,
-        req.body,
-        contentType
-      );
+      
+const buktiHash = hashBuktiPengeluaran(req.body);
+const path = await uploadBuktiPengeluaran(
+  `bukti.${extension}`,
+  req.body,
+  contentType
+);
 
-      return res.json({
-        ok: true,
-        message: "Bukti berhasil diunggah",
-        path
-      });
+     return res.json({
+  ok: true,
+  message: "Bukti berhasil diunggah",
+  path,
+  buktiHash
+});
     } catch (error) {
       console.error("UPLOAD BUKTI ERROR:", error);
 
@@ -1196,6 +1206,7 @@ app.get("/api/cash/proof/:id", requireLogin, async (req, res) => {
 });
 
 
+
 /* TAMBAH TRANSAKSI KAS - KETUA RT */
 app.post("/api/cash", requireAdmin, async (req, res) => {
   try {
@@ -1240,21 +1251,20 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
       });
     }
 
-    if (
-      jenis === "keluar" &&
-      (
+    let buktiHash = null;
+
+    if (jenis === "keluar") {
+      if (
         typeof proof !== "string" ||
         !/^\d+-bukti\.(jpg|png|webp)$/.test(proof)
-      )
-    ) {
-      return res.status(400).json({
-        ok: false,
-        message: "Unggah bukti pengeluaran terlebih dahulu"
-      });
-    }
+      ) {
+        return res.status(400).json({
+          ok: false,
+          message: "Unggah bukti pengeluaran terlebih dahulu"
+        });
+      }
 
-    // Cegah penggunaan ulang bukti pengeluaran yang sama.
-    if (jenis === "keluar") {
+      // Periksa apakah lokasi bukti pernah digunakan.
       const buktiLama = await supabaseRequest("kas_rt", {
         query:
           "select=id" +
@@ -1267,6 +1277,54 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
           ok: false,
           message:
             "Bukti pengeluaran ini sudah digunakan pada transaksi sebelumnya."
+        });
+      }
+
+      // Ambil isi foto dari Supabase Storage.
+      const fotoResponse = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/bukti-pengeluaran/${encodeURIComponent(proof)}`,
+        {
+          method: "GET",
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+
+      if (!fotoResponse.ok) {
+        console.error(
+          "READ PROOF ERROR:",
+          fotoResponse.status,
+          await fotoResponse.text()
+        );
+
+        return res.status(400).json({
+          ok: false,
+          message: "Bukti foto tidak dapat dibaca. Silakan unggah ulang."
+        });
+      }
+
+      const fotoBuffer = Buffer.from(
+        await fotoResponse.arrayBuffer()
+      );
+
+      // Hitung hash berdasarkan isi foto, bukan nama file.
+      buktiHash = hashBuktiPengeluaran(fotoBuffer);
+
+      // Tolak foto yang identik dengan bukti transaksi sebelumnya.
+      const hashLama = await supabaseRequest("kas_rt", {
+        query:
+          "select=id,keterangan,tanggal,jumlah" +
+          `&bukti_hash=eq.${encodeURIComponent(buktiHash)}` +
+          "&limit=1"
+      });
+
+      if (Array.isArray(hashLama) && hashLama.length > 0) {
+        return res.status(409).json({
+          ok: false,
+          message:
+            "Foto bukti ini sudah digunakan pada transaksi pengeluaran sebelumnya."
         });
       }
     }
@@ -1312,6 +1370,7 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
 
     if (jenis === "keluar") {
       transaksi.bukti_path = proof;
+      transaksi.bukti_hash = buktiHash;
     }
 
     const data = await supabaseRequest("kas_rt", {
@@ -1333,7 +1392,6 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
     });
   }
 });
-
 
 
 /* EXPORT KAS RT */
