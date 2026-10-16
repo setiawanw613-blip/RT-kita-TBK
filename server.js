@@ -1383,14 +1383,31 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
       message: "Transaksi berhasil disimpan",
       data: Array.isArray(data) ? data[0] : data
     });
-  } catch (error) {
-    console.error("ADD CASH ERROR:", error);
+  
+} catch (error) {
+  console.error("ADD CASH ERROR:", error);
 
-    return res.status(500).json({
+  const pesanError = String(
+    error?.message || error || ""
+  );
+
+  if (
+    pesanError.includes("kas_rt_bukti_hash_unik") ||
+    pesanError.includes("duplicate key")
+  ) {
+    return res.status(409).json({
       ok: false,
-      message: "Gagal menyimpan transaksi kas"
+      message:
+        "Foto bukti ini sudah digunakan pada transaksi pengeluaran sebelumnya."
     });
   }
+
+  return res.status(500).json({
+    ok: false,
+    message: "Gagal menyimpan transaksi kas"
+  });
+}
+
 });
 
 
