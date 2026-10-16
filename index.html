@@ -1747,7 +1747,12 @@ function ubahFormCash(){
   bukti.required = pengeluaran;
 }
 
+let cashSaving = false;
+
 async function saveCash(){
+  if(cashSaving) return;
+  cashSaving = true;
+
   try{
     const type = document.getElementById("cashType").value;
     const category = document.getElementById("cashCategory").value;
@@ -1833,6 +1838,8 @@ async function saveCash(){
 
   }catch(e){
     alert(e.message || "Gagal menyimpan transaksi.");
+  }finally{
+    cashSaving = false;
   }
 }
 async function letters(){
