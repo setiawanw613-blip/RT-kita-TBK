@@ -410,7 +410,7 @@ if (warga.status_warga !== "aktif") {
 
   res.setHeader(
     "Set-Cookie",
-    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
+    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax`
   );
 
   return res.json({
@@ -450,7 +450,7 @@ if (warga.status_warga !== "aktif") {
 
     res.setHeader(
       "Set-Cookie",
-      `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax`
+     `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax`
     );
 
     res.json({
