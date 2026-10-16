@@ -1776,7 +1776,8 @@ app.get("/api/iuran", requireAdmin, async (req, res) => {
     });
   }
 });
-/* BAYAR IURAN - WARGA */
+
+/* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
     const inputBulan = String(req.body.bulan || "").slice(0, 7);
@@ -1790,25 +1791,79 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
 
     const bulan = inputBulan + "-01";
 
+    // Ambil data warga yang sedang mengajukan pembayaran.
+    const wargaData = await supabaseRequest("warga", {
+      query:
+        "select=id,nama_lengkap,keluarga_id" +
+        `&id=eq.${encodeURIComponent(req.session.wargaId)}` +
+        "&limit=1"
+    });
+
+    const warga = Array.isArray(wargaData) ? wargaData[0] : null;
+
+    if (!warga || !warga.keluarga_id) {
+      return res.status(400).json({
+        ok: false,
+        message: "Data keluarga belum terhubung. Hubungi Ketua RT."
+      });
+    }
+
+    const keluargaId = String(warga.keluarga_id);
+
+    // Cari pengajuan iuran yang sudah ada untuk KK dan bulan ini.
     const existing = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,status,total_amount" +
-        `&warga_id=eq.${encodeURIComponent(req.session.wargaId)}` +
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount" +
+        `&keluarga_id=eq.${encodeURIComponent(keluargaId)}` +
         `&bulan=eq.${encodeURIComponent(bulan)}` +
         "&limit=1"
     });
 
     if (Array.isArray(existing) && existing.length) {
-      return res.json({
-        ok: true,
-        data: existing[0]
+      const pembayaran = existing[0];
+
+      // Jika anggota keluarga yang sama mencoba lagi,
+      // kembalikan data pembayaran yang sudah tersimpan.
+      if (String(pembayaran.warga_id) === String(warga.id)) {
+        return res.json({
+          ok: true,
+          data: pembayaran
+        });
+      }
+
+      // Pembayaran sudah diajukan oleh anggota KK lainnya.
+      let namaPembayar = "anggota keluarga lainnya";
+
+      if (pembayaran.warga_id) {
+        const pembayarData = await supabaseRequest("warga", {
+          query:
+            "select=id,nama_lengkap" +
+            `&id=eq.${encodeURIComponent(pembayaran.warga_id)}` +
+            "&limit=1"
+        });
+
+        if (Array.isArray(pembayarData) && pembayarData.length) {
+          namaPembayar =
+            pembayarData[0].nama_lengkap || namaPembayar;
+        }
+      }
+
+      const sudahLunas = pembayaran.status === "lunas";
+
+      return res.status(409).json({
+        ok: false,
+        message: sudahLunas
+          ? `Iuran bulan ${inputBulan} sudah lunas dan dibayarkan oleh ${namaPembayar}. KK ini tidak perlu membayar lagi.`
+          : `Iuran bulan ${inputBulan} sudah diajukan oleh ${namaPembayar} dan masih menunggu verifikasi. Anggota KK ini tidak perlu mengajukan lagi.`
       });
     }
 
+    // Simpan pembayaran sekaligus dengan identitas KK.
     const data = await supabaseRequest("iuran_warga", {
       method: "POST",
       body: {
-        warga_id: req.session.wargaId,
+        warga_id: String(warga.id),
+        keluarga_id: keluargaId,
         bulan,
         status: "menunggu_verifikasi",
         total_amount: 35000
@@ -1824,32 +1879,70 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   } catch (error) {
     console.error("BAYAR IURAN ERROR:", error);
 
-    // Jika data sudah dibuat oleh permintaan bersamaan,
-    // ambil kembali data iuran yang tersimpan.
+    // Jika dua permintaan bersamaan, periksa apakah
+    // pengajuan untuk KK dan bulan tersebut sudah tersimpan.
     try {
       const inputBulan = String(req.body.bulan || "").slice(0, 7);
 
-     
-if (
-  getSupabaseErrorCode(error) === "23505" &&
-  /^\d{4}-\d{2}$/.test(inputBulan)
-) {
-
-        const bulan = inputBulan + "-01";
-
-        const existing = await supabaseRequest("iuran_warga", {
+      if (
+        getSupabaseErrorCode(error) === "23505" &&
+        /^\d{4}-\d{2}$/.test(inputBulan)
+      ) {
+        const wargaData = await supabaseRequest("warga", {
           query:
-            "select=id,status,total_amount" +
-            `&warga_id=eq.${encodeURIComponent(req.session.wargaId)}` +
-            `&bulan=eq.${encodeURIComponent(bulan)}` +
+            "select=id,nama_lengkap,keluarga_id" +
+            `&id=eq.${encodeURIComponent(req.session.wargaId)}` +
             "&limit=1"
         });
 
-        if (Array.isArray(existing) && existing.length) {
-          return res.json({
-            ok: true,
-            data: existing[0]
+        const warga = Array.isArray(wargaData)
+          ? wargaData[0]
+          : null;
+
+        if (warga && warga.keluarga_id) {
+          const bulan = inputBulan + "-01";
+
+          const existing = await supabaseRequest("iuran_warga", {
+            query:
+              "select=id,warga_id,keluarga_id,bulan,status,total_amount" +
+              `&keluarga_id=eq.${encodeURIComponent(String(warga.keluarga_id))}` +
+              `&bulan=eq.${encodeURIComponent(bulan)}` +
+              "&limit=1"
           });
+
+          if (Array.isArray(existing) && existing.length) {
+            const pembayaran = existing[0];
+
+            if (String(pembayaran.warga_id) === String(warga.id)) {
+              return res.json({
+                ok: true,
+                data: pembayaran
+              });
+            }
+
+            let namaPembayar = "anggota keluarga lainnya";
+
+            if (pembayaran.warga_id) {
+              const pembayarData = await supabaseRequest("warga", {
+                query:
+                  "select=id,nama_lengkap" +
+                  `&id=eq.${encodeURIComponent(pembayaran.warga_id)}` +
+                  "&limit=1"
+              });
+
+              if (Array.isArray(pembayarData) && pembayarData.length) {
+                namaPembayar =
+                  pembayarData[0].nama_lengkap || namaPembayar;
+              }
+            }
+
+            return res.status(409).json({
+              ok: false,
+              message:
+                `Iuran bulan ${inputBulan} sudah diajukan oleh ${namaPembayar}. ` +
+                "KK ini tidak perlu mengajukan lagi."
+            });
+          }
         }
       }
     } catch (recoveryError) {
