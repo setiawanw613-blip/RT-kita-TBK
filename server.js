@@ -1120,7 +1120,7 @@ app.post(
 
 
 /* LIHAT BUKTI PENGELUARAN - KETUA RT */
-app.get("/api/cash/proof/:id", requireAdmin, async (req, res) => {
+app.get("/api/cash/proof/:id", requireLogin, async (req, res) => {
   try {
     const id = String(req.params.id || "");
 
@@ -1435,7 +1435,7 @@ app.get("/api/cash-warga", requireWarga, async (req, res) => {
   try {
     const data = await supabaseRequest("kas_rt", {
       query:
-        "select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at&order=tanggal.desc,created_at.desc"
+       "select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at,bukti_path&order=tanggal.desc,created_at.desc"
     });
 
     const rows = Array.isArray(data) ? data : [];
