@@ -1253,6 +1253,24 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
       });
     }
 
+    // Cegah penggunaan ulang bukti pengeluaran yang sama.
+    if (jenis === "keluar") {
+      const buktiLama = await supabaseRequest("kas_rt", {
+        query:
+          "select=id" +
+          `&bukti_path=eq.${encodeURIComponent(proof)}` +
+          "&limit=1"
+      });
+
+      if (Array.isArray(buktiLama) && buktiLama.length > 0) {
+        return res.status(409).json({
+          ok: false,
+          message:
+            "Bukti pengeluaran ini sudah digunakan pada transaksi sebelumnya."
+        });
+      }
+    }
+
     // Ambil riwayat dana pada kategori yang dipilih.
     const riwayat = await supabaseRequest("kas_rt", {
       query:
