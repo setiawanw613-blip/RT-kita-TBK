@@ -2426,7 +2426,18 @@ document.getElementById("kasDetailModal").innerHTML = `
         </div>
       `).join("")}
     </div>
-
+    ${x.type === "keluar" && x.bukti_path ? `
+      <div style="margin-top:16px;background:#f8fafc;padding:12px;border-radius:10px">
+        <div style="font-weight:700;margin-bottom:10px">
+          📷 Bukti Pengeluaran
+        </div>
+        <button class="btn" style="width:100%;min-height:44px;border-radius:10px"
+          onclick="lihatBuktiKasWarga(${Number(x.id)})">
+          Lihat Foto Bukti
+        </button>
+        <div id="buktiKasWarga${Number(x.id)}" style="margin-top:12px"></div>
+      </div>
+    ` : ""}
     <div style="margin-top:16px;background:#f8fafc;padding:12px;border-radius:10px">
       <div style="font-weight:700;margin-bottom:6px">📝 Keterangan</div>
       <div style="overflow-wrap:anywhere;color:#475569;font-size:13px;line-height:1.6">
@@ -2443,6 +2454,35 @@ document.getElementById("kasDetailModal").innerHTML = `
 
 document.getElementById("kasDetailModal").scrollIntoView({behavior:"smooth",block:"start"});
     };
+    window.lihatBuktiKasWarga = async function(id) {
+  const target = document.getElementById("buktiKasWarga" + id);
+  if (!target) return;
+
+  target.innerHTML = "Memuat foto bukti...";
+
+  try {
+    const hasil = await api("/api/cash/proof/" + encodeURIComponent(id));
+
+    if (!hasil || !hasil.ok || !hasil.url) {
+      throw new Error(hasil?.message || "Bukti foto tidak ditemukan");
+    }
+
+    target.innerHTML = `
+      <a href="${esc(hasil.url)}" target="_blank" rel="noopener noreferrer">
+        <img
+          src="${esc(hasil.url)}"
+          alt="Bukti pengeluaran"
+          style="display:block;width:100%;max-width:480px;height:auto;margin:auto;border-radius:10px;border:1px solid #cbd5e1"
+        >
+      </a>
+      <p style="font-size:12px;color:#64748b;margin-top:8px">
+        Ketuk foto untuk membuka ukuran penuh.
+      </p>
+    `;
+  } catch (error) {
+    target.textContent = error.message || "Gagal membuka foto bukti.";
+  }
+};
 
   }catch(e){
 
