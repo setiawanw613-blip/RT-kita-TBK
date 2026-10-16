@@ -302,27 +302,112 @@ function dashboard(){
 
 function loginPage(error=""){
   document.getElementById("app").innerHTML=`
-    <div class="wrap">
-      <div class="logo">
-        <h1>RT Kita</h1>
-        <div class="muted">Pelayanan warga digital</div>
+    <div style="
+      min-height:100vh;
+      box-sizing:border-box;
+      padding:28px 16px 20px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      background:linear-gradient(145deg,#d9edff,#f8fcff,#c6e5ff);
+      font-family:Arial,sans-serif;
+    ">
+      <div style="
+        width:100%;
+        max-width:440px;
+        text-align:center;
+        margin-bottom:20px;
+      ">
+        <div style="
+          font-size:14px;
+          font-weight:700;
+          letter-spacing:2px;
+          color:#607080;
+          line-height:1.5;
+        ">TAMAN BALI KAHURIPAN</div>
+
+        <h1 style="
+          margin:12px 0 4px;
+          color:#0875d1;
+          font-size:38px;
+          font-weight:800;
+        ">RT Kita</h1>
+
+        <div style="color:#536b8c;font-size:16px">
+          Pelayanan warga digital
+        </div>
+
+        <div style="
+          margin-top:10px;
+          color:#0875d1;
+          font-size:17px;
+          font-weight:600;
+        ">Dari Warga, Untuk Warga</div>
       </div>
 
-      <div class="card">
-        <h2>Masuk</h2>
+      <div style="
+        width:100%;
+        max-width:440px;
+        box-sizing:border-box;
+        padding:26px 22px;
+        background:rgba(255,255,255,.96);
+        border:1px solid #d7e8f8;
+        border-radius:22px;
+        box-shadow:0 16px 40px rgba(25,90,150,.15);
+      ">
+        <h2 style="
+          margin:0 0 20px;
+          color:#194c80;
+          text-align:center;
+          font-size:23px;
+        ">Selamat Datang</h2>
 
         ${error?`<div class="error">${esc(error)}</div>`:""}
 
         <label>Masuk sebagai</label>
-        <select id="role" onchange="changeLoginForm()">
-          <option value="admin">Ketua RT</option>
+        <select id="role" onchange="changeLoginForm()"
+          style="
+            width:100%;
+            box-sizing:border-box;
+            margin:8px 0 16px;
+            padding:13px;
+            border:1px solid #c9def4;
+            border-radius:10px;
+            background:#fafdff;
+            font-size:16px;
+          ">
+          <option value="admin">Ketua RT / Admin</option>
           <option value="warga">Warga</option>
         </select>
 
         <div id="loginFields"></div>
 
-        <button class="btn" style="width:100%;margin-top:16px"
+        <button class="btn"
+          style="
+            width:100%;
+            margin-top:18px;
+            padding:14px;
+            border-radius:10px;
+            font-size:16px;
+            font-weight:700;
+            background:linear-gradient(100deg,#0785ed,#075dc2);
+          "
           onclick="doLogin()">Masuk aplikasi</button>
+      </div>
+
+      <div style="
+        margin-top:24px;
+        text-align:center;
+        color:#526d8c;
+        font-size:12px;
+        line-height:1.9;
+      ">
+        <div>RT 04 / RW 01 · Taman Bali Kahuripan</div>
+        <div>RT Kita — Dari Warga, Untuk Warga</div>
+        <div style="font-weight:800;color:#24456b">
+          Created by ayah CiaraChana
+        </div>
       </div>
     </div>`;
 
