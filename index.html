@@ -1869,35 +1869,87 @@ async function saveCash(){
   }
 }
 
+
 async function letters(){
   layout("Surat Masuk",`
     <div class="card" id="letterList">Memuat...</div>
   `);
 
   try{
-    const data=await api("/api/letters");
-    const box=document.getElementById("letterList");
+    const data = await api("/api/letters");
+    const box = document.getElementById("letterList");
 
-    if(!data.length){
-      box.innerHTML="<p class='muted'>Belum ada pengajuan surat</p>";
+    if(!Array.isArray(data) || !data.length){
+      box.innerHTML = "<p class='muted'>Belum ada pengajuan surat</p>";
       return;
     }
 
-    box.innerHTML=data.map(x=>`
-      <div class="row">
-        <b>${esc(x.type||x.jenis_surat)}</b>
-        <div>Warga: ${esc(x.nama||"Warga")}</div>
-        <div>${esc(x.purpose||x.keperluan)}</div>
-        <span class="badge">${esc(x.status)}</span>
+    box.innerHTML = data.map(x => `
+      <div class="card" style="margin-bottom:12px">
+        <b>${esc(x.type || x.jenis_surat || "Surat")}</b>
+        <div style="margin-top:8px">Warga: ${esc(x.nama || "Warga")}</div>
+        <div>Keperluan: ${esc(x.purpose || x.keperluan || "-")}</div>
+        <div style="margin:8px 0">
+          Status: <span class="badge">${esc(x.status || "diajukan")}</span>
+        </div>
+        ${x.catatan ? `<div>Catatan: ${esc(x.catatan)}</div>` : ""}
+        ${
+          x.status === "diajukan"
+          ? `
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+              <button onclick="processLetter(${Number(x.id)},'disetujui')">
+                Setujui
+              </button>
+              <button onclick="processLetter(${Number(x.id)},'ditolak')">
+                Tolak
+              </button>
+            </div>
+          `
+          : ""
+        }
       </div>
     `).join("");
   }catch(e){
-    document.getElementById("letterList").innerHTML=
+    document.getElementById("letterList").innerHTML =
       `<div class="error">${esc(e.message)}</div>`;
   }
 }
 
-async function complaints(){
+async function processLetter(id, status){
+  const catatan = status === "ditolak"
+    ? prompt("Alasan penolakan surat:")
+    : prompt("Catatan Ketua RT (boleh dikosongkan):");
+
+  if(catatan === null) return;
+
+  if(status === "ditolak" && !catatan.trim()){
+    alert("Mohon isi alasan penolakan.");
+    return;
+  }
+
+  if(!confirm(
+    status === "disetujui"
+      ? "Setujui pengajuan surat ini?"
+      : "Tolak pengajuan surat ini?"
+  )) return;
+
+  try{
+    const result = await api("/api/letters/" + id, {
+      method: "PATCH",
+      body: { status, catatan }
+    });
+
+    if(result && result.ok){
+      alert(result.message || "Status surat berhasil diperbarui.");
+      await letters();
+    }else{
+      alert(result?.message || "Gagal memproses surat.");
+    }
+  }catch(e){
+    alert(e.message || "Gagal memproses surat.");
+  }
+}
+
   layout("Pengaduan Warga",`
     <div class="card" id="complaintList">Memuat...</div>
   `);
