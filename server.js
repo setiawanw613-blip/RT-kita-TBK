@@ -1689,31 +1689,73 @@ app.post("/api/letters", requireWarga, async (req, res) => {
   }
 });
 
-/* SURAT SAYA - WARGA */
-app.get("/api/my-letters", requireWarga, async (req, res) => {
+
+/* PROSES SURAT - KETUA RT */
+app.patch("/api/letters/:id", requireAdmin, async (req, res) => {
   try {
-    const data = await supabaseRequest("pengajuan_surat", {
-      query:
-        `select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at` +
-        `&warga_id=eq.${encodeURIComponent(req.session.wargaId)}` +
-        `&order=created_at.desc`
+    const id = Number(req.params.id);
+    const { status, catatan = "" } = req.body;
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        ok: false,
+        message: "ID surat tidak valid"
+      });
+    }
+
+    if (!["disetujui", "ditolak"].includes(status)) {
+      return res.status(400).json({
+        ok: false,
+        message: "Status surat tidak valid"
+      });
+    }
+
+    const existing = await supabaseRequest("pengajuan_surat", {
+      query: `select=id,status&id=eq.${id}`
     });
 
-    const rows = Array.isArray(data)
-      ? data.map(row => ({
-          ...row,
-          type: row.jenis_surat,
-          purpose: row.keperluan
-        }))
-      : [];
+    if (!Array.isArray(existing) || existing.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        message: "Pengajuan surat tidak ditemukan"
+      });
+    }
 
-    res.json(rows);
+    if (existing[0].status !== "diajukan") {
+      return res.status(409).json({
+        ok: false,
+        message: "Surat ini sudah diproses sebelumnya"
+      });
+    }
+
+    const updated = await supabaseRequest("pengajuan_surat", {
+      method: "PATCH",
+      query: `id=eq.${id}&status=eq.diajukan`,
+      body: {
+        status,
+        catatan: String(catatan).trim()
+      }
+    });
+
+    if (!Array.isArray(updated) || updated.length === 0) {
+      return res.status(409).json({
+        ok: false,
+        message: "Status surat berubah. Muat ulang daftar surat."
+      });
+    }
+
+    res.json({
+      ok: true,
+      message: status === "disetujui"
+        ? "Surat berhasil disetujui"
+        : "Surat berhasil ditolak",
+      data: updated[0]
+    });
   } catch (error) {
-    console.error("MY LETTERS ERROR:", error);
-
+    console.error("PROSES SURAT ERROR:", error);
     res.status(500).json({
       ok: false,
-      message: "Gagal mengambil surat saya"
+      message: "Gagal memproses pengajuan surat"
     });
   }
 });
