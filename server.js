@@ -1543,7 +1543,7 @@ app.get("/api/cash-warga", requireWarga, async (req, res) => {
       let statusIuran = "";
       let diverifikasiAt = "";
       let diverifikasiOleh = "";
-      let kategori = "Lainnya";
+      let kategori = row.kategori || "Lainnya";
 
       const keterangan = row.keterangan || "";
 
