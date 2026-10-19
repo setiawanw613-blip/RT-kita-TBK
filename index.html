@@ -137,42 +137,6 @@ window.onerror = function(message, source, line, column, error) {
 };
 
 
-async function api(url,options={}){
-  const res=await fetch(url,{
-    credentials:"same-origin",
-    headers:{
-      "Content-Type":"application/json",
-      ...(options.headers||{})
-    },
-    ...options
-  });
-
-  const text=await res.text();
-  let data=null;
-
-  try{data=text?JSON.parse(text):null}
-  catch{data={message:text}}
-
-  if(!res.ok){
-    throw new Error(data?.message||data?.error||"Terjadi kesalahan");
-  }
-
-  return data;
-}
-
-function esc(value){
-  return String(value??"").replace(/[&<>"']/g,m=>({
-    "&":"&amp;",
-    "<":"&lt;",
-    ">":"&gt;",
-    '"':"&quot;",
-    "'":"&#039;"
-  }[m]));
-}
-
-function rupiah(value){
-  return "Rp "+Number(value||0).toLocaleString("id-ID");
-}
 
 
 function layout(title,body,showBack=true){
@@ -1936,7 +1900,7 @@ async function processLetter(id, status){
   try{
     const result = await api("/api/letters/" + id, {
       method: "PATCH",
-      body: { status, catatan }
+      body: JSON.stringify({ status, catatan })
     });
 
     if(result && result.ok){
