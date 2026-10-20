@@ -322,41 +322,23 @@ async function muatNotifikasiHeader() {
 }
 
   
+
 async function bukaNotifikasiHeader() {
   try {
     const hasil = await api("/api/notifikasi");
-    const daftar = hasil.notifikasi || [];
 
-    const isi = daftar.length
-      ? daftar.map(item => `
-          <div style="
-            padding:12px;
-            margin-bottom:8px;
-            border:1px solid #dce6f2;
-            border-radius:10px;
-            background:${item.sudah_dibaca ? "#ffffff" : "#eef6ff"};
-          ">
-            <div style="font-weight:800;color:#174a82">
-              ${esc(item.judul || "Notifikasi")}
-            </div>
-            <div style="margin-top:5px">
-              ${esc(item.pesan || "")}
-            </div>
-            <div style="font-size:12px;color:#64748b;margin-top:7px">
-              ${item.dibuat_pada
-                ? new Date(item.dibuat_pada).toLocaleString("id-ID")
-                : ""}
-              · ${item.sudah_dibaca ? "Sudah dibaca" : "Belum dibaca"}
-            </div>
-          </div>
-        `).join("")
-      : "<p>Belum ada notifikasi.</p>";
+    if (!hasil || !hasil.ok) {
+      throw new Error(hasil?.message || "Gagal memuat notifikasi");
+    }
+
+    const daftar = hasil.notifikasi || [];
 
     const lama = document.getElementById("panelNotifikasiHeader");
     if (lama) lama.remove();
 
     const panel = document.createElement("div");
     panel.id = "panelNotifikasiHeader";
+
     panel.style.cssText = `
       position:fixed;
       top:90px;
@@ -374,25 +356,76 @@ async function bukaNotifikasiHeader() {
       box-sizing:border-box;
     `;
 
-    panel.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <strong style="font-size:18px">Notifikasi</strong>
-        <button type="button" class="btn secondary"
-          onclick="document.getElementById('panelNotifikasiHeader')?.remove()">
-          Tutup
-        </button>
-      </div>
-      ${isi}
-    `;
+    function tampilkanDaftar(items) {
+      const isi = items.length
+        ? items.map(item => `
+            <div style="
+              padding:12px;
+              margin-bottom:8px;
+              border:1px solid #dce6f2;
+              border-radius:10px;
+              background:${item.sudah_dibaca ? "#ffffff" : "#eef6ff"};
+            ">
+              <div style="font-weight:800;color:#174a82">
+                ${esc(item.judul || "Notifikasi")}
+              </div>
+              <div style="margin-top:5px">
+                ${esc(item.pesan || "")}
+              </div>
+              <div style="font-size:12px;color:#64748b;margin-top:7px">
+                ${item.dibuat_pada
+                  ? new Date(item.dibuat_pada).toLocaleString("id-ID")
+                  : ""}
+                · ${item.sudah_dibaca ? "Sudah dibaca" : "Belum dibaca"}
+              </div>
+            </div>
+          `).join("")
+        : "<p>Belum ada notifikasi.</p>";
+
+      panel.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <strong style="font-size:18px">Notifikasi</strong>
+          <button type="button" class="btn secondary"
+            id="tutupNotifikasiHeader">
+            Tutup
+          </button>
+        </div>
+        <div id="isiNotifikasiHeader">${isi}</div>
+      `;
+
+      document.getElementById("tutupNotifikasiHeader")
+        ?.addEventListener("click", () => panel.remove());
+    }
 
     document.body.appendChild(panel);
+    tampilkanDaftar(daftar);
+
+    // Tandai notifikasi yang belum dibaca.
+    for (const item of daftar.filter(n => !n.sudah_dibaca)) {
+      const hasilBaca = await api(
+        `/api/notifikasi/${encodeURIComponent(item.id)}/baca`,
+        { method: "PATCH" }
+      );
+
+      if (!hasilBaca || !hasilBaca.ok) {
+        throw new Error(
+          hasilBaca?.message || `Gagal membaca notifikasi ${item.id}`
+        );
+      }
+
+      item.sudah_dibaca = true;
+    }
+
+    // Perbarui daftar dan angka lonceng.
+    tampilkanDaftar(daftar);
+    await muatNotifikasiHeader();
+
   } catch (error) {
-    alert("Gagal memuat notifikasi: " + error.message);
+    console.error("Gagal membuka notifikasi:", error);
+    alert("Gagal memperbarui notifikasi: " + error.message);
   }
 }
 
-
-  
 function loginPage(error=""){
   document.getElementById("app").innerHTML=`
     <div style="
