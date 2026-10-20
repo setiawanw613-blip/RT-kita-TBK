@@ -1850,7 +1850,32 @@ app.post("/api/letters", requireWarga, async (req, res) => {
       }
     });
 
-    const row = Array.isArray(data) ? data[0] : data;
+   const row = Array.isArray(data) ? data[0] : data;
+
+    // Notifikasi otomatis untuk Ketua RT
+    try {
+      await supabaseRequest("notifikasi", {
+        method: "POST",
+        body: {
+          penerima_peran: "admin",
+          judul: "Pengajuan Surat Baru",
+          pesan:
+            "Ada pengajuan surat " +
+            (row.jenis_surat || type) +
+            ". Keperluan: " +
+            (row.keperluan || purpose),
+          jenis: "surat",
+          tautan: "/admin",
+          referensi_id: row.id,
+          sudah_dibaca: false
+        }
+      });
+    } catch (notificationError) {
+      console.error(
+        "NOTIFIKASI PENGAJUAN SURAT ERROR:",
+        notificationError
+      );
+    }
 
     res.json({
       ok: true,
