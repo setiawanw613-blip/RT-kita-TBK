@@ -152,7 +152,24 @@ let currentUser=null;
 
   return data;
 }
-  
+
+  function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[char]);
+}
+
+function rupiah(value) {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    maximumFractionDigits: 0
+  }).format(Number(value) || 0);
+}
 window.onerror = function(message, source, line, column, error) {
   alert(
     "PELACAK ERROR RT KITA\n\n" +
