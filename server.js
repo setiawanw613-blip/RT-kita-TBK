@@ -1861,6 +1861,7 @@ app.get("/api/my-letters/:id/pdf", requireWarga, async (req, res) => {
     );
 
    
+ 
     // PENGESAHAN CONTOH — STAMPEL TES / PERCOBAAN
     doc.moveDown(2);
 
@@ -1869,6 +1870,7 @@ app.get("/api/my-letters/:id/pdf", requireWarga, async (req, res) => {
 
     doc.font("Helvetica")
       .fontSize(10)
+      .fillColor("#000000")
       .text("Bekasi, ____ / ____ / ______", signX, signY, {
         width: 190,
         align: "center"
@@ -1879,12 +1881,34 @@ app.get("/api/my-letters/:id/pdf", requireWarga, async (req, res) => {
       align: "center"
     });
 
-    // Stempel contoh berbentuk lingkaran merah.
-    // Posisi stempel dibuat sedikit di atas area tanda tangan.
+    // GAMBAR TANDA TANGAN — DIGAMBAR TERLEBIH DAHULU
+    const fs = require("fs");
+    const path = require("path");
+    const signaturePath = path.join(
+      __dirname,
+      "WhatsApp Image 2026-10-20 at 14.48.18.jpeg"
+    );
+
+    if (fs.existsSync(signaturePath)) {
+      doc.image(signaturePath, signX + 25, signY + 82, {
+        fit: [140, 55]
+      });
+    } else {
+      doc.font("Helvetica")
+        .fontSize(8)
+        .fillColor("#555555")
+        .text("Gambar tanda tangan belum tersedia", signX, signY + 100, {
+          width: 190,
+          align: "center"
+        });
+    }
+
+    // STEMPEL DIGAMBAR SETELAH TANDA TANGAN
     const stampX = signX + 95;
     const stampY = signY + 105;
 
     doc.save();
+
     doc.lineWidth(2)
       .strokeColor("#B91C1C")
       .circle(stampX, stampY, 43)
@@ -1922,47 +1946,25 @@ app.get("/api/my-letters/:id/pdf", requireWarga, async (req, res) => {
 
     doc.restore();
 
-  // TANDA TANGAN — FILE GAMBAR DI REPOSITORI
-const signaturePath = require("path").join(
-  __dirname,
-  "WhatsApp Image 2026-10-20 at 14.48.18.jpeg"
-);
+    // NAMA DAN LABEL PERCOBAAN
+    doc.font("Helvetica-Bold")
+      .fontSize(10)
+      .fillColor("#000000")
+      .text("Nama Ketua RT", signX, signY + 155, {
+        width: 190,
+        align: "center",
+        underline: true
+      });
 
-const fs = require("fs");
+    doc.font("Helvetica")
+      .fontSize(8)
+      .fillColor("#B91C1C")
+      .text("CONTOH — BUKAN PENGESAHAN RESMI", signX - 5, signY + 175, {
+        width: 200,
+        align: "center"
+      });
 
-if (fs.existsSync(signaturePath)) {
-  doc.image(signaturePath, signX + 25, signY + 82, {
-    fit: [140, 55],
-    align: "center"
-  });
-} else {
-  doc.font("Helvetica")
-    .fontSize(8)
-    .fillColor("#555555")
-    .text("Gambar tanda tangan belum tersedia", signX, signY + 125, {
-      width: 190,
-      align: "center"
-    });
-}
-
-doc.font("Helvetica-Bold")
-  .fontSize(10)
-  .fillColor("#000000")
-  .text("Nama Ketua RT", signX, signY + 145, {
-    width: 190,
-    align: "center",
-    underline: true
-  });
-
-doc.font("Helvetica")
-  .fontSize(8)
-  .fillColor("#B91C1C")
-  .text("CONTOH — BUKAN PENGESAHAN RESMI", signX - 5, signY + 165, {
-    width: 200,
-    align: "center"
-  });
-
-doc.end();
+    doc.end();
 
   } catch (error) {
     console.error("DOWNLOAD LETTER PDF ERROR:", error);
