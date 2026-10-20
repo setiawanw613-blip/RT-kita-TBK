@@ -1860,28 +1860,98 @@ app.get("/api/my-letters/:id/pdf", requireWarga, async (req, res) => {
       { align: "justify", lineGap: 3 }
     );
 
-    // RUANG PENGESAHAN — tanda tangan dan stempel asli diisi pengurus.
+   
+    // PENGESAHAN CONTOH — STAMPEL TES / PERCOBAAN
     doc.moveDown(2);
+
     const signX = 335;
     const signY = doc.y;
 
-    doc.fontSize(10).text("Bekasi, ____ / ____ / ______", signX, signY, {
-      width: 190,
-      align: "center"
-    });
+    doc.font("Helvetica")
+      .fontSize(10)
+      .text("Bekasi, ____ / ____ / ______", signX, signY, {
+        width: 190,
+        align: "center"
+      });
 
     doc.text("Ketua RT 004 / RW 01", signX, signY + 20, {
       width: 190,
       align: "center"
     });
 
-    doc.rect(signX + 45, signY + 45, 100, 65).lineWidth(0.7).stroke();
-    doc.fontSize(8).text("Ruang tanda tangan / stempel", signX + 49, signY + 70, {
-      width: 92,
-      align: "center"
-    });
+    // Stempel contoh berbentuk lingkaran merah.
+    // Posisi stempel dibuat sedikit di atas area tanda tangan.
+    const stampX = signX + 95;
+    const stampY = signY + 105;
+
+    doc.save();
+    doc.lineWidth(2)
+      .strokeColor("#B91C1C")
+      .circle(stampX, stampY, 43)
+      .stroke();
+
+    doc.lineWidth(0.8)
+      .circle(stampX, stampY, 37)
+      .stroke();
+
+    doc.font("Helvetica-Bold")
+      .fontSize(7)
+      .fillColor("#B91C1C")
+      .text("TAMAN BALI KAHURIPAN", stampX - 34, stampY - 21, {
+        width: 68,
+        align: "center"
+      });
+
+    doc.fontSize(11)
+      .text("STEMPEL", stampX - 34, stampY - 5, {
+        width: 68,
+        align: "center"
+      });
+
+    doc.fontSize(7)
+      .text("TES / PERCOBAAN", stampX - 34, stampY + 10, {
+        width: 68,
+        align: "center"
+      });
+
+    doc.fontSize(7)
+      .text("RT 004 / RW 01", stampX - 34, stampY + 20, {
+        width: 68,
+        align: "center"
+      });
+
+    doc.restore();
+
+    // Area tanda tangan masih kosong.
+    // Tanda tangan asli akan dipasang setelah file gambarnya
+    // tersedia untuk digunakan di PDF.
+    doc.font("Helvetica")
+      .fontSize(8)
+      .fillColor("#555555")
+      .text("Area tanda tangan", signX, signY + 125, {
+        width: 190,
+        align: "center"
+      });
+
+    doc.font("Helvetica-Bold")
+      .fontSize(10)
+      .fillColor("#000000")
+      .text("Nama Ketua RT", signX, signY + 145, {
+        width: 190,
+        align: "center",
+        underline: true
+      });
+
+    doc.font("Helvetica")
+      .fontSize(8)
+      .fillColor("#B91C1C")
+      .text("CONTOH — BUKAN PENGESAHAN RESMI", signX - 5, signY + 165, {
+        width: 200,
+        align: "center"
+      });
 
     doc.end();
+
   } catch (error) {
     console.error("DOWNLOAD LETTER PDF ERROR:", error);
 
