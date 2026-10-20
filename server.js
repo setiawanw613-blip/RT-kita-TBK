@@ -1,7 +1,7 @@
 const express = require("express");
 const path = require("path");
 const crypto = require("crypto");
-
+const PDFDocument = require("pdfkit");
 const app = express();
 
 app.use(express.json());
@@ -1688,6 +1688,214 @@ app.post("/api/letters", requireWarga, async (req, res) => {
     });
   }
 });
+
+/* UNDUH PDF SURAT - WARGA */
+app.get("/api/my-letters/:id/pdf", requireWarga, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const wargaId = req.session.wargaId;
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        ok: false,
+        message: "ID surat tidak valid"
+      });
+    }
+
+    // Pastikan surat milik warga yang sedang login.
+    const letters = await supabaseRequest("pengajuan_surat", {
+      query:
+        "select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at" +
+        "&id=eq." + encodeURIComponent(id) +
+        "&warga_id=eq." + encodeURIComponent(wargaId)
+    });
+
+    if (!Array.isArray(letters) || letters.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        message: "Surat tidak ditemukan atau bukan milik Anda"
+      });
+    }
+
+    const letter = letters[0];
+
+    if (letter.status !== "disetujui") {
+      return res.status(403).json({
+        ok: false,
+        message: "PDF hanya tersedia setelah surat disetujui Ketua RT"
+      });
+    }
+
+    // Ambil data warga untuk dicantumkan pada surat.
+    const residents = await supabaseRequest("warga", {
+      query:
+        "select=id,nama_lengkap,nik,no_kk,alamat,jenis_kelamin,tempat_lahir,tanggal_lahir,pekerjaan" +
+        "&id=eq." + encodeURIComponent(wargaId)
+    });
+
+    if (!Array.isArray(residents) || residents.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        message: "Data warga tidak ditemukan"
+      });
+    }
+
+    const warga = residents[0];
+
+    const clean = (value) =>
+      String(value ?? "").replace(/\s+/g, " ").trim();
+
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: { top: 45, bottom: 45, left: 55, right: 55 },
+      info: {
+        Title: clean(letter.jenis_surat) || "Surat RT TBK",
+        Author: "Pengurus RT 004 / RW 01"
+      }
+    });
+
+    const filename = "surat-rt-tbk-" + id + ".pdf";
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="' + filename + '"'
+    );
+    res.setHeader("Cache-Control", "private, no-store");
+
+    doc.on("error", (error) => {
+      console.error("PDF STREAM ERROR:", error);
+      if (!res.headersSent) {
+        res.status(500).end("Gagal membuat PDF");
+      } else {
+        res.destroy(error);
+      }
+    });
+
+    doc.pipe(res);
+
+    // KOP SURAT
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(16)
+      .text("TAMAN BALI KAHURIPAN", { align: "center" });
+
+    doc
+      .fontSize(12)
+      .text("RT 004 / RW 01", { align: "center" });
+
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .text("PENGURUS RT", { align: "center" })
+      .moveDown(0.4);
+
+    doc
+      .fontSize(9)
+      .text(
+        "Taman Bali Kahuripan, Kelurahan Sukahurip, Kecamatan Sukatani, Kabupaten Bekasi",
+        { align: "center" }
+      );
+
+    const kopY = doc.y + 10;
+    doc.moveTo(55, kopY).lineTo(540, kopY).lineWidth(1.5).stroke();
+    doc.moveTo(55, kopY + 4).lineTo(540, kopY + 4).lineWidth(0.5).stroke();
+    doc.y = kopY + 28;
+
+    // JUDUL SURAT
+    doc
+      .font("Helvetica-Bold")
+      .fontSize(14)
+      .text(clean(letter.jenis_surat).toUpperCase(), {
+        align: "center"
+      });
+
+    doc.moveDown(0.4);
+    doc
+      .font("Helvetica")
+      .fontSize(10)
+      .text("Nomor: ______________________________", {
+        align: "center"
+      });
+
+    doc.moveDown(1.5);
+    doc.fontSize(11).text("Yang bertanda tangan di bawah ini menerangkan bahwa:");
+
+    doc.moveDown(0.8);
+
+    const identity = [
+      ["Nama", clean(warga.nama_lengkap)],
+      ["NIK", clean(warga.nik) || "-"],
+      ["Nomor KK", clean(warga.no_kk) || "-"],
+      ["Tempat/Tanggal Lahir", [
+        clean(warga.tempat_lahir),
+        clean(warga.tanggal_lahir)
+      ].filter(Boolean).join(", ") || "-"],
+      ["Jenis Kelamin", clean(warga.jenis_kelamin) || "-"],
+      ["Pekerjaan", clean(warga.pekerjaan) || "-"],
+      ["Alamat", clean(warga.alamat) || "-"]
+    ];
+
+    identity.forEach(([label, value]) => {
+      doc.font("Helvetica").fontSize(10);
+      const y = doc.y;
+      doc.text(label, 65, y, { width: 135 });
+      doc.text(":", 200, y, { width: 12 });
+      doc.text(value, 215, y, { width: 310 });
+      doc.moveDown(0.45);
+    });
+
+    doc.moveDown(1);
+    doc
+      .font("Helvetica")
+      .fontSize(11)
+      .text(
+        "Keperluan: " + (clean(letter.keperluan) || "-"),
+        { align: "justify" }
+      );
+
+    doc.moveDown(0.8);
+    doc.text(
+      "Surat ini dibuat berdasarkan pengajuan warga yang telah disetujui Ketua RT. Nomor surat, isi akhir, serta pengesahan perlu diperiksa oleh Pengurus RT sebelum digunakan sebagai dokumen resmi.",
+      { align: "justify", lineGap: 3 }
+    );
+
+    // RUANG PENGESAHAN — tanda tangan dan stempel asli diisi pengurus.
+    doc.moveDown(2);
+    const signX = 335;
+    const signY = doc.y;
+
+    doc.fontSize(10).text("Bekasi, ____ / ____ / ______", signX, signY, {
+      width: 190,
+      align: "center"
+    });
+
+    doc.text("Ketua RT 004 / RW 01", signX, signY + 20, {
+      width: 190,
+      align: "center"
+    });
+
+    doc.rect(signX + 45, signY + 45, 100, 65).lineWidth(0.7).stroke();
+    doc.fontSize(8).text("Ruang tanda tangan / stempel", signX + 49, signY + 70, {
+      width: 92,
+      align: "center"
+    });
+
+    doc.end();
+  } catch (error) {
+    console.error("DOWNLOAD LETTER PDF ERROR:", error);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        ok: false,
+        message: "Gagal membuat PDF surat"
+      });
+    } else {
+      res.end();
+    }
+  }
+});
+
 
 /* SURAT SAYA - WARGA */
 app.get("/api/my-letters", requireWarga, async (req, res) => {
