@@ -125,6 +125,33 @@ textarea{min-height:110px;resize:vertical}
 
 <script>
 let currentUser=null;
+  async function api(url, options = {}) {
+  const res = await fetch(url, {
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers || {})
+    },
+    ...options
+  });
+
+  const text = await res.text();
+  let data = null;
+
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { message: text };
+  }
+
+  if (!res.ok) {
+    throw new Error(
+      data?.message || data?.error || "Terjadi kesalahan"
+    );
+  }
+
+  return data;
+}
   
 window.onerror = function(message, source, line, column, error) {
   alert(
