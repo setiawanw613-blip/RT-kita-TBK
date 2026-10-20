@@ -1922,35 +1922,47 @@ app.get("/api/my-letters/:id/pdf", requireWarga, async (req, res) => {
 
     doc.restore();
 
-    // Area tanda tangan masih kosong.
-    // Tanda tangan asli akan dipasang setelah file gambarnya
-    // tersedia untuk digunakan di PDF.
-    doc.font("Helvetica")
-      .fontSize(8)
-      .fillColor("#555555")
-      .text("Area tanda tangan", signX, signY + 125, {
-        width: 190,
-        align: "center"
-      });
+  // TANDA TANGAN — FILE GAMBAR DI REPOSITORI
+const signaturePath = require("path").join(
+  __dirname,
+  "WhatsApp Image 2026-10-20 at 14.48.18.jpeg"
+);
 
-    doc.font("Helvetica-Bold")
-      .fontSize(10)
-      .fillColor("#000000")
-      .text("Nama Ketua RT", signX, signY + 145, {
-        width: 190,
-        align: "center",
-        underline: true
-      });
+const fs = require("fs");
 
-    doc.font("Helvetica")
-      .fontSize(8)
-      .fillColor("#B91C1C")
-      .text("CONTOH — BUKAN PENGESAHAN RESMI", signX - 5, signY + 165, {
-        width: 200,
-        align: "center"
-      });
+if (fs.existsSync(signaturePath)) {
+  doc.image(signaturePath, signX + 25, signY + 82, {
+    fit: [140, 55],
+    align: "center"
+  });
+} else {
+  doc.font("Helvetica")
+    .fontSize(8)
+    .fillColor("#555555")
+    .text("Gambar tanda tangan belum tersedia", signX, signY + 125, {
+      width: 190,
+      align: "center"
+    });
+}
 
-    doc.end();
+doc.font("Helvetica-Bold")
+  .fontSize(10)
+  .fillColor("#000000")
+  .text("Nama Ketua RT", signX, signY + 145, {
+    width: 190,
+    align: "center",
+    underline: true
+  });
+
+doc.font("Helvetica")
+  .fontSize(8)
+  .fillColor("#B91C1C")
+  .text("CONTOH — BUKAN PENGESAHAN RESMI", signX - 5, signY + 165, {
+    width: 200,
+    align: "center"
+  });
+
+doc.end();
 
   } catch (error) {
     console.error("DOWNLOAD LETTER PDF ERROR:", error);
