@@ -183,12 +183,12 @@ window.onerror = function(message, source, line, column, error) {
 
 
 
-function layout(title,body,showBack=true){
+```js
+function layout(title, body, showBack = true) {
   const isWarga = currentUser?.role === "warga";
 
-  document.getElementById("app").innerHTML=`
+  document.getElementById("app").innerHTML = `
     <div class="wrap">
-
       <div style="
         background:linear-gradient(135deg,#1267c9,#0750a4);
         color:white;
@@ -204,9 +204,7 @@ function layout(title,body,showBack=true){
           gap:12px;
         ">
           <div style="min-width:0">
-            <div style="font-size:25px;font-weight:800">
-              RT Kita
-            </div>
+            <div style="font-size:25px;font-weight:800">RT Kita</div>
             <div style="font-size:13px;opacity:.92">
               Pelayanan warga digital
             </div>
@@ -216,48 +214,46 @@ function layout(title,body,showBack=true){
           </div>
 
           <div style="display:flex;align-items:center;gap:8px">
-          
-<button
-  type="button"
-  aria-label="Notifikasi"
-  title="Notifikasi"
-  onclick="alert('Notifikasi akan segera diaktifkan.')"
-  style="
-    position:relative;
-    width:44px;
-    height:44px;
-    flex-shrink:0;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border:1px solid #ffffff70;
-    border-radius:50%;
-    background:#ffffff18;
-    color:white;
-    font-size:22px;
-    cursor:pointer;
-  "
->
-  🔔
-  <span style="
-    position:absolute;
-    top:-4px;
-    right:-4px;
-    min-width:17px;
-    height:17px;
-    padding:0 3px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border-radius:20px;
-    background:#ff304f;
-    color:white;
-    font-size:10px;
-    font-weight:800;
-    border:2px solid #1267c9;
-  ">0</span>
-</button>
-
+            <button
+              type="button"
+              aria-label="Notifikasi"
+              title="Notifikasi"
+              onclick="bukaNotifikasiHeader()"
+              style="
+                position:relative;
+                width:44px;
+                height:44px;
+                flex-shrink:0;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                border:1px solid #ffffff70;
+                border-radius:50%;
+                background:#ffffff18;
+                color:white;
+                font-size:22px;
+                cursor:pointer;
+              "
+            >
+              🔔
+              <span id="jumlahNotifikasiHeader" style="
+                position:absolute;
+                top:-4px;
+                right:-4px;
+                min-width:17px;
+                height:17px;
+                padding:0 3px;
+                display:none;
+                align-items:center;
+                justify-content:center;
+                border-radius:20px;
+                background:#ff304f;
+                color:white;
+                font-size:10px;
+                font-weight:800;
+                border:2px solid #1267c9;
+              ">0</span>
+            </button>
 
             <button class="btn secondary" onclick="logout()">
               Keluar
@@ -284,7 +280,6 @@ function layout(title,body,showBack=true){
         </div>
       ` : ""}
 
-    
       <div style="
         text-align:center;
         color:#52647a;
@@ -297,17 +292,110 @@ function layout(title,body,showBack=true){
         <div style="font-weight:700;color:#174a82">
           RT Kita — Dari Warga, Untuk Warga
         </div>
-        <div style="font-weight:600;color:#52647a">
+        <div style="font-weight:700;color:#52647a">
           Created by ayah CiaraChana
         </div>
       </div>
- </div>
+    </div>
   `;
+
+  if (typeof muatNotifikasiHeader === "function") {
+    muatNotifikasiHeader();
+  }
 }
+```
 function dashboard(){
   boot();
 }
 
+async function muatNotifikasiHeader() {
+  try {
+    const hasil = await api("/api/notifikasi");
+    const jumlah = document.getElementById("jumlahNotifikasiHeader");
+
+    if (!jumlah || !hasil || !hasil.ok) return;
+
+    const belumDibaca = Number(hasil.belum_dibaca || 0);
+
+    jumlah.textContent = belumDibaca > 99 ? "99+" : belumDibaca;
+    jumlah.style.display = belumDibaca > 0 ? "flex" : "none";
+  } catch (error) {
+    console.error("Gagal memuat jumlah notifikasi:", error);
+  }
+}
+
+  
+async function bukaNotifikasiHeader() {
+  try {
+    const hasil = await api("/api/notifikasi");
+    const daftar = hasil.notifikasi || [];
+
+    const isi = daftar.length
+      ? daftar.map(item => `
+          <div style="
+            padding:12px;
+            margin-bottom:8px;
+            border:1px solid #dce6f2;
+            border-radius:10px;
+            background:${item.sudah_dibaca ? "#ffffff" : "#eef6ff"};
+          ">
+            <div style="font-weight:800;color:#174a82">
+              ${esc(item.judul || "Notifikasi")}
+            </div>
+            <div style="margin-top:5px">
+              ${esc(item.pesan || "")}
+            </div>
+            <div style="font-size:12px;color:#64748b;margin-top:7px">
+              ${item.dibuat_pada
+                ? new Date(item.dibuat_pada).toLocaleString("id-ID")
+                : ""}
+              · ${item.sudah_dibaca ? "Sudah dibaca" : "Belum dibaca"}
+            </div>
+          </div>
+        `).join("")
+      : "<p>Belum ada notifikasi.</p>";
+
+    const lama = document.getElementById("panelNotifikasiHeader");
+    if (lama) lama.remove();
+
+    const panel = document.createElement("div");
+    panel.id = "panelNotifikasiHeader";
+    panel.style.cssText = `
+      position:fixed;
+      top:90px;
+      right:16px;
+      width:min(380px,calc(100vw - 32px));
+      max-height:70vh;
+      overflow:auto;
+      padding:16px;
+      background:white;
+      color:#243447;
+      border:1px solid #dce6f2;
+      border-radius:14px;
+      box-shadow:0 10px 35px #0003;
+      z-index:9999;
+      box-sizing:border-box;
+    `;
+
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <strong style="font-size:18px">Notifikasi</strong>
+        <button type="button" class="btn secondary"
+          onclick="document.getElementById('panelNotifikasiHeader')?.remove()">
+          Tutup
+        </button>
+      </div>
+      ${isi}
+    `;
+
+    document.body.appendChild(panel);
+  } catch (error) {
+    alert("Gagal memuat notifikasi: " + error.message);
+  }
+}
+
+
+  
 function loginPage(error=""){
   document.getElementById("app").innerHTML=`
     <div style="
