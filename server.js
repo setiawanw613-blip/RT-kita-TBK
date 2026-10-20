@@ -595,6 +595,55 @@ app.get("/api/dashboard", requireAdmin, async (req, res) => {
   }
 });
 
+/* NOTIFIKASI — DAFTAR ADMIN DAN WARGA */
+app.get("/api/notifikasi", requireLogin, async (req, res) => {
+  try {
+    const session = req.session;
+    let query =
+      "select=id,penerima_peran,penerima_warga_id,judul,pesan,jenis,tautan,referensi_id,sudah_dibaca,dibuat_pada&order=dibuat_pada.desc&limit=100";
+
+    if (session.role === "admin") {
+      query += "&penerima_peran=eq.admin";
+    } else if (session.role === "warga") {
+      if (!session.wargaId) {
+        return res.status(403).json({
+          ok: false,
+          message: "Identitas warga tidak ditemukan"
+        });
+      }
+
+      query +=
+        "&penerima_peran=eq.warga" +
+        "&penerima_warga_id=eq." +
+        encodeURIComponent(session.wargaId);
+    } else {
+      return res.status(403).json({
+        ok: false,
+        message: "Akses ditolak"
+      });
+    }
+
+    const data = await supabaseRequest("notifikasi", {
+      query
+    });
+
+    const rows = Array.isArray(data) ? data : [];
+
+    res.json({
+      ok: true,
+      notifikasi: rows,
+      belum_dibaca: rows.filter(item => !item.sudah_dibaca).length
+    });
+  } catch (error) {
+    console.error("NOTIFIKASI ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil notifikasi"
+    });
+  }
+});
+
 /* DATA WARGA - KETUA RT */
 app.get("/api/residents", requireAdmin, async (req, res) => {
   try {
