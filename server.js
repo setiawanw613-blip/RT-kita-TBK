@@ -136,31 +136,98 @@ async function uploadBuktiPengeluaran(fileName, fileBuffer, contentType) {
 }
 
 
+
 function getToken(req) {
   const cookie = req.headers.cookie || "";
-  const match = cookie.match(/rt_token=([^;]+)/);
-  return match ? decodeURIComponent(match[1]) : null;
+  const match = cookie.match(/(?:^|;\s*)rt_token=([^;]+)/);
+
+  if (!match) return null;
+
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+}
+
+function createSessionToken(session) {
+  if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET belum dikonfigurasi");
+  }
+
+  const payload = Buffer.from(
+    JSON.stringify({
+      ...session,
+      createdAt: Date.now()
+    })
+  ).toString("base64url");
+
+  const signature = crypto
+    .createHmac("sha256", process.env.SESSION_SECRET)
+    .update(payload)
+    .digest("base64url");
+
+  return `${payload}.${signature}`;
 }
 
 function getSession(req) {
   const token = getToken(req);
-  if (!token) return null;
+  if (!token || !process.env.SESSION_SECRET) return null;
 
-  const session = sessions.get(token);
-  if (!session) return null;
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
 
-  const SESSION_MAX_AGE = 8 * 60 * 60 * 1000;
+  const [payload, signature] = parts;
+
+  const expectedSignature = crypto
+    .createHmac("sha256", process.env.SESSION_SECRET)
+    .update(payload)
+    .digest("base64url");
+
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
 
   if (
-    !session.createdAt ||
-    Date.now() - session.createdAt > SESSION_MAX_AGE
+    actualBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
   ) {
-    sessions.delete(token);
     return null;
   }
 
-  return session;
+  try {
+    const session = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    );
+
+    const SESSION_MAX_AGE = 8 * 60 * 60 * 1000;
+
+    if (
+      !session.createdAt ||
+      !Number.isFinite(session.createdAt) ||
+      Date.now() - session.createdAt < 0 ||
+      Date.now() - session.createdAt > SESSION_MAX_AGE
+    ) {
+      return null;
+    }
+
+    if (session.role === "admin" && session.id === "admin") {
+      return session;
+    }
+
+    if (
+      session.role === "warga" &&
+      session.wargaId &&
+      String(session.id) === String(session.wargaId)
+    ) {
+      return session;
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
 }
+
 
 function requireLogin(req, res, next) {
   const session = getSession(req);
@@ -191,6 +258,7 @@ function requireAdmin(req, res, next) {
 }
 
 
+
 async function requireWarga(req, res, next) {
   const session = getSession(req);
 
@@ -217,8 +285,6 @@ async function requireWarga(req, res, next) {
     }
 
     if (data[0].status_warga !== "aktif") {
-      sessions.delete(getToken(req));
-
       res.setHeader(
         "Set-Cookie",
         "rt_token=; Path=/; HttpOnly; Secure; Max-Age=0; SameSite=Lax"
@@ -443,16 +509,15 @@ if (warga.status_warga !== "aktif") {
     message: "Akun Anda sudah dinonaktifkan oleh Ketua RT"
   });
 }
-  const token = crypto.randomBytes(32).toString("hex");
+ 
+const token = createSessionToken({
+  id: warga.id,
+  wargaId: warga.id,
+  username: warga.no_hp,
+  role: "warga",
+  nama: warga.nama_lengkap
+});
 
-  sessions.set(token, {
-    id: warga.id,
-    wargaId: warga.id,
-    username: warga.no_hp,
-    role: "warga",
-    nama: warga.nama_lengkap,
-    createdAt: Date.now()
-  });
 
   res.setHeader(
     "Set-Cookie",
@@ -485,14 +550,12 @@ if (warga.status_warga !== "aktif") {
       });
     }
 
-    const token = crypto.randomBytes(32).toString("hex");
-
-    sessions.set(token, {
-      id: "admin",
-      username,
-      role: "admin",
-      createdAt: Date.now()
-    });
+ 
+const token = createSessionToken({
+  id: "admin",
+  username,
+  role: "admin"
+});
 
     res.setHeader(
       "Set-Cookie",
@@ -517,21 +580,17 @@ if (warga.status_warga !== "aktif") {
   }
 });
 
+
 /* LOGOUT */
 app.post("/api/logout", (req, res) => {
-  const token = getToken(req);
-
-  if (token) {
-    sessions.delete(token);
-  }
-
   res.setHeader(
     "Set-Cookie",
-   "rt_token=; Path=/; HttpOnly; Secure; Max-Age=0; SameSite=Lax"
+    "rt_token=; Path=/; HttpOnly; Secure; Max-Age=0; SameSite=Lax"
   );
 
   res.json({ ok: true });
 });
+
 
 /* CEK LOGIN */
 app.get("/api/me", requireLogin, (req, res) => {
