@@ -1689,7 +1689,34 @@ app.post("/api/letters", requireWarga, async (req, res) => {
   }
 });
 
+/* SURAT SAYA - WARGA */
+app.get("/api/my-letters", requireWarga, async (req, res) => {
+  try {
+    const data = await supabaseRequest("pengajuan_surat", {
+      query:
+        "select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at" +
+        "&warga_id=eq." +
+        encodeURIComponent(req.session.wargaId) +
+        "&order=created_at.desc"
+    });
 
+    const rows = Array.isArray(data)
+      ? data.map(row => ({
+          ...row,
+          type: row.jenis_surat,
+          purpose: row.keperluan
+        }))
+      : [];
+
+    res.json(rows);
+  } catch (error) {
+    console.error("MY LETTERS ERROR:", error);
+    res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil daftar surat saya"
+    });
+  }
+});
 
 /* PROSES SURAT - KETUA RT */
 app.patch("/api/letters/:id", requireAdmin, async (req, res) => {
