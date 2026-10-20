@@ -644,6 +644,75 @@ app.get("/api/notifikasi", requireLogin, async (req, res) => {
   }
 });
 
+/* NOTIFIKASI — TANDAI SUDAH DIBACA */
+app.patch("/api/notifikasi/:id/baca", requireLogin, async (req, res) => {
+  try {
+    const session = req.session;
+    const id = Number(req.params.id);
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+      return res.status(400).json({
+        ok: false,
+        message: "ID notifikasi tidak valid"
+      });
+    }
+
+    let query =
+      "id=eq." + id +
+      "&select=id,penerima_peran,penerima_warga_id";
+
+    if (session.role === "admin") {
+      query += "&penerima_peran=eq.admin";
+    } else if (session.role === "warga" && session.wargaId) {
+      query +=
+        "&penerima_peran=eq.warga" +
+        "&penerima_warga_id=eq." +
+        encodeURIComponent(session.wargaId);
+    } else {
+      return res.status(403).json({
+        ok: false,
+        message: "Akses ditolak"
+      });
+    }
+
+    const found = await supabaseRequest("notifikasi", { query });
+
+    if (!Array.isArray(found) || found.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        message: "Notifikasi tidak ditemukan"
+      });
+    }
+
+    await supabaseRequest("notifikasi", {
+      method: "PATCH",
+      query:
+  "id=eq." + id +
+  "&penerima_peran=eq." + session.role +
+  (session.role === "warga"
+    ? "&penerima_warga_id=eq." + encodeURIComponent(session.wargaId)
+    : ""),
+      body: {
+        sudah_dibaca: true,
+        dibaca_pada: new Date().toISOString()
+      }
+    });
+
+    res.json({
+      ok: true,
+      message: "Notifikasi ditandai sudah dibaca"
+    });
+  } catch (error) {
+    console.error("TANDAI NOTIFIKASI ERROR:", error);
+
+    res.status(500).json({
+      ok: false,
+      message: "Gagal memperbarui notifikasi"
+    });
+  }
+});
+
+
 /* DATA WARGA - KETUA RT */
 app.get("/api/residents", requireAdmin, async (req, res) => {
   try {
