@@ -2509,12 +2509,33 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
       }
     });
 
-    const row = Array.isArray(data) ? data[0] : data;
+const row = Array.isArray(data) ? data[0] : data;
 
-    return res.json({
-      ok: true,
-      data: row
-    });
+// Notifikasi admin untuk pengajuan iuran baru.
+try {
+  await supabaseRequest("notifikasi", {
+    method: "POST",
+    body: {
+      penerima_peran: "admin",
+      judul: "Pembayaran Iuran Menunggu Verifikasi",
+      pesan:
+        `${warga.nama_lengkap || "Warga"} mengajukan iuran bulan ${inputBulan}. ` +
+        "Total pembayaran Rp35.000. Menunggu verifikasi Ketua RT.",
+      jenis: "iuran",
+      tautan: "/admin",
+      referensi_id: row.id,
+      sudah_dibaca: false
+    }
+  });
+} catch (notifError) {
+  console.error("NOTIFIKASI PEMBAYARAN IURAN ERROR:", notifError);
+}
+
+return res.json({
+  ok: true,
+  data: row
+});
+
   } catch (error) {
     console.error("BAYAR IURAN ERROR:", error);
 
@@ -2595,6 +2616,7 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   }
 });
 
+
 /* VERIFIKASI IURAN - KETUA RT */
 app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
   try {
@@ -2622,6 +2644,15 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
     }
 
     const iuran = existing[0];
+
+    // Cegah verifikasi ulang untuk pembayaran yang sudah lunas.
+    if (iuran.status === "lunas") {
+      return res.json({
+        ok: true,
+        message: "Iuran ini sudah lunas sebelumnya",
+        data: iuran
+      });
+    }
 
     const dana = [
       { kategori: "Sampah", jumlah: 15000 },
@@ -2653,8 +2684,6 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
             }
           });
         } catch (insertError) {
-          // Jika permintaan lain sudah memasukkan transaksi yang sama,
-          // lanjutkan hanya jika transaksi tersebut benar-benar ditemukan.
           if (getSupabaseErrorCode(insertError) !== "23505") {
             throw insertError;
           }
@@ -2687,7 +2716,9 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
 
     const data = await supabaseRequest("iuran_warga", {
       method: "PATCH",
-      query: `id=eq.${encodeURIComponent(id)}`,
+      query:
+        `id=eq.${encodeURIComponent(id)}` +
+        "&status=neq.lunas",
       body: {
         status: "lunas",
         diverifikasi_at: new Date().toISOString(),
@@ -2695,10 +2726,40 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
       }
     });
 
+    const row = Array.isArray(data) ? data[0] : data;
+
+    if (!row || row.status !== "lunas") {
+      return res.status(409).json({
+        ok: false,
+        message: "Status iuran tidak berhasil diperbarui. Periksa kembali data iuran."
+      });
+    }
+
+    // Notifikasi warga setelah pembayaran berhasil diverifikasi.
+    try {
+      await supabaseRequest("notifikasi", {
+        method: "POST",
+        body: {
+          penerima_peran: "warga",
+          penerima_warga_id: Number(iuran.warga_id),
+          judul: "Pembayaran Iuran Terverifikasi",
+          pesan:
+            `Pembayaran iuran bulan ${String(iuran.bulan).slice(0, 7)} ` +
+            "sebesar Rp35.000 telah diverifikasi dan dinyatakan lunas.",
+          jenis: "iuran",
+          tautan: "/",
+          referensi_id: iuran.id,
+          sudah_dibaca: false
+        }
+      });
+    } catch (notifError) {
+      console.error("NOTIFIKASI VERIFIKASI IURAN ERROR:", notifError);
+    }
+
     return res.json({
       ok: true,
       message: "Iuran berhasil diverifikasi",
-      data: Array.isArray(data) ? data[0] : data
+      data: row
     });
   } catch (error) {
     console.error("VERIFIKASI IURAN ERROR:", error);
