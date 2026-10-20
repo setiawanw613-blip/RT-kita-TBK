@@ -2883,6 +2883,7 @@ async function myLetters(){
   }
 }
 
+
 function openMyLetter(index){
   const letters = window._myLetters || [];
   const x = letters[index];
@@ -2952,9 +2953,15 @@ function openMyLetter(index){
         ">
           <b>Surat telah disetujui.</b>
           <div style="font-size:13px;margin-top:5px">
-            Dokumen PDF akan tersedia setelah fitur pembuatan surat resmi diaktifkan.
+            Silakan unduh PDF untuk diperiksa sebelum digunakan.
           </div>
         </div>
+
+        <button class="btn"
+          style="width:100%;margin-top:12px"
+          onclick="downloadMyLetterPDF(${Number(x.id)})">
+          ↓ Unduh PDF Surat
+        </button>
       ` : ""}
 
       <button class="btn secondary"
@@ -2965,6 +2972,49 @@ function openMyLetter(index){
     </div>
   `);
 }
+
+async function downloadMyLetterPDF(id){
+  if (!Number.isInteger(id) || id <= 0) {
+    alert("ID surat tidak valid.");
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      "/api/my-letters/" + encodeURIComponent(id) + "/pdf",
+      {
+        method: "GET",
+        credentials: "same-origin"
+      }
+    );
+
+    if (!response.ok) {
+      let message = "Gagal mengunduh PDF surat.";
+      try {
+        const data = await response.json();
+        if (data.message) message = data.message;
+      } catch (_) {}
+      alert(message);
+      return;
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "surat-rt-tbk-" + id + ".pdf";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {
+    console.error("DOWNLOAD PDF ERROR:", error);
+    alert("Koneksi gagal. Silakan coba unduh kembali.");
+  }
+}
+
 function newComplaint(){
   layout("Pengaduan Warga",`
     <div class="card">
