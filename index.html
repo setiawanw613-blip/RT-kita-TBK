@@ -2814,39 +2814,157 @@ async function saveLetter(){
     alert(e.message);
   }
 }
-
 async function myLetters(){
   layout("Surat Saya",`
-    <div class="card" id="myLetterList">Memuat...</div>
-    <button class="btn" onclick="newLetter()">+ Ajukan surat</button>
-    <button class="btn secondary" style="margin-top:8px" onclick="wargaHome()">Kembali</button>
+    <div class="card" id="myLetterList">Memuat pengajuan surat...</div>
+
+    <button class="btn" style="width:100%;margin-top:10px"
+      onclick="newLetter()">
+      + Ajukan Surat
+    </button>
+
+    <button class="btn secondary" style="width:100%;margin-top:8px"
+      onclick="wargaHome()">
+      ← Kembali
+    </button>
   `);
 
-  try{
-    const data=await api("/api/my-letters");
-    const box=document.getElementById("myLetterList");
+  try {
+    const data = await api("/api/my-letters");
+    const box = document.getElementById("myLetterList");
 
-    if(!data.length){
-      box.innerHTML="<p class='muted'>Belum ada pengajuan surat</p>";
+    window._myLetters = Array.isArray(data) ? data : [];
+
+    if (!window._myLetters.length) {
+      box.innerHTML =
+        "<p class='muted'>Belum ada pengajuan surat.</p>";
       return;
     }
 
-    box.innerHTML=data.map(x=>`
-      <div class="row">
-        <b>${esc(x.type||x.jenis_surat)}</b>
-        <div>${esc(x.purpose||x.keperluan)}</div>
-        <div style="margin-top:6px">
-          <span class="badge">${esc(x.status)}</span>
+    box.innerHTML = window._myLetters.map((x, i) => `
+      <button
+        type="button"
+        class="row"
+        onclick="openMyLetter(${i})"
+        style="
+          display:block;
+          width:100%;
+          padding:16px 8px;
+          border:0;
+          border-bottom:1px solid #e8edf3;
+          background:white;
+          text-align:left;
+          cursor:pointer;
+          color:#172033;
+        "
+      >
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
+          <b>${esc(x.type || x.jenis_surat || "Pengajuan Surat")}</b>
+          <span style="color:#1267c9;font-size:20px">›</span>
         </div>
-        ${x.catatan?`<div class="muted">Catatan RT: ${esc(x.catatan)}</div>`:""}
-      </div>
+
+        <div class="muted" style="margin-top:6px">
+          ${esc(x.purpose || x.keperluan || "-")}
+        </div>
+
+        <div style="margin-top:8px">
+          <span class="badge">${esc(x.status || "diajukan")}</span>
+        </div>
+
+        <div class="muted" style="font-size:12px;margin-top:6px">
+          Ketuk untuk melihat detail surat
+        </div>
+      </button>
     `).join("");
-  }catch(e){
-    document.getElementById("myLetterList").innerHTML=
+
+  } catch(e) {
+    document.getElementById("myLetterList").innerHTML =
       `<div class="error">${esc(e.message)}</div>`;
   }
 }
 
+function openMyLetter(index){
+  const letters = window._myLetters || [];
+  const x = letters[index];
+
+  if (!x) {
+    alert("Data surat tidak ditemukan. Silakan buka Surat Saya kembali.");
+    return;
+  }
+
+  const status = String(x.status || "diajukan");
+  const approved = status.toLowerCase() === "disetujui";
+
+  layout("Detail Surat Saya",`
+    <div class="card">
+      <div style="text-align:center;padding:10px 0 18px">
+        <div style="font-size:36px">📄</div>
+        <h2 style="margin:8px 0">
+          ${esc(x.type || x.jenis_surat || "Pengajuan Surat")}
+        </h2>
+        <span class="badge">${esc(status)}</span>
+      </div>
+
+      <div class="row">
+        <div class="muted">Jenis surat</div>
+        <b>${esc(x.type || x.jenis_surat || "-")}</b>
+      </div>
+
+      <div class="row">
+        <div class="muted">Keperluan</div>
+        <div>${esc(x.purpose || x.keperluan || "-")}</div>
+      </div>
+
+      <div class="row">
+        <div class="muted">Tanggal pengajuan</div>
+        <div>${
+          x.created_at
+            ? esc(new Date(x.created_at).toLocaleDateString("id-ID", {
+                day:"numeric", month:"long", year:"numeric"
+              }))
+            : "-"
+        }</div>
+      </div>
+
+      <div class="row">
+        <div class="muted">Status persetujuan</div>
+        <b style="color:${approved ? "#16803c" : "#1267c9"}">
+          ${approved ? "✓ Telah disetujui Ketua RT" :
+            status.toLowerCase() === "ditolak" ? "Pengajuan ditolak" :
+            "Menunggu proses Ketua RT"}
+        </b>
+      </div>
+
+      ${x.catatan ? `
+        <div class="row">
+          <div class="muted">Catatan Ketua RT</div>
+          <div>${esc(x.catatan)}</div>
+        </div>
+      ` : ""}
+
+      ${approved ? `
+        <div style="
+          margin-top:16px;
+          padding:14px;
+          border-radius:12px;
+          background:#edf7ef;
+          color:#245b32;
+        ">
+          <b>Surat telah disetujui.</b>
+          <div style="font-size:13px;margin-top:5px">
+            Dokumen PDF akan tersedia setelah fitur pembuatan surat resmi diaktifkan.
+          </div>
+        </div>
+      ` : ""}
+
+      <button class="btn secondary"
+        style="width:100%;margin-top:16px"
+        onclick="myLetters()">
+        ← Kembali ke Surat Saya
+      </button>
+    </div>
+  `);
+}
 function newComplaint(){
   layout("Pengaduan Warga",`
     <div class="card">
