@@ -117,15 +117,16 @@ textarea{min-height:110px;resize:vertical}
 .bottom button{border:0;background:transparent;font-size:12px}
 .error{background:#ffebee;color:#b71c1c;padding:10px;border-radius:10px;margin-bottom:12px}
 .success{background:#e8f5e9;color:#176b20;padding:10px;border-radius:10px;margin-bottom:12px}
-  @media (max-width: 700px) {
-  #stats {
+@media (max-width: 700px) {
+  #stats.grid {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
   }
 
-  #stats > * {
-    min-width: 0 !important;
+  #stats.grid > .stat {
+    min-width: 0;
+    width: auto;
   }
 }
 </style>
