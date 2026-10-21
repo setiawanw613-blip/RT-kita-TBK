@@ -2416,6 +2416,7 @@ app.get("/api/iuran", requireAdmin, async (req, res) => {
   }
 });
 
+
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
@@ -2430,7 +2431,6 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
 
     const bulan = inputBulan + "-01";
 
-    // Ambil data warga yang sedang mengajukan pembayaran.
     const wargaData = await supabaseRequest("warga", {
       query:
         "select=id,nama_lengkap,keluarga_id" +
@@ -2449,7 +2449,6 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
 
     const keluargaId = String(warga.keluarga_id);
 
-    // Cari pengajuan iuran yang sudah ada untuk KK dan bulan ini.
     const existing = await supabaseRequest("iuran_warga", {
       query:
         "select=id,warga_id,keluarga_id,bulan,status,total_amount" +
@@ -2458,19 +2457,54 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
         "&limit=1"
     });
 
+    // Jika pembayaran sudah ada, jangan membuat pembayaran kedua.
     if (Array.isArray(existing) && existing.length) {
       const pembayaran = existing[0];
 
-      // Jika anggota keluarga yang sama mencoba lagi,
-      // kembalikan data pembayaran yang sudah tersimpan.
+      // Pengaju yang sama: pulihkan notifikasi bila diperlukan.
       if (String(pembayaran.warga_id) === String(warga.id)) {
+        if (pembayaran.status === "menunggu_verifikasi") {
+          try {
+            const notifAda = await supabaseRequest("notifikasi", {
+              query:
+                "select=id" +
+                "&penerima_peran=eq.admin" +
+                "&jenis=eq.iuran" +
+                `&referensi_id=eq.${encodeURIComponent(pembayaran.id)}` +
+                "&limit=1"
+            });
+
+            if (!Array.isArray(notifAda) || notifAda.length === 0) {
+              await supabaseRequest("notifikasi", {
+                method: "POST",
+                body: {
+                  penerima_peran: "admin",
+                  judul: "Pembayaran Iuran Menunggu Verifikasi",
+                  pesan:
+                    `${warga.nama_lengkap || "Warga"} mengajukan iuran bulan ${inputBulan}. ` +
+                    "Total pembayaran Rp35.000. Menunggu verifikasi Ketua RT.",
+                  jenis: "iuran",
+                  tautan: "/admin",
+                  referensi_id: pembayaran.id,
+                  sudah_dibaca: false
+                }
+              });
+            }
+          } catch (notifError) {
+            console.error(
+              "PEMULIHAN NOTIFIKASI IURAN ERROR:",
+              notifError?.message || notifError
+            );
+          }
+        }
+
         return res.json({
           ok: true,
           data: pembayaran
         });
       }
 
-      // Pembayaran sudah diajukan oleh anggota KK lainnya.
+      // Pembayaran milik anggota KK lainnya.
       let namaPembayar = "anggota keluarga lainnya";
 
       if (pembayaran.warga_id) {
@@ -2497,7 +2531,7 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
       });
     }
 
-    // Simpan pembayaran sekaligus dengan identitas KK.
+    // Simpan pembayaran baru.
     const data = await supabaseRequest("iuran_warga", {
       method: "POST",
       body: {
@@ -2509,40 +2543,44 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
       }
     });
 
-const row = Array.isArray(data) ? data[0] : data;
+    const row = Array.isArray(data) ? data[0] : data;
 
-// Notifikasi admin untuk pengajuan iuran baru.
-try {
-  await supabaseRequest("notifikasi", {
-    method: "POST",
-    body: {
-      penerima_peran: "admin",
-      judul: "Pembayaran Iuran Menunggu Verifikasi",
-      pesan:
-        `${warga.nama_lengkap || "Warga"} mengajukan iuran bulan ${inputBulan}. ` +
-        "Total pembayaran Rp35.000. Menunggu verifikasi Ketua RT.",
-      jenis: "iuran",
-      tautan: "/admin",
-      referensi_id: row.id,
-      sudah_dibaca: false
+    if (!row || row.id == null) {
+      throw new Error("Data pembayaran tidak ditemukan setelah disimpan.");
     }
-  });
-} catch (notifError) {
-  console.error(
-    "NOTIFIKASI PEMBAYARAN IURAN ERROR:",
-    notifError?.message || notifError
-  );
-}
-return res.json({
-  ok: true,
-  data: row
-});
+
+    // Buat notifikasi admin untuk pembayaran baru.
+    try {
+      await supabaseRequest("notifikasi", {
+        method: "POST",
+        body: {
+          penerima_peran: "admin",
+          judul: "Pembayaran Iuran Menunggu Verifikasi",
+          pesan:
+            `${warga.nama_lengkap || "Warga"} mengajukan iuran bulan ${inputBulan}. ` +
+            "Total pembayaran Rp35.000. Menunggu verifikasi Ketua RT.",
+          jenis: "iuran",
+          tautan: "/admin",
+          referensi_id: row.id,
+          sudah_dibaca: false
+        }
+      });
+    } catch (notifError) {
+      console.error(
+        "NOTIFIKASI PEMBAYARAN IURAN ERROR:",
+        notifError?.message || notifError
+      );
+    }
+
+    return res.json({
+      ok: true,
+      data: row
+    });
 
   } catch (error) {
     console.error("BAYAR IURAN ERROR:", error);
 
-    // Jika dua permintaan bersamaan, periksa apakah
-    // pengajuan untuk KK dan bulan tersebut sudah tersimpan.
+    // Tangani dua permintaan bersamaan tanpa membuat pembayaran ganda.
     try {
       const inputBulan = String(req.body.bulan || "").slice(0, 7);
 
@@ -2576,6 +2614,47 @@ return res.json({
             const pembayaran = existing[0];
 
             if (String(pembayaran.warga_id) === String(warga.id)) {
+              // Pulihkan notifikasi tanpa menggagalkan respons pembayaran.
+              if (pembayaran.status === "menunggu_verifikasi") {
+                try {
+                  const notifAda = await supabaseRequest("notifikasi", {
+                    query:
+                      "select=id" +
+                      "&penerima_peran=eq.admin" +
+                      "&jenis=eq.iuran" +
+                      `&referensi_id=eq.${encodeURIComponent(pembayaran.id)}` +
+                      "&limit=1"
+                  });
+
+                  if (!Array.isArray(notifAda) || notifAda.length === 0) {
+                    await supabaseRequest("notifikasi", {
+                      method: "POST",
+                      body: {
+                        penerima_peran: "admin",
+                        judul: "Pembayaran Iuran Menunggu Verifikasi",
+                        pesan:
+                          `${warga.nama_lengkap || "Warga"} mengajukan iuran bulan ${inputBulan}. ` +
+                          "Total pembayaran Rp35.000. Menunggu verifikasi Ketua RT.",
+                        jenis: "iuran",
+                        tautan: "/admin",
+                        referensi_id: pembayaran.id,
+                        sudah_dibaca: false
+                      }
+                    });
+                  }
+                } catch (notifError) {
+                  console.error(
+                    "PEMULIHAN NOTIFIKASI IURAN ERROR:",
+                    notifError?.message || notifError
+                  );
+                }
+
+                return res.json({
+                  ok: true,
+                  data: pembayaran
+                });
+              }
+
               return res.json({
                 ok: true,
                 data: pembayaran
@@ -2598,11 +2677,13 @@ return res.json({
               }
             }
 
+            const sudahLunas = pembayaran.status === "lunas";
+
             return res.status(409).json({
               ok: false,
-              message:
-                `Iuran bulan ${inputBulan} sudah diajukan oleh ${namaPembayar}. ` +
-                "KK ini tidak perlu mengajukan lagi."
+              message: sudahLunas
+                ? `Iuran bulan ${inputBulan} sudah lunas dan dibayarkan oleh ${namaPembayar}. KK ini tidak perlu membayar lagi.`
+                : `Iuran bulan ${inputBulan} sudah diajukan oleh ${namaPembayar} dan masih menunggu verifikasi. Anggota KK ini tidak perlu mengajukan lagi.`
             });
           }
         }
@@ -2617,7 +2698,6 @@ return res.json({
     });
   }
 });
-
 
 /* VERIFIKASI IURAN - KETUA RT */
 app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
