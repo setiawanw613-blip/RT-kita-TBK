@@ -2550,7 +2550,7 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
     }
 
     // Buat notifikasi admin untuk pembayaran baru.
-    try {
+      try {
       await supabaseRequest("notifikasi", {
         method: "POST",
         body: {
@@ -2570,8 +2570,13 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
         "NOTIFIKASI PEMBAYARAN IURAN ERROR:",
         notifError?.message || notifError
       );
-    }
 
+      return res.status(500).json({
+        ok: false,
+        message:
+          "Pembayaran tersimpan, tetapi notifikasi admin gagal dibuat. Hubungi Ketua RT."
+      });
+    }
     return res.json({
       ok: true,
       data: row
