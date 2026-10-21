@@ -2528,9 +2528,11 @@ try {
     }
   });
 } catch (notifError) {
-  console.error("NOTIFIKASI PEMBAYARAN IURAN ERROR:", notifError);
+  console.error(
+    "NOTIFIKASI PEMBAYARAN IURAN ERROR:",
+    notifError?.message || notifError
+  );
 }
-
 return res.json({
   ok: true,
   data: row
