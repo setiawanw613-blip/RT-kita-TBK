@@ -2382,23 +2382,43 @@ app.post("/api/complaints", requireWarga, (req, res) => {
 
 /* IURAN WARGA */
 
+
 app.get("/api/my-iuran", requireWarga, async (req, res) => {
   try {
-    const data = await supabaseRequest("iuran_warga", {
+    const wargaData = await supabaseRequest("warga", {
       query:
-        `select=*&warga_id=eq.${encodeURIComponent(req.session.wargaId)}` +
-        `&order=bulan.desc`
+        "select=id,keluarga_id" +
+        `&id=eq.${encodeURIComponent(req.session.wargaId)}` +
+        "&limit=1"
     });
 
-    res.json(Array.isArray(data) ? data : []);
+    const warga = Array.isArray(wargaData) ? wargaData[0] : null;
+
+    if (!warga || !warga.keluarga_id) {
+      return res.status(400).json({
+        ok: false,
+        message: "Data keluarga belum terhubung. Hubungi Ketua RT."
+      });
+    }
+
+    const data = await supabaseRequest("iuran_warga", {
+      query:
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount" +
+        `&keluarga_id=eq.${encodeURIComponent(String(warga.keluarga_id))}` +
+        "&order=bulan.desc"
+    });
+
+    return res.json(Array.isArray(data) ? data : []);
   } catch (error) {
     console.error("MY IURAN ERROR:", error);
-    res.status(500).json({
+
+    return res.status(500).json({
       ok: false,
       message: "Gagal mengambil data iuran"
     });
   }
 });
+
 
 app.get("/api/iuran", requireAdmin, async (req, res) => {
   try {
