@@ -2417,6 +2417,193 @@ app.get("/api/iuran", requireAdmin, async (req, res) => {
 });
 
 
+/* BAYAR IURAN BEBERAPA BULAN SEKALIGUS */
+app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
+  try {
+    const bulans = req.body.bulans;
+
+    if (
+      !Array.isArray(bulans) ||
+      bulans.length === 0 ||
+      bulans.length > 12
+    ) {
+      return res.status(400).json({
+        ok: false,
+        message: "Pilih minimal satu bulan dan maksimal 12 bulan."
+      });
+    }
+
+    const valid = bulans.every(b =>
+      typeof b === "string" &&
+      /^\d{4}-(0[1-9]|1[0-2])$/.test(b)
+    );
+
+    if (!valid || new Set(bulans).size !== bulans.length) {
+      return res.status(400).json({
+        ok: false,
+        message: "Pilihan bulan tidak valid atau ada bulan yang dipilih dua kali."
+      });
+    }
+
+    const dipilih = [...bulans].sort();
+    const awalCatatan = "2026-10";
+
+    if (dipilih[0] < awalCatatan) {
+      return res.status(400).json({
+        ok: false,
+        message: "Pencatatan iuran dimulai Oktober 2026."
+      });
+    }
+
+    const wargaData = await supabaseRequest("warga", {
+      query:
+        "select=id,nama_lengkap,keluarga_id" +
+        `&id=eq.${encodeURIComponent(req.session.wargaId)}` +
+        "&limit=1"
+    });
+
+    const warga = Array.isArray(wargaData) ? wargaData[0] : null;
+
+    if (!warga || !warga.keluarga_id) {
+      return res.status(400).json({
+        ok: false,
+        message: "Data keluarga belum terhubung. Hubungi Ketua RT."
+      });
+    }
+
+    const keluargaId = String(warga.keluarga_id);
+
+    const dataLama = await supabaseRequest("iuran_warga", {
+      query:
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount" +
+        `&keluarga_id=eq.${encodeURIComponent(keluargaId)}` +
+        "&order=bulan.asc"
+    });
+
+    const catatan = Array.isArray(dataLama) ? dataLama : [];
+    const peta = new Map(
+      catatan.map(row => [String(row.bulan).slice(0, 7), row])
+    );
+
+    // Periksa semua bulan sebelum menyimpan satu pun pembayaran.
+    const pertama = dipilih[0];
+    const terakhir = dipilih[dipilih.length - 1];
+
+    for (
+      let d = new Date(
+        Number(pertama.slice(0, 4)),
+        Number(pertama.slice(5, 7)) - 1,
+        1
+      );
+      d <= new Date(
+        Number(terakhir.slice(0, 4)),
+        Number(terakhir.slice(5, 7)) - 1,
+        1
+      );
+      d.setMonth(d.getMonth() + 1)
+    ) {
+      const bulan = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const record = peta.get(bulan);
+
+      if (record?.status === "lunas") continue;
+
+      if (record) {
+        return res.status(409).json({
+          ok: false,
+          message: `Iuran ${bulan} sudah diajukan dan masih menunggu verifikasi. Tunggu verifikasi Ketua RT terlebih dahulu.`
+        });
+      }
+
+      if (!dipilih.includes(bulan)) {
+        return res.status(409).json({
+          ok: false,
+          message: `Iuran ${bulan} belum lunas. Pilih bulan tersebut terlebih dahulu sebelum mengajukan bulan berikutnya.`
+        });
+      }
+    }
+
+    // Pastikan bulan sebelum pilihan pertama sudah lunas.
+    const bulanSebelumnya = new Date(
+      Number(pertama.slice(0, 4)),
+      Number(pertama.slice(5, 7)) - 2,
+      1
+    );
+
+    const sebelumnya =
+      `${bulanSebelumnya.getFullYear()}-${String(bulanSebelumnya.getMonth() + 1).padStart(2, "0")}`;
+
+    if (pertama > awalCatatan && peta.get(sebelumnya)?.status !== "lunas") {
+      return res.status(409).json({
+        ok: false,
+        message: `Iuran ${sebelumnya} masih belum lunas. Silakan lunasi atau selesaikan verifikasinya terlebih dahulu sebelum mengajukan ${pertama}.`
+      });
+    }
+
+    const rowsBaru = dipilih.map(bulan => ({
+      warga_id: String(warga.id),
+      keluarga_id: keluargaId,
+      bulan: bulan + "-01",
+      status: "menunggu_verifikasi",
+      total_amount: 35000
+    }));
+
+    // Kirim semua baris dalam satu permintaan database.
+    const hasil = await supabaseRequest("iuran_warga", {
+      method: "POST",
+      body: rowsBaru
+    });
+
+    const tersimpan = Array.isArray(hasil) ? hasil : [];
+
+    if (tersimpan.length !== rowsBaru.length) {
+      console.error("JUMLAH HASIL PEMBAYARAN TIDAK SESUAI.");
+      return res.status(500).json({
+        ok: false,
+        message: "Hasil penyimpanan perlu diperiksa oleh Ketua RT."
+      });
+    }
+
+    // Buat notifikasi admin untuk setiap bulan.
+    for (const row of tersimpan) {
+      try {
+        await supabaseRequest("notifikasi", {
+          method: "POST",
+          body: {
+            penerima_peran: "admin",
+            judul: "Pembayaran Iuran Menunggu Verifikasi",
+            pesan:
+              `${warga.nama_lengkap || "Warga"} mengajukan iuran bulan ${String(row.bulan).slice(0, 7)}. Total Rp35.000. Menunggu verifikasi Ketua RT.`,
+            jenis: "iuran",
+            tautan: "/admin",
+            referensi_id: row.id,
+            sudah_dibaca: false
+          }
+        });
+      } catch (err) {
+        console.error("NOTIFIKASI IURAN ERROR:", err?.message || err);
+      }
+    }
+
+    return res.json({
+      ok: true,
+      data: tersimpan,
+      message: "Pengajuan iuran berhasil disimpan."
+    });
+  } catch (error) {
+    console.error("BAYAR IURAN BANYAK ERROR:", error);
+
+    return res.status(
+      getSupabaseErrorCode(error) === "23505" ? 409 : 500
+    ).json({
+      ok: false,
+      message: getSupabaseErrorCode(error) === "23505"
+        ? "Ada pembayaran untuk salah satu bulan yang sudah tercatat. Muat ulang halaman dan periksa status iuran."
+        : "Gagal menyimpan pengajuan iuran. Periksa kembali sebelum mencoba lagi."
+    });
+  }
+});
+
+
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
