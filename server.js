@@ -2485,59 +2485,68 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
       catatan.map(row => [String(row.bulan).slice(0, 7), row])
     );
 
-    // Periksa semua bulan sebelum menyimpan satu pun pembayaran.
-    const pertama = dipilih[0];
-    const terakhir = dipilih[dipilih.length - 1];
-
-    for (
-      let d = new Date(
-        Number(pertama.slice(0, 4)),
-        Number(pertama.slice(5, 7)) - 1,
-        1
-      );
-      d <= new Date(
-        Number(terakhir.slice(0, 4)),
-        Number(terakhir.slice(5, 7)) - 1,
-        1
-      );
-      d.setMonth(d.getMonth() + 1)
-    ) {
-      const bulan = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+   
+    // Tolak bulan yang sudah memiliki catatan pembayaran.
+    for (const bulan of dipilih) {
       const record = peta.get(bulan);
 
-      if (record?.status === "lunas") continue;
+      if (record?.status === "lunas") {
+        return res.status(409).json({
+          ok: false,
+          message: `Iuran ${bulan} sudah lunas. Silakan periksa status iuran.`
+        });
+      }
 
       if (record) {
         return res.status(409).json({
           ok: false,
-          message: `Iuran ${bulan} sudah diajukan dan masih menunggu verifikasi. Tunggu verifikasi Ketua RT terlebih dahulu.`
-        });
-      }
-
-      if (!dipilih.includes(bulan)) {
-        return res.status(409).json({
-          ok: false,
-          message: `Iuran ${bulan} belum lunas. Pilih bulan tersebut terlebih dahulu sebelum mengajukan bulan berikutnya.`
+          message: `Iuran ${bulan} sudah diajukan dan masih menunggu verifikasi Ketua RT.`
         });
       }
     }
 
-    // Pastikan bulan sebelum pilihan pertama sudah lunas.
-    const bulanSebelumnya = new Date(
-      Number(pertama.slice(0, 4)),
-      Number(pertama.slice(5, 7)) - 2,
+    // Periksa seluruh urutan bulan sejak awal pencatatan.
+    const terakhir = dipilih[dipilih.length - 1];
+    const bulanDipilih = new Set(dipilih);
+
+    const mulai = new Date(2026, 9, 1);
+    const akhir = new Date(
+      Number(terakhir.slice(0, 4)),
+      Number(terakhir.slice(5, 7)) - 1,
       1
     );
 
-    const sebelumnya =
-      `${bulanSebelumnya.getFullYear()}-${String(bulanSebelumnya.getMonth() + 1).padStart(2, "0")}`;
+    for (
+      let d = new Date(mulai);
+      d <= akhir;
+      d.setMonth(d.getMonth() + 1)
+    ) {
+      const bulan =
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 
-    if (pertama > awalCatatan && peta.get(sebelumnya)?.status !== "lunas") {
+      const record = peta.get(bulan);
+
+      if (record?.status === "lunas") {
+        continue;
+      }
+
+      if (record) {
+        return res.status(409).json({
+          ok: false,
+          message: `Iuran ${bulan} masih menunggu verifikasi. Selesaikan verifikasi sebelum mengajukan bulan berikutnya.`
+        });
+      }
+
+      if (bulanDipilih.has(bulan)) {
+        continue;
+      }
+
       return res.status(409).json({
         ok: false,
-        message: `Iuran ${sebelumnya} masih belum lunas. Silakan lunasi atau selesaikan verifikasinya terlebih dahulu sebelum mengajukan ${pertama}.`
+        message: `Iuran ${bulan} masih belum lunas. Silakan pilih dan ajukan bulan tersebut terlebih dahulu sebelum membayar bulan berikutnya.`
       });
     }
+
 
     const rowsBaru = dipilih.map(bulan => ({
       warga_id: String(warga.id),
