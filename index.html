@@ -2530,10 +2530,12 @@ async function iuranWarga(){
 
  try {
 
-   await api("/api/iuran/bayar-banyak", {
+ 
+await api("/api/iuran/bayar-banyak", {
   method: "POST",
-  body: { bulans: dipilih }
+  body: JSON.stringify({ bulans: dipilih })
 });
+
 
         alert("Pengajuan iuran berhasil dikirim.");
         await iuranWarga();
