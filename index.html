@@ -125,14 +125,17 @@ textarea{min-height:110px;resize:vertical}
 
 <script>
 let currentUser=null;
-  async function api(url, options = {}) {
+ 
+async function api(url, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+
   const res = await fetch(url, {
+    ...options,
     credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {})
-    },
-    ...options
+    headers
   });
 
   const text = await res.text();
@@ -145,9 +148,18 @@ let currentUser=null;
   }
 
   if (!res.ok) {
-    throw new Error(
-      data?.message || data?.error || "Terjadi kesalahan"
-    );
+    const message =
+      data?.message ||
+      data?.error ||
+      `Permintaan gagal (HTTP ${res.status})`;
+
+    console.error("API ERROR:", {
+      url,
+      status: res.status,
+      response: data
+    });
+
+    throw new Error(message);
   }
 
   return data;
