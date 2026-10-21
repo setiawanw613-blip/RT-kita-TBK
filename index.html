@@ -2516,13 +2516,12 @@ async function iuranWarga(){
       tombol.textContent = "Memproses...";
       pesan.textContent = "";
 
-      try {
-        for (const bulan of dipilih) {
-          await api("/api/iuran/bayar", {
-            method: "POST",
-            body: { bulan }
-          });
-        }
+ try {
+
+   await api("/api/iuran/bayar-banyak", {
+  method: "POST",
+  body: { bulans: dipilih }
+});
 
         alert("Pengajuan iuran berhasil dikirim.");
         await iuranWarga();
