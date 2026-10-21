@@ -2396,76 +2396,154 @@ async function bayarIuran(){
   }
 }
 
-  async function iuranWarga(){
-  const security=15000;
-  const sampah=15000;
-  const kasRt=5000;
-  const total=security+sampah+kasRt;
 
-  try{
-    const data=await api("/api/my-iuran");
+async function iuranWarga(){
+  const security = 15000;
+  const sampah = 15000;
+  const kasRt = 5000;
+  const total = security + sampah + kasRt;
 
-    const item=Array.isArray(data) && data.length
-      ? data[0]
-      : null;
+  try {
+    const data = await api("/api/my-iuran");
+    const rows = Array.isArray(data) ? data : [];
 
-    const status=item?.status || "Belum Lunas";
+    const sekarang = new Date();
+    const awal = new Date(
+      sekarang.getFullYear(),
+      sekarang.getMonth(),
+      1
+    );
 
-    layout("Iuran Warga",`
+    // Tampilkan 12 bulan mulai bulan berjalan.
+    const bulanList = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(awal.getFullYear(), awal.getMonth() + i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+
+      const record = rows.find(x => String(x.bulan).slice(0, 10) === key);
+
+      bulanList.push({
+        key,
+        label: d.toLocaleDateString("id-ID", {
+          month: "long",
+          year: "numeric"
+        }),
+        status: record?.status || "belum_dibayar"
+      });
+    }
+
+    const statusLabel = status => {
+      if (status === "lunas") return "Lunas";
+      if (status === "menunggu_verifikasi") return "Menunggu verifikasi";
+      return "Belum lunas";
+    };
+
+    layout("Iuran Warga", `
       <div class="card">
         <h2>💳 Iuran Warga</h2>
-        <p class="muted">
-          Iuran rutin warga Taman Bali Kahuripan
-        </p>
-      </div>
-
-      <div class="card">
-        <div class="row">
-          <b>🛡️ Security</b>
-          <div>${rupiah(security)} / bulan</div>
-          <div style="margin-top:6px">
-            <span class="badge">${status}</span>
-          </div>
-        </div>
-
-        <div class="row">
-          <b>🗑️ Sampah</b>
-          <div>${rupiah(sampah)} / bulan</div>
-          <div style="margin-top:6px">
-            <span class="badge">${status}</span>
-          </div>
-        </div>
-
-        <div class="row">
-          <b>💰 Kas RT</b>
-          <div>${rupiah(kasRt)} / bulan</div>
-          <div style="margin-top:6px">
-            <span class="badge">${status}</span>
+        <p class="muted">Pilih satu atau beberapa bulan yang ingin diajukan.</p>
+        <div style="background:#eef5ff;padding:14px;border-radius:12px">
+          <b>Iuran per bulan: ${rupiah(total)}</b>
+          <div class="muted" style="font-size:13px;margin-top:5px">
+            Keamanan Rp15.000 + Sampah Rp15.000 + Kas RT Rp5.000
           </div>
         </div>
       </div>
 
       <div class="card">
-        <h3>Total Iuran per Bulan</h3>
-        <div style="font-size:28px;font-weight:800;color:#1267c9">
-          ${rupiah(total)}
-        </div>
+        <h3>Status dan Pilihan Bulan</h3>
+        <div style="display:grid;gap:8px">
+          ${bulanList.map(b => {
+            const lunas = b.status === "lunas";
+            const pending = b.status === "menunggu_verifikasi";
+            const tidakBisaDipilih = lunas || pending;
 
-        <p class="muted">
-          Security Rp15.000 + Sampah Rp15.000 + Kas RT Rp5.000.
-        </p>
+            return `
+              <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #dbe5f1;border-radius:12px">
+                <input
+                  type="checkbox"
+                  class="pilih-bulan-iuran"
+                  value="${b.key.slice(0, 7)}"
+                  ${tidakBisaDipilih ? "disabled" : ""}
+                  style="width:18px;height:18px"
+                >
+                <span style="flex:1">
+                  <b>${b.label}</b>
+                  <div style="font-size:12px;margin-top:4px;color:${lunas ? "#16834a" : pending ? "#b45309" : "#64748b"}">
+                    ${statusLabel(b.status)}
+                  </div>
+                </span>
+                <b style="font-size:13px;white-space:nowrap">${rupiah(total)}</b>
+              </label>
+            `;
+          }).join("")}
+        </div>
+        <div id="ringkasanPilihIuran" style="margin-top:16px;background:#eef5ff;padding:14px;border-radius:12px">
+          <div>Jumlah bulan dipilih: <b id="jumlahBulanIuran">0</b></div>
+          <div style="margin-top:6px">Total: <b id="totalPilihIuran">${rupiah(0)}</b></div>
+        </div>
+        <div id="pesanPilihIuran" style="margin-top:10px"></div>
+        <button class="btn" id="btnAjukanIuran" style="width:100%;margin-top:12px" disabled>
+          💳 Ajukan Pembayaran
+        </button>
       </div>
-<button class="btn" onclick="bayarIuran()">
-  💳 Bayar Iuran Rp35.000
-</button>
-      
     `);
 
-  }catch(e){
+    const pilihan = [...document.querySelectorAll(".pilih-bulan-iuran")];
+    const tombol = document.getElementById("btnAjukanIuran");
+    const pesan = document.getElementById("pesanPilihIuran");
+
+    function perbaruiRingkasan(){
+      const dipilih = pilihan.filter(x => x.checked);
+      document.getElementById("jumlahBulanIuran").textContent = dipilih.length;
+      document.getElementById("totalPilihIuran").textContent = rupiah(dipilih.length * total);
+      tombol.disabled = dipilih.length === 0;
+      pesan.innerHTML = "";
+    }
+
+    pilihan.forEach(x => x.addEventListener("change", perbaruiRingkasan));
+
+    tombol.addEventListener("click", async () => {
+      const dipilih = pilihan.filter(x => x.checked)
+        .map(x => x.value)
+        .sort();
+
+      if (!dipilih.length) return;
+
+      // Untuk saat ini server lama menerima satu bulan per pengajuan.
+      // Kirim bulan satu per satu; jika ada tunggakan, hentikan.
+      tombol.disabled = true;
+      tombol.textContent = "Memproses...";
+      pesan.textContent = "";
+
+      try {
+        for (const bulan of dipilih) {
+          await api("/api/iuran/bayar", {
+            method: "POST",
+            body: { bulan }
+          });
+        }
+
+        alert("Pengajuan iuran berhasil dikirim.");
+        await iuranWarga();
+      } catch (e) {
+        pesan.innerHTML = `
+          <div style="background:#fff1f2;color:#b91c1c;padding:12px;border-radius:10px">
+            <b>Pembayaran tidak bisa diproses</b>
+            <div style="margin-top:5px">${esc(e.message || "Periksa tunggakan bulan sebelumnya.")}</div>
+          </div>
+        `;
+      } finally {
+        tombol.disabled = false;
+        tombol.textContent = "💳 Ajukan Pembayaran";
+      }
+    });
+
+  } catch(e) {
     alert(e.message || "Gagal mengambil data iuran");
   }
-  }
-  
+}
+
 async function kasWarga(){
   layout("Kas RT",`
     <div class="card">
