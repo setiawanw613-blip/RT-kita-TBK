@@ -138,11 +138,17 @@ padding:9px 10px;
 <script>
 let currentUser=null;
  
+
 async function api(url, options = {}) {
   const headers = {
-    "Content-Type": "application/json",
     ...(options.headers || {})
   };
+
+  const isFormData = options.body instanceof FormData;
+
+  if (!isFormData && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
 
   const res = await fetch(url, {
     ...options,
@@ -3075,13 +3081,19 @@ async function myData(){
           background:rgba(255,255,255,.12)">
         </div>
 
+      
         <div style="
-          width:66px;height:66px;border-radius:22px;
+          width:76px;height:76px;border-radius:22px;
           display:flex;align-items:center;justify-content:center;
           background:rgba(255,255,255,.2);
-          font-size:34px;margin-bottom:16px">
-          👤
+          font-size:34px;margin-bottom:16px;
+          overflow:hidden;border:2px solid rgba(255,255,255,.65)">
+          ${w.foto_url
+            ? `<img src="${esc(w.foto_url)}" alt="Foto profil"
+                style="width:100%;height:100%;object-fit:cover">`
+            : "👤"}
         </div>
+
 
         <div style="font-size:13px;opacity:.9">
           PROFIL WARGA
@@ -3144,6 +3156,23 @@ async function myData(){
             </div>
           `).join("")}
         </div>
+        
+        <input
+          type="file"
+          id="fotoProfilInput"
+          accept="image/jpeg,image/png,image/webp"
+          style="display:none"
+          onchange="uploadFotoProfil()">
+
+        <button class="btn secondary"
+          type="button"
+          style="
+            width:100%;margin-top:12px;padding:13px;
+            border-radius:13px;font-weight:750"
+          onclick="document.getElementById('fotoProfilInput').click()">
+          📷 Ganti Foto Profil
+        </button>
+
 
         <button class="btn"
           style="
@@ -3169,6 +3198,55 @@ async function myData(){
     }
   }
 }
+
+async function uploadFotoProfil(){
+  const input = document.getElementById("fotoProfilInput");
+  const file = input?.files?.[0];
+
+  if (!file) return;
+
+  const tipeDiizinkan = [
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ];
+
+  if (!tipeDiizinkan.includes(file.type)) {
+    alert("Foto harus berformat JPG, PNG, atau WebP.");
+    input.value = "";
+    return;
+  }
+
+  if (file.size > 2 * 1024 * 1024) {
+    alert("Ukuran foto maksimal 2 MB.");
+    input.value = "";
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("foto", file);
+
+  try {
+    const hasil = await api("/api/my-photo", {
+      method: "POST",
+      body: formData
+    });
+
+    if (hasil && hasil.ok) {
+      alert("Foto profil berhasil diperbarui.");
+      await myData();
+    } else {
+      throw new Error(
+        hasil?.message || "Foto gagal diunggah."
+      );
+    }
+  } catch (error) {
+    alert(error.message || "Gagal mengunggah foto.");
+  } finally {
+    input.value = "";
+  }
+}
+
 
 async function saveMyData(){
   const jenis_kelamin=document.getElementById("editJenisKelamin").value;
