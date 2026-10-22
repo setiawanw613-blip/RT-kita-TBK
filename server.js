@@ -308,6 +308,76 @@ async function requireWarga(req, res, next) {
   }
 }
 
+
+/* INFO PEMBAYAR IURAN UNTUK TRANSAKSI KAS */
+const NAMA_BULAN_ID = [
+  "Januari","Februari","Maret","April","Mei","Juni",
+  "Juli","Agustus","September","Oktober","November","Desember"
+];
+
+function labelBulanIuran(bulan) {
+  const m = String(bulan || "").match(/^(\d{4})-(\d{2})/);
+  if (!m) return String(bulan || "");
+  return `${NAMA_BULAN_ID[Number(m[2]) - 1] || m[2]} ${m[1]}`;
+}
+
+async function ambilNamaWarga(ids) {
+  const bersih = [...new Set(
+    ids.map(id => String(id ?? "").trim()).filter(id => /^[0-9]+$/.test(id))
+  )];
+  const peta = new Map();
+  if (!bersih.length) return peta;
+
+  const data = await supabaseRequest("warga", {
+    query: `select=id,nama_lengkap,nik,alamat,no_hp&id=in.(${bersih.join(",")})`
+  });
+
+  (Array.isArray(data) ? data : []).forEach(w => peta.set(String(w.id), w));
+  return peta;
+}
+
+async function infoIuranUntukKas(rows) {
+  const peta = new Map();
+  const ids = [...new Set(
+    rows
+      .map(r => (String(r.keterangan || "").match(/iuran_id\s+(\d+)/i) || [])[1])
+      .filter(Boolean)
+  )];
+  if (!ids.length) return peta;
+
+  try {
+    const iuran = await supabaseRequest("iuran_warga", {
+      query:
+        "select=id,warga_id,bulan,total_amount,status,diverifikasi_at,diverifikasi_oleh" +
+        `&id=in.(${ids.join(",")})`
+    });
+    const daftar = Array.isArray(iuran) ? iuran : [];
+    const warga = await ambilNamaWarga(daftar.map(i => i.warga_id));
+
+    daftar.forEach(i => {
+      peta.set(String(i.id), {
+        ...i,
+        nama_warga: warga.get(String(i.warga_id))?.nama_lengkap || "",
+        periode_label: labelBulanIuran(i.bulan)
+      });
+    });
+  } catch (error) {
+    console.error("INFO IURAN KAS ERROR:", error?.message || error);
+  }
+
+  return peta;
+}
+
+function iuranIdDariKeterangan(keterangan) {
+  return (String(keterangan || "").match(/iuran_id\s+(\d+)/i) || [])[1] || "";
+}
+
+function keteranganKasRapi(row, info) {
+  if (!info) return row.keterangan || "";
+  const kategori = row.kategori || "Iuran";
+  return `Iuran ${kategori} ${info.periode_label} - dari ${info.nama_warga || "warga"}`;
+}
+
 /* DAFTAR WARGA */
 app.post("/api/register-warga", async (req, res) => {
   try {
@@ -1191,9 +1261,17 @@ app.get("/api/cash", requireAdmin, async (req, res) => {
         "select=id,tanggal,jenis,keterangan,jumlah,kategori,created_at,bukti_path&order=created_at.desc"
     });
 
+    const infoIuran = await infoIuranUntukKas(Array.isArray(data) ? data : []);
+
     const rows = Array.isArray(data)
-      ? data.map(row => ({
+      ? data.map(row => {
+          const info = infoIuran.get(iuranIdDariKeterangan(row.keterangan));
+          return {
           ...row,
+          nama_warga: info?.nama_warga || "",
+          periode: info?.bulan || "",
+          periode_label: info?.periode_label || "",
+          keterangan_rapi: keteranganKasRapi(row, info),
           description: row.keterangan,
           date: row.tanggal,
           type:
@@ -1201,7 +1279,8 @@ app.get("/api/cash", requireAdmin, async (req, res) => {
               ? "keluar"
               : "masuk",
           amount: row.jumlah
-        }))
+        };
+        })
       : [];
 
     res.json(rows);
@@ -1598,12 +1677,14 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
     });
 
     const rows = Array.isArray(data) ? data : [];
+    const infoIuranExport = await infoIuranUntukKas(rows);
 
     const header = [
       "No",
       "Tanggal",
       "Jenis",
       "Kategori",
+      "Nama Warga",
       "Keterangan",
       "Jumlah (Rp)",
       "Bukti Pengeluaran",
@@ -1643,7 +1724,8 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
         row.tanggal || "",
         row.jenis || "",
         kategori,
-        row.keterangan || "",
+        infoIuranExport.get(iuranIdDariKeterangan(row.keterangan))?.nama_warga || "",
+        keteranganKasRapi(row, infoIuranExport.get(iuranIdDariKeterangan(row.keterangan))),
         jumlah,
         row.bukti_path || "",
         row.created_at || ""
@@ -1655,14 +1737,14 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
     const rekapRows = [
       [],
       ["REKAPITULASI KAS RT"],
-      ["Total Pemasukan", "", "", "", "", totalMasuk],
-      ["Total Pengeluaran", "", "", "", "", totalKeluar],
-      ["SALDO AKHIR", "", "", "", "", saldoAkhir],
+      ["Total Pemasukan", "", "", "", "", "", totalMasuk],
+      ["Total Pengeluaran", "", "", "", "", "", totalKeluar],
+      ["SALDO AKHIR", "", "", "", "", "", saldoAkhir],
       [],
       ["RINCIAN SALDO DANA"],
-      ["Dana Keamanan", "", "", "", "", saldoKategori["Keamanan"]],
-      ["Dana Sampah", "", "", "", "", saldoKategori["Sampah"]],
-      ["Dana Kas RT", "", "", "", "", saldoKategori["Kas RT"]]
+      ["Dana Keamanan", "", "", "", "", "", saldoKategori["Keamanan"]],
+      ["Dana Sampah", "", "", "", "", "", saldoKategori["Sampah"]],
+      ["Dana Kas RT", "", "", "", "", "", saldoKategori["Kas RT"]]
     ];
 
   const csv = [
@@ -1710,81 +1792,27 @@ app.get("/api/cash-warga", requireWarga, async (req, res) => {
     });
 
     const rows = Array.isArray(data) ? data : [];
+    const infoIuran = await infoIuranUntukKas(rows);
 
-
-    const result = [];
-
-    for (const row of rows) {
-      let namaWarga = "";
-      let periode = "";
-      let totalIuran = 0;
-      let statusIuran = "";
-      let diverifikasiAt = "";
-      let diverifikasiOleh = "";
-      let kategori = row.kategori || "Lainnya";
-
-      const keterangan = row.keterangan || "";
-
-      const match = keterangan.match(/iuran_id\s+(\d+)/i);
-
-      if (match) {
-        const iuranId = match[1];
-
-      
-const iuranData = await supabaseRequest("iuran_warga", {
-  query:
-    "select=id,warga_id,bulan,total_amount,status,diverifikasi_at,diverifikasi_oleh" +
-    "&id=eq." + encodeURIComponent(iuranId) +
-    "&limit=1"
-});
-
-if (Array.isArray(iuranData) && iuranData.length) {
-  const iuran = iuranData[0];
-
-  periode = iuran.bulan || "";
-  totalIuran = Number(iuran.total_amount) || 0;
-  statusIuran = iuran.status || "";
-  diverifikasiAt = iuran.diverifikasi_at || "";
-  diverifikasiOleh = iuran.diverifikasi_oleh || "";
-
-  kategori = row.kategori || "Iuran Warga";
-
-  if (iuran.warga_id) {
-    const wargaData = await supabaseRequest("warga", {
-      query:
-        "select=id,nama_lengkap" +
-        "&id=eq." + encodeURIComponent(iuran.warga_id) +
-        "&limit=1"
-    });
-
-    if (Array.isArray(wargaData) && wargaData.length) {
-      namaWarga = wargaData[0].nama_lengkap || "";
-    }
-  }
-}
-
-kategori = row.kategori || kategori || "Pemasukan Lainnya";
-}
-
-
-
-      result.push({
+    const result = rows.map(row => {
+      const info = infoIuran.get(iuranIdDariKeterangan(row.keterangan));
+      return {
         id: row.id,
-      tanggal: row.tanggal || "",
-      waktu: row.created_at || "",
-       bukti_path: row.bukti_path || "",
+        tanggal: row.tanggal || "",
+        waktu: row.created_at || "",
+        bukti_path: row.bukti_path || "",
         type: row.jenis === "keluar" ? "keluar" : "masuk",
         amount: Number(row.jumlah) || 0,
-        description: keterangan,
-        nama_warga: namaWarga,
-        periode: periode,
-        total_iuran: totalIuran,
-        status_iuran: statusIuran,
-        diverifikasi_at: diverifikasiAt,
-        diverifikasi_oleh: diverifikasiOleh,
-        kategori: kategori
-      });
-    }
+        description: keteranganKasRapi(row, info),
+        nama_warga: info?.nama_warga || "",
+        periode: info?.periode_label || "",
+        total_iuran: Number(info?.total_amount) || 0,
+        status_iuran: info?.status || "",
+        diverifikasi_at: info?.diverifikasi_at || "",
+        diverifikasi_oleh: info?.diverifikasi_oleh || "",
+        kategori: row.kategori || (info ? "Iuran Warga" : "Lainnya")
+      };
+    });
 
     res.json(result);
 
@@ -1806,14 +1834,27 @@ app.get("/api/letters", requireAdmin, async (req, res) => {
         "select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at&order=created_at.desc"
     });
 
-    const rows = Array.isArray(data)
-      ? data.map(row => ({
-          ...row,
-          type: row.jenis_surat,
-          purpose: row.keperluan,
-          nama: ""
-        }))
-      : [];
+    const list = Array.isArray(data) ? data : [];
+    let warga = new Map();
+
+    try {
+      warga = await ambilNamaWarga(list.map(r => r.warga_id));
+    } catch (err) {
+      console.error("NAMA PENGAJU SURAT ERROR:", err?.message || err);
+    }
+
+    const rows = list.map(row => {
+      const w = warga.get(String(row.warga_id));
+      return {
+        ...row,
+        type: row.jenis_surat,
+        purpose: row.keperluan,
+        nama: w?.nama_lengkap || "",
+        nik: w?.nik || "",
+        alamat: w?.alamat || "",
+        no_hp: w?.no_hp || ""
+      };
+    });
 
     res.json(rows);
   } catch (error) {
@@ -1861,7 +1902,7 @@ app.post("/api/letters", requireWarga, async (req, res) => {
           penerima_peran: "admin",
           judul: "Pengajuan Surat Baru",
           pesan:
-            "Ada pengajuan surat " +
+            (req.session.nama ? req.session.nama + " mengajukan surat " : "Ada pengajuan surat ") +
             (row.jenis_surat || type) +
             ". Keperluan: " +
             (row.keperluan || purpose),
