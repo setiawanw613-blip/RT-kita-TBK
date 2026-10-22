@@ -911,7 +911,8 @@ app.get("/api/residents", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("warga", {
       query:
-        "select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_hunian,status_warga,hubungan_keluarga,keluarga_id,created_at&order=nama_lengkap.asc"
+      
+"select=id,foto_profil,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_hunian,status_warga,hubungan_keluarga,keluarga_id,created_at&order=nama_lengkap.asc"
     });
 
     const rows = Array.isArray(data)
