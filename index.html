@@ -195,7 +195,7 @@ function rupiah(value) {
   }).format(Number(value) || 0);
 }
 window.onerror = function(message, source, line, column, error) {
-  alert(
+  console.error(
     "PELACAK ERROR RT KITA\n\n" +
     "Pesan: " + message + "\n" +
     "Baris: " + line + "\n" +
@@ -714,6 +714,18 @@ if(hubungan_keluarga !== "Anak" && !nik){
     alert(e.message || "Pendaftaran gagal");
   }
 }
+document.addEventListener("keydown", e => {
+  if (
+    e.key === "Enter" &&
+    !currentUser &&
+    e.target &&
+    (e.target.id === "username" || e.target.id === "password")
+  ) {
+    e.preventDefault();
+    doLogin();
+  }
+});
+
 async function doLogin(){
   const role=document.getElementById("role").value;
   const username=document.getElementById("username").value.trim();
@@ -836,6 +848,7 @@ async function adminHome(){
   <span>Iuran Warga</span>
 </button>
 
+    </div>
     </div>
   `,false);
 
@@ -1048,12 +1061,22 @@ function editResident(w){
     ["no_hp","Nomor HP"]
   ];
 
+  const opsiSelect = (daftar, nilai) => {
+    const sekarang = String(nilai || "").trim();
+    const semua = sekarang && !daftar.includes(sekarang)
+      ? [sekarang, ...daftar]
+      : daftar;
+    return `<option value="" ${sekarang ? "" : "selected"}>-- Pilih --</option>` +
+      semua.map(v => `<option value="${esc(v)}" ${v === sekarang ? "selected" : ""}>${esc(v)}</option>`).join("");
+  };
+
   const inputField = ([key,label]) => `
     <label style="display:block;margin:12px 0 5px">${label}</label>
     <input
       id="edit_${key}"
       name="${key}"
-      value="${esc(w[key] || "")}"
+      ${key === "tanggal_lahir" ? 'type="date"' : ""}
+      value="${esc(key === "tanggal_lahir" ? String(w[key] || "").slice(0,10) : (w[key] || ""))}"
       style="width:100%;box-sizing:border-box;padding:10px"
     />
   `;
@@ -1065,23 +1088,22 @@ function editResident(w){
 
         <label style="display:block;margin:12px 0 5px">Jenis Kelamin</label>
         <select id="edit_jenis_kelamin" style="width:100%;padding:10px">
-          <option value="Laki-laki" ${w.jenis_kelamin==="Laki-laki"?"selected":""}>Laki-laki</option>
-          <option value="Perempuan" ${w.jenis_kelamin==="Perempuan"?"selected":""}>Perempuan</option>
+          ${opsiSelect(["Laki-laki","Perempuan"], w.jenis_kelamin)}
         </select>
 
         <label style="display:block;margin:12px 0 5px">Status Perkawinan</label>
         <select id="edit_status_perkawinan" style="width:100%;padding:10px">
-          ${["Belum Kawin","Kawin","Cerai Hidup","Cerai Mati"].map(v=>`<option value="${v}" ${w.status_perkawinan===v?"selected":""}>${v}</option>`).join("")}
+          ${opsiSelect(["Belum Kawin","Kawin","Cerai Hidup","Cerai Mati"], w.status_perkawinan)}
         </select>
 
         <label style="display:block;margin:12px 0 5px">Status Hunian</label>
         <select id="edit_status_hunian" style="width:100%;padding:10px">
-          ${["Warga Tetap","Warga Kontrak"].map(v=>`<option value="${v}" ${w.status_hunian===v?"selected":""}>${v}</option>`).join("")}
+          ${opsiSelect(["Warga Tetap","Warga Kontrak"], w.status_hunian)}
         </select>
 
         <label style="display:block;margin:12px 0 5px">Hubungan Keluarga</label>
         <select id="edit_hubungan_keluarga" style="width:100%;padding:10px">
-          ${["Kepala Keluarga","Ayah","Ibu / Istri","Anak","Saudara","Anggota Keluarga Lain"].map(v=>`<option value="${v}" ${w.hubungan_keluarga===v?"selected":""}>${v}</option>`).join("")}
+          ${opsiSelect(["Kepala Keluarga","Istri","Anak","Saudara","Anggota Keluarga Lain"], w.hubungan_keluarga)}
         </select>
 
         <button class="btn" type="submit" style="margin-top:16px">💾 Simpan Perubahan</button>
@@ -1132,6 +1154,10 @@ async function saveResident(event,id){
 
     if(el){
       const value = el.value.trim();
+
+      if(el.tagName === "SELECT" && !value){
+        continue;
+      }
 
       if(key === "tanggal_lahir"){
         body[key] = value || null;
@@ -1243,7 +1269,7 @@ function addResident(){
       <label>No. HP</label>
       <input id="rHp" inputmode="tel">
 
-      <button class="btn" style="margin-top:16px" onclick="saveResident()">
+      <button class="btn" style="margin-top:16px" onclick="simpanWargaBaru()">
         Simpan data warga
       </button>
       <button class="btn secondary" style="margin-top:8px" onclick="residents()">
@@ -1253,7 +1279,14 @@ function addResident(){
   `);
 }
 
-async function addResident(){
+async function simpanWargaBaru(){
+  const nama=document.getElementById("rNama")?.value.trim();
+  const nik=document.getElementById("rNik")?.value.trim();
+  const noKk=document.getElementById("rKk")?.value.trim();
+  if(!nama||!nik||!noKk){
+    alert("Nama, NIK, dan No. KK wajib diisi");
+    return;
+  }
   try{
     await api("/api/residents",{
       method:"POST",
@@ -1296,7 +1329,7 @@ async function cash(){
   <input
     type="month"
     id="cashMonthFilter"
-    value="2026-10"
+    value="${new Date().toLocaleDateString('en-CA').slice(0,7)}"
     onchange="renderCashMonthly()"
   >
 
@@ -1371,11 +1404,11 @@ async function cash(){
    
 document.getElementById("cashSummary").innerHTML = `
   <div style="background:linear-gradient(135deg,#1267c9,#073b83);color:white;padding:20px;border-radius:16px;margin-bottom:14px">
-    <div style="font-size:13px;opacity:.85">💰 Total Saldo Tiga Dana</div>
+    <div style="font-size:13px;opacity:.85">💰 Total Saldo Kas RT</div>
 <div style="font-size:clamp(25px,4vw,34px);font-weight:800;margin-top:6px;overflow-wrap:anywhere">
   ${rupiah(saldo)}
 </div>
-<div style="font-size:12px;opacity:.8;margin-top:5px">Keamanan + Sampah + Kas RT</div>
+<div style="font-size:12px;opacity:.8;margin-top:5px">Seluruh pemasukan dikurangi seluruh pengeluaran (semua kategori)</div>
 </div>
 
   <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
@@ -1483,6 +1516,15 @@ function getCashCategory(x){
   const kategori = String(x.kategori || "").trim();
   const keterangan =
     String(x.description || x.keterangan || "").toLowerCase();
+
+  // Kategori yang sudah dipilih saat pencatatan selalu dipakai.
+  // Tebakan dari keterangan hanya untuk data lama tanpa kategori spesifik.
+  if(
+    kategori &&
+    !["Iuran Warga","Pemasukan Lainnya","Pengeluaran","Lainnya"].includes(kategori)
+  ){
+    return kategori;
+  }
 
   if(keterangan.includes("keamanan")){
     return "Keamanan";
@@ -1875,7 +1917,7 @@ function addCash(){
         <label>Bukti pengeluaran (wajib)</label>
         <input id="cashProof" type="file" accept="image/*">
         <div class="muted" style="font-size:12px;margin-top:5px">
-          Lampirkan foto kuitansi atau bukti transfer.
+          Lampirkan foto kuitansi atau bukti transfer. Foto otomatis diperkecil sebelum diunggah.
         </div>
       </div>
 
@@ -1902,6 +1944,50 @@ function ubahFormCash(){
   const pengeluaran = jenis.value === "keluar";
   bungkus.style.display = pengeluaran ? "block" : "none";
   bukti.required = pengeluaran;
+}
+
+// Perkecil foto bukti (maks. 1600px, JPEG) agar selalu di bawah batas upload server.
+async function kompresFotoBukti(fileAsli){
+  if (!fileAsli) throw new Error("Bukti pengeluaran wajib dilampirkan.");
+  if (fileAsli.size > 25 * 1024 * 1024) {
+    throw new Error("Ukuran foto terlalu besar (maks. 25 MB).");
+  }
+
+  const url = URL.createObjectURL(fileAsli);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error("Format foto tidak didukung. Gunakan foto JPG atau PNG."));
+      el.src = url;
+    });
+
+    const MAKS = 1600;
+    const skala = Math.min(1, MAKS / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * skala));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * skala));
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    let kualitas = 0.82;
+    let blob = null;
+    for (let i = 0; i < 5; i++) {
+      blob = await new Promise(r => canvas.toBlob(r, "image/jpeg", kualitas));
+      if (blob && blob.size <= 3 * 1024 * 1024) break;
+      kualitas -= 0.15;
+    }
+
+    if (!blob || blob.size > 4 * 1024 * 1024) {
+      throw new Error("Foto bukti terlalu besar. Coba foto ulang dengan resolusi lebih kecil.");
+    }
+
+    return new File([blob], "bukti.jpg", { type: "image/jpeg" });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 let cashSaving = false;
@@ -1947,20 +2033,13 @@ async function saveCash(){
         return;
       }
 
-      const file = proofInput.files[0];
-      const allowedTypes = [
-        "image/jpeg",
-        "image/png",
-        "image/webp"
-      ];
+      tombolSimpan.textContent = "Menyiapkan foto...";
 
-      if (!allowedTypes.includes(file.type)) {
-        alert("Bukti harus berupa JPG, PNG, atau WebP.");
-        return;
-      }
-
-      if (file.size > 5 * 1024 * 1024) {
-        alert("Ukuran foto maksimal 5 MB.");
+      let file;
+      try {
+        file = await kompresFotoBukti(proofInput.files[0]);
+      } catch (err) {
+        alert(err.message || "Foto bukti tidak dapat dibaca. Coba foto ulang atau pilih file JPG/PNG.");
         return;
       }
 
@@ -1974,7 +2053,17 @@ async function saveCash(){
         body: file
       });
 
-      const uploadResult = await uploadResponse.json();
+      let uploadResult = {};
+      try {
+        uploadResult = await uploadResponse.json();
+      } catch (_) {
+        uploadResult = {
+          ok: false,
+          message: uploadResponse.status === 413
+            ? "Foto bukti terlalu besar untuk diunggah."
+            : "Gagal mengunggah bukti (HTTP " + uploadResponse.status + ")."
+        };
+      }
 
       if (
         !uploadResponse.ok ||
@@ -2255,10 +2344,16 @@ async function iuranAdmin(){
       data.forEach(item=>{
         html+=`
           <div class="row">
-            <b>Warga ID: ${item.warga_id || "-"}</b>
-            <div>Bulan: ${item.bulan || "-"}</div>
+            <b>${esc(item.nama_warga || ("Warga ID: " + (item.warga_id || "-")))}</b>
+            <div>Bulan: ${item.bulan
+              ? esc(new Date(String(item.bulan).slice(0,10) + "T00:00:00").toLocaleDateString("id-ID",{month:"long",year:"numeric"}))
+              : "-"}</div>
             <div>Total: ${rupiah(item.total_amount || 0)}</div>
-            <div>Status: <span class="badge">${item.status || "Belum Lunas"}</span></div>
+            <div>Status: <span class="badge">${esc(
+              item.status === "lunas" ? "Lunas"
+              : item.status === "menunggu_verifikasi" ? "Menunggu verifikasi"
+              : (item.status || "Belum lunas")
+            )}</span></div>
             ${
   item.status === "menunggu_verifikasi"
   ? `
@@ -2439,15 +2534,38 @@ async function iuranWarga(){
     const rows = Array.isArray(data) ? data : [];
 
     const sekarang = new Date();
-    const awal = new Date(
+    const bulanIni = new Date(
       sekarang.getFullYear(),
       sekarang.getMonth(),
       1
     );
 
-    // Tampilkan 12 bulan mulai bulan berjalan.
+    // Mulai dari bulan tertua yang belum lunas (sejak awal pencatatan
+    // Oktober 2026), supaya tunggakan bulan sebelumnya tetap bisa dipilih.
+    const awalPencatatan = new Date(2026, 9, 1);
+    const kunciBulan = d =>
+      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+    let awal = new Date(bulanIni);
+    for (
+      let d = new Date(awalPencatatan);
+      d < bulanIni;
+      d = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+    ) {
+      const rec = rows.find(x => String(x.bulan).slice(0, 10) === kunciBulan(d));
+      if (!rec || rec.status !== "lunas") {
+        awal = new Date(d);
+        break;
+      }
+    }
+    if (awal < awalPencatatan) awal = new Date(awalPencatatan);
+
+    // Tampilkan dari bulan tersebut sampai 11 bulan ke depan dari bulan ini.
+    const jumlahBulan =
+      (bulanIni.getFullYear() - awal.getFullYear()) * 12 +
+      (bulanIni.getMonth() - awal.getMonth()) + 12;
+
     const bulanList = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < jumlahBulan; i++) {
       const d = new Date(awal.getFullYear(), awal.getMonth() + i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 
@@ -2617,7 +2735,8 @@ async function kasWarga(){
 
     rows.forEach(x=>{
       const jumlah = Number(x.amount) || 0;
-      const kat = x.kategori || "Lainnya";
+      const kat = getCashCategory(x);
+      x.kategori = kat;
 
       if(x.type === "keluar") keluar += jumlah;
       else masuk += jumlah;
@@ -3003,7 +3122,7 @@ async function editMyData(){
       w.tempat_lahir || "";
 
     document.getElementById("editTanggalLahir").value =
-      w.tanggal_lahir || "";
+      String(w.tanggal_lahir || "").slice(0,10);
 
     document.getElementById("editAlamat").value =
       w.alamat || "";
@@ -3019,6 +3138,8 @@ async function editMyData(){
 
     document.getElementById("editPekerjaan").value =
       w.pekerjaan || "";
+    document.getElementById("editStatusHunian").value =
+      w.status_hunian || "";
 
     
 

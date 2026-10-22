@@ -1158,8 +1158,9 @@ app.patch("/api/my-data", requireWarga, async (req, res) => {
         rt: rt || "04",
         rw: rw || "01",
         status_perkawinan: status_perkawinan || null,
-pekerjaan: pekerjaan || null,
-status_hunian: status_hunian || null
+        pekerjaan: pekerjaan || null,
+        // Status hunian hanya diubah jika diisi, agar data lama tidak terhapus.
+        ...(status_hunian ? { status_hunian } : {})
       }
     });
 
@@ -2344,16 +2345,61 @@ app.post("/api/announcements", requireAdmin, async (req, res) => {
 });
 
 /* PENGADUAN - KETUA RT */
-app.get("/api/complaints", requireAdmin, (req, res) => {
-  res.json(complaintsMemory);
+app.get("/api/complaints", requireAdmin, async (req, res) => {
+  let tersimpan = [];
+
+  try {
+    // Pengaduan disimpan permanen di tabel notifikasi (jenis = pengaduan).
+    const data = await supabaseRequest("notifikasi", {
+      query:
+        "select=id,judul,pesan,referensi_id,sudah_dibaca,dibuat_pada" +
+        "&penerima_peran=eq.admin&jenis=eq.pengaduan" +
+        "&order=dibuat_pada.desc&limit=500"
+    });
+
+    const rows = Array.isArray(data) ? data : [];
+
+    const ids = [...new Set(
+      rows
+        .map(r => String(r.referensi_id ?? "").trim())
+        .filter(id => /^[0-9]+$/.test(id))
+    )];
+
+    const namaMap = new Map();
+
+    if (ids.length) {
+      try {
+        const warga = await supabaseRequest("warga", {
+          query: `select=id,nama_lengkap&id=in.(${ids.join(",")})`
+        });
+        (Array.isArray(warga) ? warga : []).forEach(w =>
+          namaMap.set(String(w.id), w.nama_lengkap || "")
+        );
+      } catch (err) {
+        console.error("PENGADUAN NAMA ERROR:", err?.message || err);
+      }
+    }
+
+    tersimpan = rows.map(r => ({
+      id: r.id,
+      warga_id: r.referensi_id,
+      title: r.judul,
+      content: r.pesan,
+      nama: namaMap.get(String(r.referensi_id)) || "",
+      created_at: r.dibuat_pada,
+      status: r.sudah_dibaca ? "dibaca" : "baru"
+    }));
+  } catch (error) {
+    console.error("PENGADUAN GET ERROR:", error?.message || error);
+  }
+
+  res.json([...complaintsMemory, ...tersimpan]);
 });
 
 /* PENGADUAN - WARGA */
-app.post("/api/complaints", requireWarga, (req, res) => {
-  const {
-    title,
-    content
-  } = req.body;
+app.post("/api/complaints", requireWarga, async (req, res) => {
+  const title = String(req.body?.title || "").trim();
+  const content = String(req.body?.content || "").trim();
 
   if (!title || !content) {
     return res.status(400).json({
@@ -2362,6 +2408,29 @@ app.post("/api/complaints", requireWarga, (req, res) => {
     });
   }
 
+  try {
+    const data = await supabaseRequest("notifikasi", {
+      method: "POST",
+      body: {
+        penerima_peran: "admin",
+        judul: title.slice(0, 200),
+        pesan: content.slice(0, 2000),
+        jenis: "pengaduan",
+        tautan: "/admin",
+        referensi_id: Number(req.session.wargaId),
+        sudah_dibaca: false
+      }
+    });
+
+    return res.json({
+      ok: true,
+      data: Array.isArray(data) ? data[0] : data
+    });
+  } catch (error) {
+    console.error("PENGADUAN SIMPAN ERROR:", error?.message || error);
+  }
+
+  // Cadangan bila penyimpanan database gagal.
   const complaint = {
     id: crypto.randomUUID(),
     warga_id: req.session.wargaId,
@@ -2426,7 +2495,37 @@ app.get("/api/iuran", requireAdmin, async (req, res) => {
       query: "select=*&order=bulan.desc"
     });
 
-    res.json(Array.isArray(data) ? data : []);
+    const rows = Array.isArray(data) ? data : [];
+
+    // Tambahkan nama warga agar Ketua RT tidak hanya melihat ID.
+    const ids = [...new Set(
+      rows
+        .map(r => String(r.warga_id || "").trim())
+        .filter(id => /^[A-Za-z0-9-]+$/.test(id))
+    )];
+
+    const namaMap = new Map();
+
+    if (ids.length) {
+      try {
+        const warga = await supabaseRequest("warga", {
+          query:
+            "select=id,nama_lengkap" +
+            `&id=in.(${ids.map(encodeURIComponent).join(",")})`
+        });
+
+        (Array.isArray(warga) ? warga : []).forEach(w => {
+          namaMap.set(String(w.id), w.nama_lengkap || "");
+        });
+      } catch (err) {
+        console.error("IURAN NAMA WARGA ERROR:", err?.message || err);
+      }
+    }
+
+    res.json(rows.map(r => ({
+      ...r,
+      nama_warga: namaMap.get(String(r.warga_id)) || ""
+    })));
   } catch (error) {
     console.error("IURAN ERROR:", error);
     res.status(500).json({
