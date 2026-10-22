@@ -1988,8 +1988,12 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
         message: "Data warga pemilik surat tidak ditemukan"
       });
     }
+  
     const warga = residents[0];
+    const clean = (value) =>
+      value == null ? "" : String(value).trim();
     const PDFDocument = require("pdfkit");
+
     const fs = require("fs");
     const path = require("path");
 
