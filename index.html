@@ -915,6 +915,7 @@ async function residents(){
   }
 }
 
+
 function filterResidents(){
   const data = Array.isArray(window._residentRows)
     ? window._residentRows
@@ -935,7 +936,8 @@ function filterResidents(){
     w.no_kk,
     w.no_hp,
     w.alamat,
-    w.status_warga
+    w.status_warga,
+    w.hubungan_keluarga
   ].some(v => String(v || "").toLowerCase().includes(q)));
 
   if(count){
@@ -949,40 +951,93 @@ function filterResidents(){
     return;
   }
 
-  box.innerHTML = filtered.map(w=>`
-    <div class="row"
-      style="cursor:pointer"
-      onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+  const keluarga = {};
 
-      <b>${esc(w.nama_lengkap||w.nama)}</b>
-      <div class="muted">NIK: ${esc(w.nik)}</div>
-      <div class="muted">No. KK: ${esc(w.no_kk)}</div>
-      <div class="muted">${esc(w.alamat)}</div>
-      <div class="muted">${esc(w.no_hp)}</div>
+  filtered.forEach(w => {
+    const key = w.keluarga_id
+      ? `keluarga-${w.keluarga_id}`
+      : w.no_kk
+        ? `kk-${String(w.no_kk).trim()}`
+        : `warga-${w.id}`;
 
-      <div class="muted" style="margin-top:6px">
-        Status: ${esc(w.status_warga || "")}
+    if(!keluarga[key]){
+      keluarga[key] = {
+        kepala: "",
+        no_kk: w.no_kk || "",
+        alamat: w.alamat || "",
+        anggota: []
+      };
+    }
+
+    keluarga[key].anggota.push(w);
+
+    if(w.hubungan_keluarga === "Kepala Keluarga"){
+      keluarga[key].kepala = w.nama_lengkap || w.nama || "";
+    }
+  });
+
+  box.innerHTML = Object.entries(keluarga).map(([key, k], index) => {
+    const judul = k.kepala ||
+      (k.anggota[0].nama_lengkap || k.anggota[0].nama || "Keluarga");
+
+    const id = `keluarga-card-${index}`;
+
+    return `
+      <div class="row" style="margin-bottom:12px">
+        <button type="button"
+          class="btn secondary"
+          style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px"
+          onclick="toggleKeluargaCard('${id}', this)">
+          <span>
+            🏠 <b>Keluarga ${esc(judul)}</b><br>
+            <small>${k.anggota.length} anggota keluarga</small>
+          </span>
+          <span>＋</span>
+        </button>
+
+        <div id="${id}" hidden style="padding:10px 4px 0">
+          ${k.anggota.map(w => `
+            <div style="padding:10px 0;border-top:1px solid #ddd">
+              <div style="cursor:pointer"
+                onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+                <b>${esc(w.nama_lengkap || w.nama || "-")}</b>
+                <div class="muted">
+                  ${esc(w.hubungan_keluarga || "Hubungan belum diisi")}
+                </div>
+                <div class="muted">
+                  Status: ${esc(w.status_warga || "-")}
+                </div>
+              </div>
+
+              ${
+                w.status_warga === "menunggu_verifikasi"
+                ? `<button class="btn" style="margin-top:8px"
+                    onclick="event.stopPropagation();verifyResident(${w.id})">
+                    ✅ Verifikasi
+                  </button>`
+                : w.status_warga === "aktif"
+                ? `<button class="btn secondary" style="margin-top:8px"
+                    onclick="event.stopPropagation();deactivateResident(${w.id})">
+                    ⛔ Nonaktifkan
+                  </button>`
+                : ""
+              }
+            </div>
+          `).join("")}
+        </div>
       </div>
+    `;
+  }).join("");
+}
 
-      ${
-        w.status_warga === "menunggu_verifikasi"
-        ? `
-          <button class="btn" style="margin-top:8px"
-            onclick="event.stopPropagation(); verifyResident(${w.id})">
-            ✅ Verifikasi
-          </button>
-        `
-        : w.status_warga === "aktif"
-        ? `
-          <button class="btn secondary" style="margin-top:8px"
-            onclick="event.stopPropagation(); deactivateResident(${w.id})">
-            ⛔ Nonaktifkan
-          </button>
-        `
-        : ""
-      }
-    </div>
-  `).join("");
+function toggleKeluargaCard(id, button){
+  const panel = document.getElementById(id);
+  if(!panel) return;
+
+  panel.hidden = !panel.hidden;
+
+  const icon = button.querySelector("span:last-child");
+  if(icon) icon.textContent = panel.hidden ? "＋" : "−";
 }
 
   async function keluargaAdmin(){
