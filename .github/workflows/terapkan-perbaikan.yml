@@ -1,0 +1,40 @@
+name: Terapkan perbaikan RT Kita
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/terapkan-perbaikan.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  terapkan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unduh file perbaikan dan cek keasliannya
+        run: |
+          set -e
+          curl -fsSL "https://sg.migoo.ai/beeai/api/v1/media/signed/budee/2026/10/22/af166a1d.html?expires=1792671255&sig=686b15b21b57e20b6922cded647a0cddcd1f353c69a70bbecc9f60eea11fd130" -o index.html.baru
+          curl -fsSL "https://sg.migoo.ai/beeai/api/v1/media/signed/budee/2026/10/22/fe7c3482.js?expires=1792671256&sig=b9a6e521ee6fadb1ca1aa0d3cbe030556b83907b6ca8bec6ba82ec8f76aa2ca2" -o server.js.baru
+          echo "f5451c58cdf680a9e3bd1d07d3b732451dcb1a6f2d6acfc2ad1d47ef8017c99f  index.html.baru" | sha256sum -c -
+          echo "6cbe58944e3556260c856514a4654c38e2f74a9320cb381232e98843553397cb  server.js.baru" | sha256sum -c -
+          node --check server.js.baru
+          mv index.html.baru index.html
+          mv server.js.baru server.js
+
+      - name: Simpan perubahan
+        run: |
+          git config user.name "setiawanw613-blip"
+          git config user.email "setiawanw613@gmail.com"
+          git add index.html server.js
+          if git diff --cached --quiet; then
+            echo "Tidak ada perubahan"
+            exit 0
+          fi
+          git commit -m "Perbaikan bug RT Kita: tambah warga, edit warga, iuran, kas, pengaduan"
+          git push
