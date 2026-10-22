@@ -306,7 +306,7 @@ function layout(title, body, showBack = true) {
 
           ${body}
 
-      ${showBack ? `
+           ${showBack && !/(← Kembali|>\s*Kembali\s*<\/button>)/i.test(body) ? `
         <button class="btn secondary"
           style="width:100%;margin-top:12px"
           onclick="${isWarga ? 'wargaHome()' : 'dashboard()'}">
