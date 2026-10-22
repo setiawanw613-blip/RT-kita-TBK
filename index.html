@@ -2148,7 +2148,7 @@ async function letters(){
           )}</span>
         </div>
         ${x.catatan ? `<div>Catatan: ${esc(x.catatan)}</div>` : ""}
-        ${
+               ${
           x.status === "diajukan"
           ? `
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
@@ -2158,6 +2158,14 @@ async function letters(){
               <button class="btn danger" onclick="processLetter(${Number(x.id)},'ditolak')">
                 ✖ Tolak
               </button>
+            </div>
+          `
+          : x.status === "disetujui"
+          ? `
+            <div style="margin-top:12px">
+              <a class="btn" href="/api/my-letters/${Number(x.id)}/pdf" target="_blank" rel="noopener">
+                📄 Unduh PDF
+              </a>
             </div>
           `
           : ""
