@@ -2163,7 +2163,6 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     });
 
     // GAMBAR TANDA TANGAN — DIGAMBAR TERLEBIH DAHULU
-    const fs = require("fs");
     const path = require("path");
     const signaturePath = path.join(
       __dirname,
