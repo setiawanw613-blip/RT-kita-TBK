@@ -1172,26 +1172,41 @@ app.post("/api/residents", requireAdmin, async (req, res) => {
   }
 });
 
-/* DATA SAYA - WARGA */
+
+/* DATA SAYA + ANGGOTA KELUARGA - WARGA */
 app.get("/api/my-data", requireWarga, async (req, res) => {
   try {
     const data = await supabaseRequest("warga", {
-  query:
-    `select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,status_hunian,no_hp,status_warga,created_at` +
-    `&id=eq.${encodeURIComponent(req.session.wargaId)}` +
-    `&limit=1`
-});
+      query:
+        `select=id,keluarga_id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,status_hunian,no_hp,status_warga,created_at` +
+        `&id=eq.${encodeURIComponent(req.session.wargaId)}` +
+        `&limit=1`
+    });
 
     const row = Array.isArray(data) ? data[0] : data;
 
-    res.json(
-      row
-        ? {
-            ...row,
-            nama: row.nama_lengkap
-          }
-        : null
-    );
+    if (!row) {
+      return res.json(null);
+    }
+
+    let anggotaKeluarga = [];
+
+    if (row.keluarga_id) {
+      const anggota = await supabaseRequest("warga", {
+        query:
+          `select=id,nama_lengkap,hubungan_keluarga,jenis_kelamin,status_warga` +
+          `&keluarga_id=eq.${encodeURIComponent(row.keluarga_id)}` +
+          `&order=created_at.asc`
+      });
+
+      anggotaKeluarga = Array.isArray(anggota) ? anggota : [];
+    }
+
+    res.json({
+      ...row,
+      nama: row.nama_lengkap,
+      anggota_keluarga: anggotaKeluarga
+    });
   } catch (error) {
     console.error("MY DATA ERROR:", error);
 
@@ -1201,6 +1216,7 @@ app.get("/api/my-data", requireWarga, async (req, res) => {
     });
   }
 });
+
 /* UPDATE DATA SAYA - WARGA */
 app.patch("/api/my-data", requireWarga, async (req, res) => {
   try {
