@@ -2161,8 +2161,21 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
         width: 190,
         align: "center"
       });
-
     doc.end();
+
+  } catch (error) {
+    console.error("DOWNLOAD LETTER PDF ERROR:", error);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        ok: false,
+        message: "Gagal membuat PDF surat"
+      });
+    } else {
+      res.end();
+    }
+  }
+});
 
 /* SURAT SAYA - WARGA */
 app.get("/api/my-letters", requireWarga, async (req, res) => {
