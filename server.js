@@ -1194,6 +1194,87 @@ app.post("/api/residents", requireAdmin, async (req, res) => {
 });
 
 
+/* UPLOAD FOTO PROFIL WARGA */
+app.post(
+  "/api/my-photo",
+  requireWarga,
+  uploadFoto.single("foto"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({
+          ok: false,
+          message: "Pilih foto terlebih dahulu."
+        });
+      }
+
+      const wargaId = req.session.wargaId;
+      const ekstensi = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp"
+      }[req.file.mimetype];
+
+      if (!ekstensi) {
+        return res.status(400).json({
+          ok: false,
+          message: "Format foto tidak diizinkan."
+        });
+      }
+
+      const bucket = "foto warga";
+      const objectPath = `warga/${wargaId}.${ekstensi}`;
+      const encodedPath = objectPath
+        .split("/")
+        .map(encodeURIComponent)
+        .join("/");
+
+      const storageUrl =
+        `${SUPABASE_URL}/storage/v1/object/` +
+        `${encodeURIComponent(bucket)}/${encodedPath}`;
+
+      const uploadResponse = await fetch(storageUrl, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": req.file.mimetype,
+          "x-upsert": "true"
+        },
+        body: req.file.buffer
+      });
+
+      if (!uploadResponse.ok) {
+        const detail = await uploadResponse.text();
+        console.error("UPLOAD FOTO ERROR:", detail);
+        return res.status(502).json({
+          ok: false,
+          message: "Foto gagal diunggah ke penyimpanan."
+        });
+      }
+
+      await supabaseRequest("warga", {
+        method: "PATCH",
+        query: `id=eq.${encodeURIComponent(wargaId)}`,
+        body: {
+          foto_profil: objectPath
+        }
+      });
+
+      return res.json({
+        ok: true,
+        message: "Foto profil berhasil diunggah."
+      });
+    } catch (error) {
+      console.error("MY PHOTO ERROR:", error);
+      return res.status(500).json({
+        ok: false,
+        message: "Gagal menyimpan foto profil."
+      });
+    }
+  }
+);
+
 /* DATA SAYA + ANGGOTA KELUARGA - WARGA */
 app.get("/api/my-data", requireWarga, async (req, res) => {
   try {
