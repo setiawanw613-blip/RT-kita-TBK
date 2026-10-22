@@ -906,20 +906,23 @@ app.patch("/api/notifikasi/:id/baca", requireLogin, async (req, res) => {
 });
 
 
+
 /* DATA WARGA - KETUA RT */
 app.get("/api/residents", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("warga", {
       query:
-      
-"select=id,foto_profil,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_hunian,status_warga,hubungan_keluarga,keluarga_id,created_at&order=nama_lengkap.asc"
+        "select=id,foto_profil,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_hunian,status_warga,hubungan_keluarga,keluarga_id,created_at&order=nama_lengkap.asc"
     });
 
     const rows = Array.isArray(data)
-      ? data.map(row => ({
-          ...row,
-          nama: row.nama_lengkap
-        }))
+      ? await Promise.all(
+          data.map(async (row) => ({
+            ...row,
+            nama: row.nama_lengkap,
+            foto_url: await buatUrlFotoPrivat(row.foto_profil)
+          }))
+        )
       : [];
 
     res.json(rows);
@@ -932,6 +935,7 @@ app.get("/api/residents", requireAdmin, async (req, res) => {
     });
   }
 });
+
 /* VERIFIKASI WARGA - KETUA RT */
 app.patch("/api/residents/:id/verify", requireAdmin, async (req, res) => {
   try {
@@ -1348,11 +1352,23 @@ app.get("/api/my-data", requireWarga, async (req, res) => {
       anggotaKeluarga = Array.isArray(anggota) ? anggota : [];
     }
 
-    res.json({
-      ...row,
-      nama: row.nama_lengkap,
-      anggota_keluarga: anggotaKeluarga
-    });
+
+const fotoUrl = await buatUrlFotoPrivat(row.foto_profil);
+
+const anggotaDenganFoto = await Promise.all(
+  anggotaKeluarga.map(async (anggota) => ({
+    ...anggota,
+    foto_url: await buatUrlFotoPrivat(anggota.foto_profil)
+  }))
+);
+
+res.json({
+  ...row,
+  nama: row.nama_lengkap,
+  foto_url: fotoUrl,
+  anggota_keluarga: anggotaDenganFoto
+});
+
   } catch (error) {
     console.error("MY DATA ERROR:", error);
 
