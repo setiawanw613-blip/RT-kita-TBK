@@ -2163,7 +2163,6 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     });
 
     // GAMBAR TANDA TANGAN — DIGAMBAR TERLEBIH DAHULU
-    const path = require("path");
     const signaturePath = path.join(
       __dirname,
       "WhatsApp Image 2026-10-20 at 14.48.18.jpeg"
