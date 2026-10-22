@@ -304,7 +304,15 @@ function layout(title, body, showBack = true) {
         ${esc(title)}
       </div>
 
-      ${body}
+          ${body}
+
+      ${showBack ? `
+        <button class="btn secondary"
+          style="width:100%;margin-top:12px"
+          onclick="${isWarga ? 'wargaHome()' : 'dashboard()'}">
+          ← Kembali
+        </button>
+      ` : ""}
 
       <div style="
         text-align:center;
@@ -2801,12 +2809,6 @@ async function iuranWarga(){
           💳 Ajukan Pembayaran
         </button>
       </div>
-
-      <button class="btn secondary"
-        style="width:100%;margin-top:12px"
-        onclick="wargaHome()">
-        ← Kembali
-      </button>
     `);
 
     const pilihan = [...document.querySelectorAll(".pilih-bulan-iuran")];
@@ -2893,12 +2895,6 @@ async function kasWarga(){
       <div id="kasRiwayat">Memuat...</div>
     </div>
     <div id="kasDetailModal"></div>
-
-    <button class="btn secondary"
-      style="width:100%;margin-top:12px"
-      onclick="dashboard()">
-      ← Kembali
-    </button>
   `);
 
   try{
