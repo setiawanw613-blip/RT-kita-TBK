@@ -887,17 +887,6 @@ async function adminHome(){
 async function residents(){
   layout("Data Warga",`
     <div class="card">
-      <button class="btn" onclick="addResident()">
-        + Tambah data warga
-      </button>
-
-      <button class="btn" style="margin-top:8px"
-        onclick="exportResidents()">
-        📥 Export Data Warga
-      </button>
-    </div>
-
-    <div class="card">
       <input
         id="residentSearch"
         type="search"
@@ -909,6 +898,20 @@ async function residents(){
     </div>
 
     <div class="card" id="residentList">Memuat...</div>
+
+    <div class="card">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <button class="btn" style="width:100%;margin:0"
+          onclick="addResident()">
+          + Tambah Warga
+        </button>
+
+        <button class="btn secondary" style="width:100%;margin:0"
+          onclick="exportResidents()">
+          📥 Export Data
+        </button>
+      </div>
+    </div>
   `);
 
   try{
@@ -920,8 +923,6 @@ async function residents(){
       `<div class="error">${esc(e.message)}</div>`;
   }
 }
-
-
 function filterResidents(){
   const data = Array.isArray(window._residentRows)
     ? window._residentRows
@@ -981,7 +982,22 @@ function filterResidents(){
       keluarga[key].kepala = w.nama_lengkap || w.nama || "";
     }
   });
+Object.values(keluarga).forEach(k => {
+  k.anggota.sort((a, b) => {
+    const urutan = w => {
+      const h = String(w.hubungan_keluarga || "")
+        .trim()
+        .toLowerCase();
 
+      if (h === "kepala keluarga") return 0;
+      if (h === "istri") return 1;
+      if (h === "anak") return 2;
+      return 3;
+    };
+
+    return urutan(a) - urutan(b);
+  });
+});
   box.innerHTML = Object.entries(keluarga).map(([key, k], index) => {
     const judul = k.kepala ||
       (k.anggota[0].nama_lengkap || k.anggota[0].nama || "Keluarga");
