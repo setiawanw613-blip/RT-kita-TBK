@@ -2012,8 +2012,8 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
 
   
    
- 
-    // KOP SURAT ASLI TBK — TEMPLATE GAMBAR
+
+    // TEMPLATE SURAT TBK — LATAR A4 PENUH
     const kopTemplatePath = path.join(
       __dirname,
       "contoh kop surat kosong tbk.png"
@@ -2021,38 +2021,39 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
 
     if (fs.existsSync(kopTemplatePath)) {
       doc.image(kopTemplatePath, 0, 0, {
-        fit: [595.28, 170],
-        align: "center",
-        valign: "top"
+        width: doc.page.width,
+        height: doc.page.height
       });
     } else {
       console.error("GAMBAR TEMPLATE KOP SURAT TIDAK DITEMUKAN");
     }
 
-    // Awal isi surat di bawah kop
-    doc.y = 185;
+    // ISI SURAT DI AREA DALAM BINGKAI
+    doc.y = 175;
+    doc.fillColor("#000000");
 
-    
-    // JUDUL SURAT
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(14)
-      .text(clean(letter.jenis_surat).toUpperCase(), {
+    doc.font("Helvetica-Bold")
+      .fontSize(13)
+      .text(clean(letter.jenis_surat).toUpperCase(), 65, doc.y, {
+        width: 465,
         align: "center"
       });
 
     doc.moveDown(0.4);
-    doc
-      .font("Helvetica")
+    doc.font("Helvetica")
       .fontSize(10)
       .text("Nomor: ______________________________", {
+        width: 465,
         align: "center"
       });
 
-    doc.moveDown(1.5);
-    doc.fontSize(11).text("Yang bertanda tangan di bawah ini menerangkan bahwa:");
+    doc.moveDown(1);
+    doc.fontSize(10)
+      .text("Yang bertanda tangan di bawah ini menerangkan bahwa:", {
+        width: 465
+      });
 
-    doc.moveDown(0.8);
+    doc.moveDown(0.6);
 
     const identity = [
       ["Nama", clean(warga.nama_lengkap)],
@@ -2068,147 +2069,101 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     ];
 
     identity.forEach(([label, value]) => {
-      doc.font("Helvetica").fontSize(10);
       const y = doc.y;
-      doc.text(label, 65, y, { width: 135 });
-      doc.text(":", 200, y, { width: 12 });
-      doc.text(value, 215, y, { width: 310 });
-      doc.moveDown(0.45);
+      doc.font("Helvetica").fontSize(9);
+      doc.text(label, 70, y, { width: 125 });
+      doc.text(":", 198, y, { width: 10 });
+      doc.text(value, 215, y, { width: 300 });
+      doc.moveDown(0.35);
     });
 
-    doc.moveDown(1);
-    doc
-      .font("Helvetica")
-      .fontSize(11)
+    doc.moveDown(0.6);
+    doc.font("Helvetica").fontSize(10)
+      .text("Keperluan: " + (clean(letter.keperluan) || "-"), {
+        width: 465,
+        align: "justify"
+      });
+
+    doc.moveDown(0.6);
+    doc.fontSize(9)
       .text(
-        "Keperluan: " + (clean(letter.keperluan) || "-"),
-        { align: "justify" }
+        "Surat ini dibuat berdasarkan pengajuan warga yang telah disetujui Ketua RT. Isi akhir dan pengesahan harus diperiksa oleh Pengurus RT sebelum digunakan sebagai dokumen resmi.",
+        { width: 465, align: "justify", lineGap: 2 }
       );
 
-    doc.moveDown(0.8);
-    doc.text(
-      "Surat ini dibuat berdasarkan pengajuan warga yang telah disetujui Ketua RT. Nomor surat, isi akhir, serta pengesahan perlu diperiksa oleh Pengurus RT sebelum digunakan sebagai dokumen resmi.",
-      { align: "justify", lineGap: 3 }
-    );
-
-   
- 
-    // PENGESAHAN CONTOH — STAMPEL TES / PERCOBAAN
-    doc.moveDown(2);
-
+    // AREA PENGESAHAN
     const signX = 335;
-    const signY = doc.y;
+    const signY = Math.min(Math.max(doc.y + 15, 475), 570);
 
     doc.font("Helvetica")
-      .fontSize(10)
+      .fontSize(9)
       .fillColor("#000000")
       .text("Bekasi, ____ / ____ / ______", signX, signY, {
-        width: 190,
+        width: 180,
         align: "center"
       });
 
-    doc.text("Ketua RT 004 / RW 01", signX, signY + 20, {
-      width: 190,
+    doc.text("Ketua RT 004 / RW 01", signX, signY + 17, {
+      width: 180,
       align: "center"
     });
 
-    // GAMBAR TANDA TANGAN — DIGAMBAR TERLEBIH DAHULU
     const signaturePath = path.join(
       __dirname,
       "WhatsApp Image 2026-10-20 at 14.48.18.jpeg"
     );
 
     if (fs.existsSync(signaturePath)) {
-      doc.image(signaturePath, signX + 25, signY + 82, {
-        fit: [140, 55]
+      doc.image(signaturePath, signX + 25, signY + 38, {
+        fit: [130, 45]
       });
-    } else {
-      doc.font("Helvetica")
-        .fontSize(8)
-        .fillColor("#555555")
-        .text("Gambar tanda tangan belum tersedia", signX, signY + 100, {
-          width: 190,
-          align: "center"
-        });
     }
 
-    // STEMPEL DIGAMBAR SETELAH TANDA TANGAN
-    const stampX = signX + 95;
-    const stampY = signY + 105;
+    const stampX = signX + 90;
+    const stampY = signY + 75;
 
     doc.save();
+    doc.lineWidth(1.5).strokeColor("#B91C1C")
+      .circle(stampX, stampY, 30).stroke();
+    doc.lineWidth(0.7)
+      .circle(stampX, stampY, 25).stroke();
 
-    doc.lineWidth(2)
-      .strokeColor("#B91C1C")
-      .circle(stampX, stampY, 43)
-      .stroke();
-
-    doc.lineWidth(0.8)
-      .circle(stampX, stampY, 37)
-      .stroke();
-
-    doc.font("Helvetica-Bold")
-      .fontSize(7)
+    doc.font("Helvetica-Bold").fontSize(6)
       .fillColor("#B91C1C")
-      .text("TAMAN BALI KAHURIPAN", stampX - 34, stampY - 21, {
-        width: 68,
+      .text("TAMAN BALI KAHURIPAN", stampX - 24, stampY - 12, {
+        width: 48,
         align: "center"
       });
 
-    doc.fontSize(11)
-      .text("STEMPEL", stampX - 34, stampY - 5, {
-        width: 68,
+    doc.fontSize(8)
+      .text("STEMPEL", stampX - 24, stampY - 2, {
+        width: 48,
         align: "center"
       });
 
-    doc.fontSize(7)
-      .text("TES / PERCOBAAN", stampX - 34, stampY + 10, {
-        width: 68,
+    doc.fontSize(5.5)
+      .text("TES / PERCOBAAN", stampX - 24, stampY + 8, {
+        width: 48,
         align: "center"
       });
-
-    doc.fontSize(7)
-      .text("RT 004 / RW 01", stampX - 34, stampY + 20, {
-        width: 68,
-        align: "center"
-      });
-
     doc.restore();
 
-    // NAMA DAN LABEL PERCOBAAN
-    doc.font("Helvetica-Bold")
-      .fontSize(10)
+    doc.font("Helvetica-Bold").fontSize(9)
       .fillColor("#000000")
-      .text("Nama Ketua RT", signX, signY + 155, {
-        width: 190,
+      .text("Nama Ketua RT", signX, signY + 112, {
+        width: 180,
         align: "center",
         underline: true
       });
 
-    doc.font("Helvetica")
-      .fontSize(8)
+    doc.font("Helvetica").fontSize(7)
       .fillColor("#B91C1C")
-      .text("CONTOH — BUKAN PENGESAHAN RESMI", signX - 5, signY + 175, {
-        width: 200,
+      .text("CONTOH — BUKAN PENGESAHAN RESMI", signX - 5, signY + 128, {
+        width: 190,
         align: "center"
       });
 
     doc.end();
-
-  } catch (error) {
-    console.error("DOWNLOAD LETTER PDF ERROR:", error);
-
-    if (!res.headersSent) {
-      res.status(500).json({
-        ok: false,
-        message: "Gagal membuat PDF surat"
-      });
-    } else {
-      res.end();
-    }
-  }
-});
-
 
 /* SURAT SAYA - WARGA */
 app.get("/api/my-letters", requireWarga, async (req, res) => {
