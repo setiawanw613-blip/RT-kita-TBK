@@ -1,3 +1,4 @@
+
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "builds": [
@@ -11,7 +12,8 @@
           "sw.js",
           "icon-192.png",
           "icon-512.png",
-          "images.png"
+          "images.png",
+          "contoh kop surat kosong tbk.png"
         ]
       }
     }
