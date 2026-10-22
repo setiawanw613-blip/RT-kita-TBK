@@ -306,14 +306,6 @@ function layout(title, body, showBack = true) {
 
       ${body}
 
-      ${showBack && !isWarga ? `
-        <div style="display:flex;gap:8px;margin-top:12px">
-          <button class="btn secondary" onclick="dashboard()">
-            ← Kembali ke Dashboard
-          </button>
-        </div>
-      ` : ""}
-
       <div style="
         text-align:center;
         color:#52647a;
@@ -3125,7 +3117,7 @@ async function myData(){
     <button class="btn secondary"
       style="width:100%;margin-top:12px"
       onclick="wargaHome()">
-      ← Kembali ke Dashboard
+     ← Kembali
     </button>
   `);
 
@@ -3680,7 +3672,7 @@ function openMyLetter(index){
       <button class="btn secondary"
         style="width:100%;margin-top:16px"
         onclick="myLetters()">
-        ← Kembali ke Surat Saya
+       ← Kembali
       </button>
     </div>
   `);
