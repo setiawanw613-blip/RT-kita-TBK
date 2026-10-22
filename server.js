@@ -7,6 +7,26 @@ const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+const uploadFoto = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 2 * 1024 * 1024
+  },
+  fileFilter: (req, file, cb) => {
+    const tipeDiizinkan = [
+      "image/jpeg",
+      "image/png",
+      "image/webp"
+    ];
+
+    if (tipeDiizinkan.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Foto harus berformat JPG, PNG, atau WebP."));
+    }
+  }
+});
+
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
