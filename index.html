@@ -1002,34 +1002,43 @@ function filterResidents(){
         </button>
 
         <div id="${id}" hidden style="padding:10px 4px 0">
-          ${k.anggota.map(w => `
-            <div style="padding:10px 0;border-top:1px solid #ddd">
-              <div style="cursor:pointer"
-                onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
-                <b>${esc(w.nama_lengkap || w.nama || "-")}</b>
-                <div class="muted">
-                  ${esc(w.hubungan_keluarga || "Hubungan belum diisi")}
-                </div>
-                <div class="muted">
-                  Status: ${esc(w.status_warga || "-")}
-                </div>
-              </div>
+         ${k.anggota.map(w => `
+  <div style="padding:10px 0;border-top:1px solid #ddd">
+    <div style="display:flex;align-items:center;gap:12px;cursor:pointer"
+      onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+      ${
+        w.foto_url
+          ? `<img src="${esc(w.foto_url)}"
+              alt="Foto warga"
+              style="width:56px;height:56px;min-width:56px;border-radius:50%;object-fit:cover;border:2px solid #dbeafe">`
+          : `<div style="width:56px;height:56px;min-width:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eaf2ff;font-size:26px">👤</div>`
+      }
+      <div style="min-width:0">
+        <b>${esc(w.nama_lengkap || w.nama || "-")}</b>
+        <div class="muted">
+          ${esc(w.hubungan_keluarga || "Hubungan belum diisi")}
+        </div>
+        <div class="muted">
+          Status: ${esc(w.status_warga || "-")}
+        </div>
+      </div>
+    </div>
 
-              ${
-                w.status_warga === "menunggu_verifikasi"
-                ? `<button class="btn" style="margin-top:8px"
-                    onclick="event.stopPropagation();verifyResident(${w.id})">
-                    ✅ Verifikasi
-                  </button>`
-                : w.status_warga === "aktif"
-                ? `<button class="btn secondary" style="margin-top:8px"
-                    onclick="event.stopPropagation();deactivateResident(${w.id})">
-                    ⛔ Nonaktifkan
-                  </button>`
-                : ""
-              }
-            </div>
-          `).join("")}
+    ${
+      w.status_warga === "menunggu_verifikasi"
+      ? `<button class="btn" style="margin-top:8px"
+          onclick="event.stopPropagation();verifyResident(${w.id})">
+          ✅ Verifikasi
+        </button>`
+      : w.status_warga === "aktif"
+      ? `<button class="btn secondary" style="margin-top:8px"
+          onclick="event.stopPropagation();deactivateResident(${w.id})">
+          ⛔ Nonaktifkan
+        </button>`
+      : ""
+    }
+  </div>
+`).join("")}
         </div>
       </div>
     `;
