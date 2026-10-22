@@ -2011,82 +2011,28 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     doc.pipe(res);
 
   
-    // KOP SURAT RT TBK
-    const kopLeft = 55;
-    const kopRight = 540;
-    const kopWidth = kopRight - kopLeft;
-    const kopTop = 42;
+   
+ 
+    // KOP SURAT ASLI TBK — TEMPLATE GAMBAR
+    const kopTemplatePath = path.join(
+      __dirname,
+      "contoh kop surat kosong tbk.png"
+    );
 
-    // Logo di sisi kiri kop surat
-    try {
-      const logoPath = path.join(__dirname, "images.png");
-
-      if (fs.existsSync(logoPath)) {
-        doc.image(logoPath, kopLeft + 5, kopTop + 2, {
-          fit: [82, 82],
-          align: "center",
-          valign: "center"
-        });
-      }
-    } catch (error) {
-      console.error("LOGO KOP SURAT ERROR:", error);
+    if (fs.existsSync(kopTemplatePath)) {
+      doc.image(kopTemplatePath, 0, 0, {
+        fit: [595.28, 170],
+        align: "center",
+        valign: "top"
+      });
+    } else {
+      console.error("GAMBAR TEMPLATE KOP SURAT TIDAK DITEMUKAN");
     }
 
-    // Judul kop di tengah
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(16)
-      .text("TAMAN BALI KAHURIPAN", kopLeft + 85, kopTop + 8, {
-        width: kopWidth - 90,
-        align: "center"
-      });
+    // Awal isi surat di bawah kop
+    doc.y = 185;
 
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(12)
-      .text("RT 004 RW 01", kopLeft + 85, kopTop + 31, {
-        width: kopWidth - 90,
-        align: "center"
-      });
-
-    doc
-      .font("Helvetica-Bold")
-      .fontSize(10)
-      .text("P E N G U R U S   R T", kopLeft + 85, kopTop + 51, {
-        width: kopWidth - 90,
-        align: "center"
-      });
-
-    doc
-      .font("Helvetica")
-      .fontSize(8)
-      .text(
-        "Taman Bali Kahuripan, Kelurahan Sukahurip, Kecamatan Sukatani, Kabupaten Bekasi",
-        kopLeft + 85,
-        kopTop + 68,
-        {
-          width: kopWidth - 90,
-          align: "center"
-        }
-      );
-
-    // Garis ganda di bawah kop
-    const kopY = kopTop + 91;
-
-    doc
-      .moveTo(kopLeft, kopY)
-      .lineTo(kopRight, kopY)
-      .lineWidth(1.5)
-      .stroke();
-
-    doc
-      .moveTo(kopLeft, kopY + 4)
-      .lineTo(kopRight, kopY + 4)
-      .lineWidth(0.5)
-      .stroke();
-
-    doc.y = kopY + 24;
-
+    
     // JUDUL SURAT
     doc
       .font("Helvetica-Bold")
