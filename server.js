@@ -119,6 +119,49 @@ function getSupabaseErrorCode(error) {
   }
 }
 
+async function buatUrlFotoPrivat(objectPath) {
+  if (!objectPath) return null;
+
+  try {
+    const bucket = "foto warga";
+    const encodedPath = objectPath
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/");
+
+    const response = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${encodedPath}`,
+      {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ expiresIn: 3600 })
+      }
+    );
+
+    if (!response.ok) {
+      console.error("SIGNED FOTO ERROR:", await response.text());
+      return null;
+    }
+
+    const data = await response.json();
+    const signedURL = data.signedURL;
+
+    if (!signedURL) return null;
+
+    return signedURL.startsWith("http")
+      ? signedURL
+      : `${SUPABASE_URL}/storage/v1${signedURL.startsWith("/") ? "" : "/"}${signedURL}`;
+  } catch (error) {
+    console.error("BUAT URL FOTO ERROR:", error);
+    return null;
+  }
+}
+
+
 function hashBuktiPengeluaran(fileBuffer) {
   return crypto
     .createHash("sha256")
