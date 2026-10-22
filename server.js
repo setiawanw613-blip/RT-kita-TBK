@@ -1933,10 +1933,12 @@ app.post("/api/letters", requireWarga, async (req, res) => {
   }
 });
 
-/* UNDUH PDF SURAT - WARGA */
-app.get("/api/my-letters/:id/pdf", requireWarga, async (req, res) => {
+
+/* UNDUH PDF SURAT - WARGA DAN KETUA RT */
+app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
   try {
     const id = Number(req.params.id);
+    const isAdmin = req.session.role === "admin";
     const wargaId = req.session.wargaId;
 
     if (!Number.isInteger(id) || id <= 0) {
@@ -1946,12 +1948,14 @@ app.get("/api/my-letters/:id/pdf", requireWarga, async (req, res) => {
       });
     }
 
-    // Pastikan surat milik warga yang sedang login.
+        // Surat diambil berdasarkan ID; akses warga dibatasi ke pemiliknya.
     const letters = await supabaseRequest("pengajuan_surat", {
       query:
         "select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at" +
         "&id=eq." + encodeURIComponent(id) +
-        "&warga_id=eq." + encodeURIComponent(wargaId)
+        (isAdmin
+          ? ""
+          : "&warga_id=eq." + encodeURIComponent(wargaId))
     });
 
     if (!Array.isArray(letters) || letters.length === 0) {
@@ -1970,55 +1974,13 @@ app.get("/api/my-letters/:id/pdf", requireWarga, async (req, res) => {
       });
     }
 
-    // Ambil data warga untuk dicantumkan pada surat.
+    // Ambil data pemilik surat yang dipilih.
     const residents = await supabaseRequest("warga", {
       query:
         "select=id,nama_lengkap,nik,no_kk,alamat,jenis_kelamin,tempat_lahir,tanggal_lahir,pekerjaan" +
-        "&id=eq." + encodeURIComponent(wargaId)
+        "&id=eq." + encodeURIComponent(letter.warga_id)
     });
-
-    if (!Array.isArray(residents) || residents.length === 0) {
-      return res.status(404).json({
-        ok: false,
-        message: "Data warga tidak ditemukan"
-      });
-    }
-
-    const warga = residents[0];
-
-    const clean = (value) =>
-      String(value ?? "").replace(/\s+/g, " ").trim();
-
-    const doc = new PDFDocument({
-      size: "A4",
-      margins: { top: 45, bottom: 45, left: 55, right: 55 },
-      info: {
-        Title: clean(letter.jenis_surat) || "Surat RT TBK",
-        Author: "Pengurus RT 004 / RW 01"
-      }
-    });
-
-    const filename = "surat-rt-tbk-" + id + ".pdf";
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="' + filename + '"'
-    );
-    res.setHeader("Cache-Control", "private, no-store");
-
-    doc.on("error", (error) => {
-      console.error("PDF STREAM ERROR:", error);
-      if (!res.headersSent) {
-        res.status(500).end("Gagal membuat PDF");
-      } else {
-        res.destroy(error);
-      }
-    });
-
-    doc.pipe(res);
-
-   
+  
     // KOP SURAT RT TBK
     const kopLeft = 55;
     const kopRight = 540;
