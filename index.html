@@ -923,6 +923,7 @@ async function residents(){
       `<div class="error">${esc(e.message)}</div>`;
   }
 }
+
 function filterResidents(){
   const data = Array.isArray(window._residentRows)
     ? window._residentRows
@@ -942,156 +943,82 @@ function filterResidents(){
   ].some(v => String(v || "").toLowerCase().includes(q)));
 
   if(count){
-    count.textContent =
-      `Menampilkan ${filtered.length} dari ${data.length} warga`;
+    count.textContent = `Menampilkan ${filtered.length} dari ${data.length} warga`;
   }
 
   if(!filtered.length){
-    box.innerHTML =
-      "<p class='muted' style='text-align:center;padding:12px'>Warga tidak ditemukan.</p>";
+    box.innerHTML = "<p class='muted' style='text-align:center;padding:16px'>Warga tidak ditemukan.</p>";
     return;
   }
 
-  const keluarga = {};
+  box.innerHTML = filtered.map(w => {
+    const nama = w.nama_lengkap || w.nama || "Nama belum diisi";
+    const status = String(w.status_warga || "").toLowerCase();
+    const aktif = status === "aktif";
+    const menunggu = status === "menunggu_verifikasi";
 
-  filtered.forEach(w => {
-    const key = w.keluarga_id
-      ? `keluarga-${w.keluarga_id}`
-      : w.no_kk
-        ? `kk-${String(w.no_kk).trim()}`
-        : `warga-${w.id}`;
-
-    if(!keluarga[key]){
-      keluarga[key] = {
-        kepala: "",
-        no_kk: w.no_kk || "",
-        alamat: w.alamat || "",
-        anggota: []
-      };
-    }
-
-    keluarga[key].anggota.push(w);
-
-    if(w.hubungan_keluarga === "Kepala Keluarga"){
-      keluarga[key].kepala = w.nama_lengkap || w.nama || "";
-    }
-  });
-
-  Object.values(keluarga).forEach(k => {
-    k.anggota.sort((a, b) => {
-      const urutan = w => {
-        const h = String(w.hubungan_keluarga || "")
-          .trim().toLowerCase();
-        if(h === "kepala keluarga") return 0;
-        if(h === "istri") return 1;
-        if(h === "anak") return 2;
-        return 3;
-      };
-      return urutan(a) - urutan(b);
-    });
-  });
-
-  box.innerHTML = Object.entries(keluarga).map(([key, k], index) => {
-    const judul = k.kepala ||
-      (k.anggota[0].nama_lengkap || k.anggota[0].nama || "Keluarga");
-    const id = `keluarga-card-${index}`;
+    const warnaStatus = aktif
+      ? "background:#dcfce7;color:#166534"
+      : menunggu
+        ? "background:#fef3c7;color:#92400e"
+        : "background:#f1f5f9;color:#475569";
 
     return `
       <div style="
-        margin-bottom:8px;
-        border:1px solid #dbe5f2;
-        border-radius:11px;
-        overflow:hidden;
-        background:#fff;
-        box-shadow:0 1px 4px rgba(15,23,42,.04)
+        display:flex;align-items:center;gap:11px;
+        padding:11px;margin-bottom:8px;
+        border:1px solid #dbe5f2;border-radius:12px;
+        background:#fff;box-shadow:0 1px 4px rgba(15,23,42,.04)
       ">
-        <button type="button"
-          class="btn secondary"
-          style="
-            width:100%;margin:0;padding:10px 11px;
-            border:0;border-radius:0;text-align:left;
-            display:flex;justify-content:space-between;
-            align-items:center;gap:8px;
-            background:#eff6ff;color:#17365d
-          "
-          onclick="toggleKeluargaCard('${id}', this)">
-          <span style="min-width:0;overflow-wrap:anywhere">
-            <b style="font-size:13px">🏠 Keluarga ${esc(judul)}</b>
-            <br>
-            <small style="font-size:11px;color:#64748b">
-              ${k.anggota.length} anggota keluarga
-            </small>
+        <div
+          style="flex-shrink:0;cursor:pointer"
+          onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+          ${
+            w.foto_url
+              ? `<img src="${esc(w.foto_url)}" alt="Foto ${esc(nama)}"
+                  style="width:58px;height:58px;border-radius:50%;object-fit:cover;border:1px solid #dbeafe">`
+              : `<div style="width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eaf2ff;font-size:25px">👤</div>`
+          }
+        </div>
+
+        <div style="flex:1;min-width:0">
+          <div
+            style="font-size:14px;font-weight:700;color:#1e293b;overflow-wrap:anywhere;cursor:pointer"
+            onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+            ${esc(nama)}
+          </div>
+          <div style="font-size:12px;color:#64748b;margin-top:3px">
+            ${esc(w.hubungan_keluarga || "Hubungan belum diisi")}
+          </div>
+          <div style="font-size:11px;color:#64748b;margin-top:3px">
+            KK: ${esc(w.no_kk ? "•••• " + String(w.no_kk).slice(-4) : "Belum diisi")}
+          </div>
+          <span style="display:inline-block;margin-top:5px;padding:3px 8px;border-radius:20px;font-size:10px;${warnaStatus}">
+            ${esc(w.status_warga || "Status belum diisi")}
           </span>
-          <span style="
-            flex-shrink:0;width:24px;height:24px;
-            display:flex;align-items:center;justify-content:center;
-            border-radius:50%;background:#dbeafe;color:#1d4ed8;
-            font-size:16px
-          ">＋</span>
-        </button>
+        </div>
 
-        <div id="${id}" hidden style="padding:0 10px 5px">
-          ${k.anggota.map(w => `
-            <div style="
-              padding:8px 0;
-              border-top:1px solid #edf0f5
-            ">
-              <div
-                style="display:flex;align-items:center;gap:9px;min-width:0;cursor:pointer"
-                onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
-                ${
-                  w.foto_url
-                    ? `<img src="${esc(w.foto_url)}" alt="Foto warga"
-                        style="width:40px;height:40px;min-width:40px;border-radius:50%;object-fit:cover;border:1px solid #dbeafe">`
-                    : `<div style="width:40px;height:40px;min-width:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eaf2ff;font-size:20px">👤</div>`
-                }
-
-                <div style="flex:1;min-width:0">
-                  <div style="font-weight:700;font-size:13px;color:#1e293b;overflow-wrap:anywhere">
-                    ${esc(w.nama_lengkap || w.nama || "-")}
-                  </div>
-                  <div style="font-size:11px;color:#64748b;margin-top:2px">
-                    ${esc(w.hubungan_keluarga || "Hubungan belum diisi")}
-                  </div>
-                  <div style="margin-top:4px">
-                    <span style="
-                      display:inline-block;padding:2px 7px;
-                      border-radius:20px;font-size:10px;
-                      background:${
-                        w.status_warga === "aktif" ? "#dcfce7" :
-                        w.status_warga === "menunggu_verifikasi" ? "#fef3c7" : "#f1f5f9"
-                      };
-                      color:${
-                        w.status_warga === "aktif" ? "#166534" :
-                        w.status_warga === "menunggu_verifikasi" ? "#92400e" : "#475569"
-                      }
-                    ">${esc(w.status_warga || "-")}</span>
-                  </div>
-                </div>
-              </div>
-
-              ${
-                w.status_warga === "menunggu_verifikasi"
-                  ? `<button class="btn"
-                      style="width:100%;margin-top:6px;padding:7px 9px;font-size:12px"
-                      onclick="verifyResident(${w.id})">
-                      ✅ Verifikasi
-                    </button>`
-                  : w.status_warga === "aktif"
-                    ? `<button class="btn secondary"
-                        style="width:100%;margin-top:6px;padding:7px 9px;font-size:12px"
-                        onclick="deactivateResident(${w.id})">
-                        ⛔ Nonaktifkan Warga
-                      </button>`
-                    : ""
-              }
-            </div>
-          `).join("")}
+        <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0">
+          <button class="btn secondary"
+            style="margin:0;padding:6px 8px;font-size:11px"
+            onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+            Detail
+          </button>
+          ${
+            menunggu
+              ? `<button class="btn" style="margin:0;padding:6px 8px;font-size:11px"
+                   onclick="verifyResident(${Number(w.id)})">Verifikasi</button>`
+              : aktif
+                ? `<button class="btn secondary" style="margin:0;padding:6px 8px;font-size:11px"
+                     onclick="deactivateResident(${Number(w.id)})">Nonaktifkan</button>`
+                : ""
+          }
         </div>
       </div>
     `;
   }).join("");
 }
+
 function toggleKeluargaCard(id, button){
   const panel = document.getElementById(id);
   if(!panel) return;
@@ -1102,66 +1029,178 @@ function toggleKeluargaCard(id, button){
   if(icon) icon.textContent = panel.hidden ? "＋" : "−";
 }
 
-  async function keluargaAdmin(){
+
+async function keluargaAdmin(){
   layout("Data Keluarga",`
+    <div class="card">
+      <input
+        id="keluargaSearch"
+        type="search"
+        placeholder="🔎 Cari kepala keluarga atau No. KK..."
+        oninput="filterKeluargaAdmin()"
+        style="width:100%;box-sizing:border-box"
+      />
+      <div id="keluargaCount" class="muted" style="margin-top:8px"></div>
+    </div>
     <div class="card" id="keluargaList">Memuat...</div>
   `);
 
   try{
     const data = await api("/api/residents");
+    window._keluargaRows = Array.isArray(data) ? data : [];
+    filterKeluargaAdmin();
+  }catch(e){
     const box = document.getElementById("keluargaList");
+    if(box) box.innerHTML = `<div class="error">${esc(e.message)}</div>`;
+  }
+}
 
-    if(!data.length){
-      box.innerHTML="<p class='muted'>Belum ada data keluarga</p>";
-      return;
+function filterKeluargaAdmin(){
+  const data = Array.isArray(window._keluargaRows)
+    ? window._keluargaRows
+    : [];
+  const input = document.getElementById("keluargaSearch");
+  const box = document.getElementById("keluargaList");
+  const count = document.getElementById("keluargaCount");
+
+  if(!input || !box) return;
+
+  const q = input.value.trim().toLowerCase();
+  const groups = {};
+
+  data.forEach(w => {
+    const key = w.keluarga_id
+      ? `keluarga-${w.keluarga_id}`
+      : w.no_kk
+        ? `kk-${String(w.no_kk).trim()}`
+        : `warga-${w.id}`;
+
+    if(!groups[key]){
+      groups[key] = {
+        no_kk: w.no_kk || "",
+        alamat: w.alamat || "",
+        anggota: []
+      };
     }
 
-    const keluarga = {};
+    groups[key].anggota.push(w);
+  });
 
-    data.forEach(w=>{
-      
-const key = w.no_kk
-  ? `kk-${String(w.no_kk).trim()}`
-  : (w.keluarga_id || `warga-${w.id}`);
-
-
-      if(!keluarga[key]){
-        keluarga[key] = {
-          no_kk: w.no_kk || "-",
-          anggota: []
-        };
-      }
-
-      keluarga[key].anggota.push(w);
+  const keluarga = Object.values(groups).map(k => {
+    k.anggota.sort((a,b) => {
+      const rank = w => {
+        const h = String(w.hubungan_keluarga || "").trim().toLowerCase();
+        if(h === "kepala keluarga") return 0;
+        if(h === "istri" || h === "suami") return 1;
+        if(h === "anak") return 2;
+        return 3;
+      };
+      return rank(a) - rank(b);
     });
 
-    box.innerHTML = Object.values(keluarga).map(k=>{
-      return `
-        <div class="row">
-          <b>🏠 No. KK: ${esc(k.no_kk)}</b>
+    k.kepala = k.anggota.find(w =>
+      String(w.hubungan_keluarga || "").trim().toLowerCase() === "kepala keluarga"
+    ) || k.anggota[0];
 
-          <div class="muted" style="margin-top:8px">
-            Jumlah anggota: ${k.anggota.length}
-          </div>
+    return k;
+  }).filter(k => {
+    const teks = [
+      k.kepala.nama_lengkap,
+      k.kepala.nama,
+      k.no_kk,
+      k.alamat,
+      ...k.anggota.map(w => w.nama_lengkap || w.nama)
+    ].join(" ").toLowerCase();
 
-          <div style="margin-top:10px">
-            ${k.anggota.map(w=>`
-              <div style="padding:8px 0;border-top:1px solid #ddd">
-                <b>${esc(w.nama_lengkap || w.nama)}</b><br>
-                <span class="muted">
-                  ${esc(w.hubungan_keluarga || "Belum diisi")}
-                </span>
-              </div>
-            `).join("")}
-          </div>
-        </div>
-      `;
-    }).join("");
+    return teks.includes(q);
+  });
 
-  }catch(e){
-    document.getElementById("keluargaList").innerHTML =
-      `<div class="error">${esc(e.message)}</div>`;
+  if(count){
+    count.textContent = `${keluarga.length} keluarga`;
   }
+
+  if(!keluarga.length){
+    box.innerHTML = "<p class='muted' style='text-align:center;padding:16px'>Keluarga tidak ditemukan.</p>";
+    return;
+  }
+
+  box.innerHTML = keluarga.map((k,index) => {
+    const kepala = k.kepala;
+    const nama = kepala.nama_lengkap || kepala.nama || "Keluarga";
+    const id = `keluarga-admin-${index}`;
+    const noKK = k.no_kk
+      ? "•••• " + String(k.no_kk).slice(-4)
+      : "Belum diisi";
+
+    return `
+      <div style="
+        margin-bottom:10px;border:1px solid #dbe5f2;
+        border-radius:13px;overflow:hidden;background:#fff;
+        box-shadow:0 1px 4px rgba(15,23,42,.05)
+      ">
+        <button type="button" class="btn secondary"
+          onclick="toggleKeluargaCard('${id}',this)"
+          style="
+            width:100%;margin:0;padding:12px;
+            border:0;border-radius:0;text-align:left;
+            display:flex;align-items:center;gap:11px;
+            background:#eff6ff;color:#17365d
+          ">
+          ${
+            kepala.foto_url
+              ? `<img src="${esc(kepala.foto_url)}" alt="Foto kepala keluarga"
+                  style="width:64px;height:64px;flex-shrink:0;border-radius:12px;object-fit:cover;border:1px solid #dbeafe">`
+              : `<div style="width:64px;height:64px;flex-shrink:0;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#dbeafe;font-size:27px">👤</div>`
+          }
+          <span style="flex:1;min-width:0">
+            <b style="font-size:14px;overflow-wrap:anywhere">🏠 Keluarga ${esc(nama)}</b>
+            <span style="display:block;font-size:11px;color:#64748b;margin-top:4px">
+              No. KK: ${esc(noKK)}
+            </span>
+            <span style="display:block;font-size:11px;color:#64748b;margin-top:3px">
+              ${k.anggota.length} anggota · ${esc(k.alamat || "Alamat belum diisi")}
+            </span>
+          </span>
+          <span style="
+            flex-shrink:0;width:25px;height:25px;
+            display:flex;align-items:center;justify-content:center;
+            border-radius:50%;background:#dbeafe;color:#1d4ed8;font-size:16px
+          ">＋</span>
+        </button>
+
+        <div id="${id}" hidden style="padding:0 12px 8px">
+          ${k.anggota.map(w => `
+            <div style="
+              display:flex;align-items:center;gap:9px;
+              padding:9px 0;border-top:1px solid #edf0f5
+            ">
+              <div style="flex-shrink:0;cursor:pointer"
+                onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+                ${
+                  w.foto_url
+                    ? `<img src="${esc(w.foto_url)}" alt="Foto anggota"
+                        style="width:43px;height:43px;border-radius:50%;object-fit:cover;border:1px solid #dbeafe">`
+                    : `<div style="width:43px;height:43px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eaf2ff;font-size:20px">👤</div>`
+                }
+              </div>
+              <div style="flex:1;min-width:0;cursor:pointer"
+                onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+                <div style="font-size:13px;font-weight:700;overflow-wrap:anywhere">
+                  ${esc(w.nama_lengkap || w.nama || "-")}
+                </div>
+                <div style="font-size:11px;color:#64748b;margin-top:3px">
+                  ${esc(w.hubungan_keluarga || "Hubungan belum diisi")}
+                </div>
+                <div style="font-size:10px;color:#64748b;margin-top:3px">
+                  ${esc(w.status_warga || "-")}
+                </div>
+              </div>
+            </div>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
 }
 
 function editResident(w){
