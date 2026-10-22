@@ -1974,12 +1974,39 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
       });
     }
 
+   
     // Ambil data pemilik surat yang dipilih.
     const residents = await supabaseRequest("warga", {
       query:
         "select=id,nama_lengkap,nik,no_kk,alamat,jenis_kelamin,tempat_lahir,tanggal_lahir,pekerjaan" +
         "&id=eq." + encodeURIComponent(letter.warga_id)
     });
+
+    if (!Array.isArray(residents) || residents.length === 0) {
+      return res.status(404).json({
+        ok: false,
+        message: "Data warga pemilik surat tidak ditemukan"
+      });
+    }
+
+    const warga = residents[0];
+    const PDFDocument = require("pdfkit");
+    const fs = require("fs");
+    const path = require("path");
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `inline; filename="surat-${id}.pdf"`
+    );
+
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 55
+    });
+
+    doc.pipe(res);
+
   
     // KOP SURAT RT TBK
     const kopLeft = 55;
@@ -1989,7 +2016,6 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
 
     // Logo di sisi kiri kop surat
     try {
-      const fs = require("fs");
       const logoPath = path.join(__dirname, "images.png");
 
       if (fs.existsSync(logoPath)) {
