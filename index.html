@@ -954,7 +954,7 @@ function filterResidents(){
 
   if(!filtered.length){
     box.innerHTML =
-      "<p class='muted'>Warga tidak ditemukan.</p>";
+      "<p class='muted' style='text-align:center;padding:20px'>Warga tidak ditemukan.</p>";
     return;
   }
 
@@ -982,22 +982,24 @@ function filterResidents(){
       keluarga[key].kepala = w.nama_lengkap || w.nama || "";
     }
   });
-Object.values(keluarga).forEach(k => {
-  k.anggota.sort((a, b) => {
-    const urutan = w => {
-      const h = String(w.hubungan_keluarga || "")
-        .trim()
-        .toLowerCase();
 
-      if (h === "kepala keluarga") return 0;
-      if (h === "istri") return 1;
-      if (h === "anak") return 2;
-      return 3;
-    };
+  Object.values(keluarga).forEach(k => {
+    k.anggota.sort((a, b) => {
+      const urutan = w => {
+        const h = String(w.hubungan_keluarga || "")
+          .trim()
+          .toLowerCase();
 
-    return urutan(a) - urutan(b);
+        if(h === "kepala keluarga") return 0;
+        if(h === "istri") return 1;
+        if(h === "anak") return 2;
+        return 3;
+      };
+
+      return urutan(a) - urutan(b);
+    });
   });
-});
+
   box.innerHTML = Object.entries(keluarga).map(([key, k], index) => {
     const judul = k.kepala ||
       (k.anggota[0].nama_lengkap || k.anggota[0].nama || "Keluarga");
@@ -1005,56 +1007,146 @@ Object.values(keluarga).forEach(k => {
     const id = `keluarga-card-${index}`;
 
     return `
-      <div class="row" style="margin-bottom:12px">
+      <div style="
+        margin-bottom:12px;
+        border:1px solid #dbe5f2;
+        border-radius:14px;
+        overflow:hidden;
+        background:#fff;
+        box-shadow:0 2px 7px rgba(15,23,42,.05)
+      ">
         <button type="button"
           class="btn secondary"
-          style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;gap:8px"
+          style="
+            width:100%;
+            margin:0;
+            padding:14px;
+            border:0;
+            border-radius:0;
+            text-align:left;
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            gap:10px;
+            background:#f0f6ff;
+            color:#17365d
+          "
           onclick="toggleKeluargaCard('${id}', this)">
-          <span>
-            🏠 <b>Keluarga ${esc(judul)}</b><br>
-            <small>${k.anggota.length} anggota keluarga</small>
+          <span style="min-width:0;overflow-wrap:anywhere">
+            <b style="font-size:14px">🏠 Keluarga ${esc(judul)}</b>
+            <br>
+            <small style="color:#64748b">
+              ${k.anggota.length} anggota keluarga
+            </small>
           </span>
-          <span>＋</span>
+          <span style="
+            flex-shrink:0;
+            width:28px;
+            height:28px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:50%;
+            background:#dbeafe;
+            color:#1d4ed8;
+            font-size:18px
+          ">＋</span>
         </button>
 
-        <div id="${id}" hidden style="padding:10px 4px 0">
-         ${k.anggota.map(w => `
-  <div style="padding:10px 0;border-top:1px solid #ddd">
-    <div style="display:flex;align-items:center;gap:12px;cursor:pointer"
-      onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
-      ${
-        w.foto_url
-          ? `<img src="${esc(w.foto_url)}"
-              alt="Foto warga"
-              style="width:56px;height:56px;min-width:56px;border-radius:50%;object-fit:cover;border:2px solid #dbeafe">`
-          : `<div style="width:56px;height:56px;min-width:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eaf2ff;font-size:26px">👤</div>`
-      }
-      <div style="min-width:0">
-        <b>${esc(w.nama_lengkap || w.nama || "-")}</b>
-        <div class="muted">
-          ${esc(w.hubungan_keluarga || "Hubungan belum diisi")}
-        </div>
-        <div class="muted">
-          Status: ${esc(w.status_warga || "-")}
-        </div>
-      </div>
-    </div>
+        <div id="${id}" hidden style="padding:4px 12px 8px">
+          ${k.anggota.map(w => `
+            <div style="
+              padding:12px 0;
+              border-top:1px solid #edf0f5
+            ">
+              <div
+                style="
+                  display:flex;
+                  align-items:center;
+                  gap:11px;
+                  cursor:pointer;
+                  min-width:0
+                "
+                onclick='showResidentDetail(${JSON.stringify(w).replace(/'/g,"&#39;")})'>
+                ${
+                  w.foto_url
+                    ? `<img src="${esc(w.foto_url)}"
+                        alt="Foto warga"
+                        style="
+                          width:48px;
+                          height:48px;
+                          min-width:48px;
+                          border-radius:50%;
+                          object-fit:cover;
+                          border:2px solid #dbeafe
+                        ">`
+                    : `<div style="
+                        width:48px;
+                        height:48px;
+                        min-width:48px;
+                        border-radius:50%;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                        background:#eaf2ff;
+                        font-size:23px
+                      ">👤</div>`
+                }
 
-    ${
-      w.status_warga === "menunggu_verifikasi"
-      ? `<button class="btn" style="margin-top:8px"
-          onclick="event.stopPropagation();verifyResident(${w.id})">
-          ✅ Verifikasi
-        </button>`
-      : w.status_warga === "aktif"
-      ? `<button class="btn secondary" style="margin-top:8px"
-          onclick="event.stopPropagation();deactivateResident(${w.id})">
-          ⛔ Nonaktifkan
-        </button>`
-      : ""
-    }
-  </div>
-`).join("")}
+                <div style="flex:1;min-width:0">
+                  <div style="
+                    font-weight:700;
+                    font-size:14px;
+                    color:#1e293b;
+                    overflow-wrap:anywhere
+                  ">${esc(w.nama_lengkap || w.nama || "-")}</div>
+
+                  <div style="font-size:12px;color:#64748b;margin-top:3px">
+                    ${esc(w.hubungan_keluarga || "Hubungan belum diisi")}
+                  </div>
+
+                  <div style="margin-top:5px">
+                    <span style="
+                      display:inline-block;
+                      padding:3px 8px;
+                      border-radius:20px;
+                      font-size:11px;
+                      background:${
+                        w.status_warga === "aktif"
+                          ? "#dcfce7"
+                          : w.status_warga === "menunggu_verifikasi"
+                            ? "#fef3c7"
+                            : "#f1f5f9"
+                      };
+                      color:${
+                        w.status_warga === "aktif"
+                          ? "#166534"
+                          : w.status_warga === "menunggu_verifikasi"
+                            ? "#92400e"
+                            : "#475569"
+                      }
+                    ">${esc(w.status_warga || "-")}</span>
+                  </div>
+                </div>
+              </div>
+
+              ${
+                w.status_warga === "menunggu_verifikasi"
+                  ? `<button class="btn"
+                      style="width:100%;margin-top:9px"
+                      onclick="verifyResident(${w.id})">
+                      ✅ Verifikasi Warga
+                    </button>`
+                  : w.status_warga === "aktif"
+                    ? `<button class="btn secondary"
+                        style="width:100%;margin-top:9px"
+                        onclick="deactivateResident(${w.id})">
+                        ⛔ Nonaktifkan Warga
+                      </button>`
+                    : ""
+              }
+            </div>
+          `).join("")}
         </div>
       </div>
     `;
