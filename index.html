@@ -3011,46 +3011,165 @@ document.getElementById("kasDetailModal").scrollIntoView({behavior:"smooth",bloc
 }
 
 
+
 async function myData(){
-  layout("Data Saya",`
-    <div class="card" id="myDataBox">Memuat...</div>
-    <button class="btn secondary" onclick="wargaHome()">Kembali</button>
+  layout("Data Saya", `
+    <div id="myDataBox" class="card"
+      style="padding:0;overflow:hidden;border-radius:20px">
+      <div style="padding:28px 16px;text-align:center">
+        Memuat data Anda...
+      </div>
+    </div>
+
+    <button class="btn secondary"
+      style="width:100%;margin-top:12px"
+      onclick="wargaHome()">
+      ← Kembali ke Dashboard
+    </button>
   `);
 
   try{
-    const w=await api("/api/my-data");
-    const box=document.getElementById("myDataBox");
+    const w = await api("/api/my-data");
+    const box = document.getElementById("myDataBox");
 
     if(!w){
-      box.innerHTML="<p class='muted'>Data warga tidak ditemukan</p>";
+      box.innerHTML = `
+        <div style="padding:24px;text-align:center">
+          <div style="font-size:40px">👤</div>
+          <h3>Data belum tersedia</h3>
+          <p class="muted">
+            Data warga Anda belum ditemukan.
+          </p>
+        </div>`;
       return;
     }
 
-    box.innerHTML=`
-  <h3>${esc(w.nama_lengkap)}</h3>
-  <div class="row"><b>NIK</b><br>${esc(w.nik)}</div>
-  <div class="row"><b>No. KK</b><br>${esc(w.no_kk)}</div>
-  <div class="row"><b>Jenis Kelamin</b><br>${esc(w.jenis_kelamin)}</div>
-  <div class="row"><b>Tempat/Tanggal Lahir</b><br>${esc(w.tempat_lahir)} / ${esc(w.tanggal_lahir)}</div>
-  <div class="row"><b>Alamat</b><br>${esc(w.alamat)}</div>
-  <div class="row"><b>RT/RW</b><br>${esc(w.rt)} / ${esc(w.rw)}</div>
-  <div class="row"><b>Status Perkawinan</b><br>${esc(w.status_perkawinan)}</div>
-  <div class="row"><b>Pekerjaan</b><br>${esc(w.pekerjaan)}</div>
-  <div class="row"><b>Status Hunian</b><br>${esc(w.status_hunian)}</div>
-  <div class="row"><b>No. HP</b><br>${esc(w.no_hp)}</div>
-  <div class="row"><b>Status Warga</b><br>${esc(w.status_warga)}</div>
+    const nama = w.nama_lengkap || "Warga RT TBK";
+    const status = w.status_warga || "Belum diketahui";
+    const aktif = status.toLowerCase() === "aktif";
 
-  <button class="btn" style="width:100%;margin-top:16px"
-    onclick="editMyData()">
-    ✏️ Lengkapi Data
-  </button>
-`;
-      
+    const detail = [
+      ["NIK", w.nik],
+      ["Nomor KK", w.no_kk],
+      ["Jenis Kelamin", w.jenis_kelamin],
+      ["Tempat Lahir", w.tempat_lahir],
+      ["Tanggal Lahir", w.tanggal_lahir],
+      ["Alamat", w.alamat],
+      ["RT / RW", [w.rt, w.rw].filter(Boolean).join(" / ")],
+      ["Status Perkawinan", w.status_perkawinan],
+      ["Pekerjaan", w.pekerjaan],
+      ["Status Hunian", w.status_hunian],
+      ["Nomor HP", w.no_hp]
+    ];
+
+    box.innerHTML = `
+      <div style="
+        padding:24px 18px;
+        color:#fff;
+        background:linear-gradient(135deg,#155eef,#3987f7);
+        position:relative;
+        overflow:hidden">
+        <div style="
+          position:absolute;right:-24px;top:-34px;
+          width:130px;height:130px;border-radius:50%;
+          background:rgba(255,255,255,.12)">
+        </div>
+
+        <div style="
+          width:66px;height:66px;border-radius:22px;
+          display:flex;align-items:center;justify-content:center;
+          background:rgba(255,255,255,.2);
+          font-size:34px;margin-bottom:16px">
+          👤
+        </div>
+
+        <div style="font-size:13px;opacity:.9">
+          PROFIL WARGA
+        </div>
+        <h2 style="
+          margin:6px 0 12px;font-size:24px;
+          line-height:1.3;overflow-wrap:anywhere">
+          ${esc(nama)}
+        </h2>
+
+        <span style="
+          display:inline-block;padding:7px 12px;
+          border-radius:30px;background:rgba(255,255,255,.18);
+          font-size:13px;font-weight:700">
+          ${aktif ? "●" : "○"} ${esc(status)}
+        </span>
+
+        <div style="font-size:13px;margin-top:14px;opacity:.9">
+          RT 04 / RW 01 · Taman Bali Kahuripan
+        </div>
+      </div>
+
+      <div style="padding:18px">
+        <div style="
+          padding:15px;border-radius:15px;
+          background:#eff6ff;border:1px solid #dbeafe;
+          margin-bottom:18px">
+          <div style="font-size:14px;font-weight:800;color:#1d4ed8">
+            🛡️ Data Pribadi
+          </div>
+          <div style="
+            font-size:13px;line-height:1.6;
+            color:#475569;margin-top:5px">
+            Periksa informasi Anda. Jika ada data yang belum lengkap,
+            gunakan tombol Lengkapi Data di bawah.
+          </div>
+        </div>
+
+        <h3 style="margin:0 0 12px;font-size:18px">
+          Informasi Saya
+        </h3>
+
+        <div style="
+          display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+          gap:10px">
+          ${detail.map(([label, value]) => `
+            <div style="
+              min-width:0;padding:12px;
+              border:1px solid #e2e8f0;border-radius:13px;
+              background:#fff">
+              <div style="
+                font-size:12px;color:#64748b;margin-bottom:6px">
+                ${esc(label)}
+              </div>
+              <div style="
+                font-size:14px;font-weight:650;color:#172554;
+                overflow-wrap:anywhere;line-height:1.5">
+                ${value ? esc(value) : "Belum diisi"}
+              </div>
+            </div>
+          `).join("")}
+        </div>
+
+        <button class="btn"
+          style="
+            width:100%;margin-top:20px;padding:13px;
+            border-radius:13px;font-weight:750"
+          onclick="editMyData()">
+          ✏️ Lengkapi Data Saya
+        </button>
+
+        <div style="
+          margin-top:14px;text-align:center;
+          font-size:12px;line-height:1.6;color:#64748b">
+          🔒 Jaga kerahasiaan data pribadi Anda.
+        </div>
+      </div>
+    `;
+
   }catch(e){
-    document.getElementById("myDataBox").innerHTML=
-      `<div class="error">${esc(e.message)}</div>`;
+    const box = document.getElementById("myDataBox");
+    if(box){
+      box.innerHTML =
+        `<div class="error">${esc(e.message)}</div>`;
+    }
   }
 }
+
 async function saveMyData(){
   const jenis_kelamin=document.getElementById("editJenisKelamin").value;
   const tempat_lahir=document.getElementById("editTempatLahir").value.trim();
