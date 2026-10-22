@@ -2027,8 +2027,10 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     } else {
       console.error("GAMBAR TEMPLATE KOP SURAT TIDAK DITEMUKAN");
     }
-
     // ISI SURAT DI AREA DALAM BINGKAI
+    const clean = (value) =>
+      value == null ? "" : String(value).trim();
+
     doc.y = 175;
     doc.fillColor("#000000");
 
