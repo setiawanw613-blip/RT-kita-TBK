@@ -2797,10 +2797,16 @@ async function iuranWarga(){
           <div style="margin-top:6px">Total: <b id="totalPilihIuran">${rupiah(0)}</b></div>
         </div>
         <div id="pesanPilihIuran" style="margin-top:10px"></div>
-        <button class="btn" id="btnAjukanIuran" style="width:100%;margin-top:12px" disabled>
+             <button class="btn" id="btnAjukanIuran" style="width:100%;margin-top:12px" disabled>
           💳 Ajukan Pembayaran
         </button>
       </div>
+
+      <button class="btn secondary"
+        style="width:100%;margin-top:12px"
+        onclick="wargaHome()">
+        ← Kembali
+      </button>
     `);
 
     const pilihan = [...document.querySelectorAll(".pilih-bulan-iuran")];
