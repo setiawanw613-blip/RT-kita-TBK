@@ -2216,10 +2216,10 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
         align: "center"
       });
 
-    doc.moveDown(0.4);
-    doc.font("Helvetica")
-      .fontSize(10)
-      const tanggalSurat = new Date(letter.created_at || Date.now());
+   doc.moveDown(0.4);
+
+const tanggalSurat = new Date(letter.created_at || Date.now());
+
 const bulanRomawi = [
   "I", "II", "III", "IV", "V", "VI",
   "VII", "VIII", "IX", "X", "XI", "XII"
@@ -2232,63 +2232,117 @@ const nomorSurat =
   "/" + bulanRomawi +
   "/" + tanggalSurat.getFullYear();
 
-doc.fontSize(10).text("Nomor: " + nomorSurat, {
-  width: 465,
-  align: "center"
-});
-    doc.moveDown(1);
+doc.font("Helvetica")
+  .fontSize(10)
+  .text("Nomor: " + nomorSurat, {
+    width: 465,
+    align: "center"
+  });
+
+doc.moveDown(1);
     doc.fontSize(10)
       .text("Yang bertanda tangan di bawah ini menerangkan bahwa:", {
         width: 465
       });
 
-    doc.moveDown(0.6);
+  
+doc.moveDown(0.6);
 
-    const identity = [
-      ["Nama", clean(warga.nama_lengkap)],
-      ["NIK", clean(warga.nik) || "-"],
-      ["Nomor KK", clean(warga.no_kk) || "-"],
-     ["Tempat/Tanggal Lahir", [
-  clean(warga.tempat_lahir),
-  warga.tanggal_lahir
-    ? new Date(warga.tanggal_lahir + "T00:00:00").toLocaleDateString("id-ID", {
-        day: "2-digit",
-        month: "long",
-        year: "numeric"
-      })
-    : ""
-].filter(Boolean).join(", ") || "-"],
-      ["Jenis Kelamin", clean(warga.jenis_kelamin) || "-"],
-      ["Pekerjaan", clean(warga.pekerjaan) || "-"],
-      ["Alamat", clean(warga.alamat) || "-"]
-    ];
+const identity = [
+  ["Nama", clean(warga.nama_lengkap)],
+  ["NIK", clean(warga.nik) || "-"],
+  ["Nomor KK", clean(warga.no_kk) || "-"],
+  ["Tempat/Tanggal Lahir", [
+    clean(warga.tempat_lahir),
+    warga.tanggal_lahir
+      ? new Date(warga.tanggal_lahir + "T00:00:00").toLocaleDateString("id-ID", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric"
+        })
+      : ""
+  ].filter(Boolean).join(", ") || "-"],
+  ["Jenis Kelamin", clean(warga.jenis_kelamin) || "-"],
+  ["Pekerjaan", clean(warga.pekerjaan) || "-"],
+  ["Alamat", clean(warga.alamat) || "-"]
+];
 
-    identity.forEach(([label, value]) => {
-      const y = doc.y;
-      doc.font("Helvetica").fontSize(9);
-      doc.text(label, 70, y, { width: 125 });
-      doc.text(":", 198, y, { width: 10 });
-      doc.text(value, 215, y, { width: 300 });
-      doc.moveDown(0.35);
-    });
+identity.forEach(([label, value]) => {
+  const y = doc.y;
+  doc.font("Helvetica").fontSize(9);
+  doc.text(label, 70, y, { width: 125 });
+  doc.text(":", 198, y, { width: 10 });
+  doc.text(value, 215, y, { width: 300 });
+  doc.moveDown(0.35);
+});
 
-    doc.moveDown(0.6);
-    doc.font("Helvetica").fontSize(10)
-      .text("Keperluan: " + (clean(letter.keperluan) || "-"), {
-        width: 465,
-        align: "justify"
-      });
+doc.moveDown(0.6);
 
-    doc.moveDown(0.6);
-    doc.fontSize(9)
-      .text(
-        "Surat ini dibuat berdasarkan pengajuan warga yang telah disetujui Ketua RT. Isi akhir dan pengesahan harus diperiksa oleh Pengurus RT sebelum digunakan sebagai dokumen resmi.",
-        { width: 465, align: "justify", lineGap: 2 }
-      );
+const jenisSurat = clean(letter.jenis_surat).toLowerCase();
+const keperluan = clean(letter.keperluan) || "-";
 
-  // AREA PENGESAHAN
+let isiSurat = "";
+
+if (jenisSurat.includes("tidak mampu") || jenisSurat.includes("sktm")) {
+  isiSurat =
+    "Yang bersangkutan mengajukan surat pengantar untuk permohonan Surat Keterangan Tidak Mampu (SKTM). Surat ini merupakan pengantar dari lingkungan RT dan tidak menggantikan surat keterangan yang diterbitkan oleh kelurahan atau instansi berwenang.";
+} else if (jenisSurat.includes("domisili sementara")) {
+  isiSurat =
+    "Surat pengantar ini dibuat untuk keperluan permohonan keterangan domisili sementara sesuai alamat dan keterangan yang disampaikan oleh pemohon. Data lebih lanjut dapat diverifikasi oleh kelurahan atau instansi berwenang.";
+} else if (jenisSurat.includes("domisili")) {
+  isiSurat =
+    "Yang bersangkutan mengajukan surat pengantar untuk permohonan keterangan domisili sesuai alamat yang tercantum di atas. Keterangan domisili resmi mengikuti verifikasi dan ketentuan instansi berwenang.";
+} else if (jenisSurat.includes("skck")) {
+  isiSurat =
+    "Yang bersangkutan mengajukan surat pengantar untuk keperluan permohonan Surat Keterangan Catatan Kepolisian (SKCK). Penerbitan SKCK merupakan kewenangan Kepolisian Republik Indonesia.";
+} else {
+  isiSurat =
+    "Surat pengantar ini dibuat berdasarkan permohonan yang disampaikan oleh warga untuk keperluan sebagaimana tercantum di bawah ini.";
+}
+
+doc.font("Helvetica")
+  .fontSize(10)
+  .text("Dengan ini diterangkan bahwa:", {
+    width: 465,
+    align: "justify",
+    lineGap: 2
+  });
+
+doc.moveDown(0.5);
+
+doc.text(isiSurat, {
+  width: 465,
+  align: "justify",
+  lineGap: 3
+});
+
+doc.moveDown(0.6);
+
+doc.font("Helvetica-Bold")
+  .fontSize(9)
+  .text("Keperluan:", { width: 465 });
+
+doc.font("Helvetica")
+  .fontSize(10)
+  .text(keperluan, {
+    width: 465,
+    align: "justify",
+    lineGap: 2
+  });
+
+doc.moveDown(0.6);
+
+doc.fontSize(9)
+  .text(
+    "Demikian surat pengantar ini dibuat berdasarkan permohonan warga untuk digunakan sesuai keperluannya. Data dan persyaratan tetap mengikuti ketentuan instansi yang berwenang.",
+    { width: 465, align: "justify", lineGap: 2 }
+  );
+
+
+
+ // AREA PENGESAHAN — DRAF BELUM DISAHKAN
 const signX = 335;
-const signY = Math.min(Math.max(doc.y + 15, 475), 570);
+const signY = Math.min(Math.max(doc.y + 20, 475), 570);
 
 doc.font("Helvetica")
   .fontSize(9)
@@ -2309,71 +2363,22 @@ doc.font("Helvetica")
     }
   );
 
-doc.text("Ketua RT 004 / RW 01", signX, signY + 17, {
+doc.text("Pengurus RT 004 / RW 01", signX, signY + 18, {
   width: 180,
   align: "center"
 });
 
-const signaturePath = path.join(
-  __dirname,
-  "WhatsApp Image 2026-10-20 at 14.48.18.jpeg"
-);
-
-if (fs.existsSync(signaturePath)) {
-  doc.image(signaturePath, signX + 25, signY + 38, {
-    fit: [130, 45]
-  });
-}
-
-const stampX = signX + 90;
-const stampY = signY + 75;
-
-doc.save();
-doc.lineWidth(1.5)
-  .strokeColor("#B91C1C")
-  .circle(stampX, stampY, 30)
+doc.moveTo(signX + 25, signY + 85)
+  .lineTo(signX + 155, signY + 85)
+  .lineWidth(0.7)
+  .strokeColor("#777777")
   .stroke();
-
-doc.lineWidth(0.7)
-  .circle(stampX, stampY, 25)
-  .stroke();
-
-doc.font("Helvetica-Bold")
-  .fontSize(6)
-  .fillColor("#B91C1C")
-  .text("TAMAN BALI KAHURIPAN", stampX - 24, stampY - 12, {
-    width: 48,
-    align: "center"
-  });
-
-doc.fontSize(8)
-  .text("STEMPEL", stampX - 24, stampY - 2, {
-    width: 48,
-    align: "center"
-  });
-
-doc.fontSize(5.5)
-  .text("TES / PERCOBAAN", stampX - 24, stampY + 8, {
-    width: 48,
-    align: "center"
-  });
-
-doc.restore();
-
-doc.font("Helvetica-Bold")
-  .fontSize(9)
-  .fillColor("#000000")
-  .text("Nama Ketua RT", signX, signY + 112, {
-    width: 180,
-    align: "center",
-    underline: true
-  });
 
 doc.font("Helvetica")
-  .fontSize(7)
+  .fontSize(8)
   .fillColor("#B91C1C")
-  .text("CONTOH — BUKAN PENGESAHAN RESMI", signX - 5, signY + 128, {
-    width: 190,
+  .text("DRAF — BELUM DISAHKAN", signX, signY + 95, {
+    width: 180,
     align: "center"
   });
 
