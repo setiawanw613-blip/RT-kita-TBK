@@ -2278,8 +2278,6 @@ identity.forEach(([label, value]) => {
 
 doc.moveDown(0.6);
 
-
-```js
 const jenisSurat = clean(letter.jenis_surat)
   .toLowerCase()
   .replace(/[_-]+/g, " ")
