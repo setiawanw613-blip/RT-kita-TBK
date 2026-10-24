@@ -2219,11 +2219,23 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     doc.moveDown(0.4);
     doc.font("Helvetica")
       .fontSize(10)
-      .text("Nomor: ______________________________", {
-        width: 465,
-        align: "center"
-      });
+      const tanggalSurat = new Date(letter.created_at || Date.now());
+const bulanRomawi = [
+  "I", "II", "III", "IV", "V", "VI",
+  "VII", "VIII", "IX", "X", "XI", "XII"
+][tanggalSurat.getMonth()];
 
+const nomorSurat =
+  String(id).padStart(3, "0") +
+  "/RT.04/RW.01/" +
+  String(tanggalSurat.getMonth() + 1).padStart(2, "0") +
+  "/" + bulanRomawi +
+  "/" + tanggalSurat.getFullYear();
+
+doc.fontSize(10).text("Nomor: " + nomorSurat, {
+  width: 465,
+  align: "center"
+});
     doc.moveDown(1);
     doc.fontSize(10)
       .text("Yang bertanda tangan di bawah ini menerangkan bahwa:", {
