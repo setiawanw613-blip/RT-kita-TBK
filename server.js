@@ -2415,14 +2415,17 @@ doc.end();
   } catch (error) {
     console.error("DOWNLOAD LETTER PDF ERROR:", error);
 
-    if (!res.headersSent) {
-      res.status(500).json({
-        ok: false,
-        message: "Gagal membuat PDF surat"
-      });
-    } else {
-      res.end();
+    if (res.headersSent) {
+      if (!res.destroyed) {
+        res.destroy(error);
+      }
+      return;
     }
+
+    return res.status(500).json({
+      ok: false,
+      message: "Gagal membuat PDF surat"
+    });
   }
 });
 
