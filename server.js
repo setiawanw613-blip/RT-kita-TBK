@@ -2248,10 +2248,16 @@ doc.fontSize(10).text("Nomor: " + nomorSurat, {
       ["Nama", clean(warga.nama_lengkap)],
       ["NIK", clean(warga.nik) || "-"],
       ["Nomor KK", clean(warga.no_kk) || "-"],
-      ["Tempat/Tanggal Lahir", [
-        clean(warga.tempat_lahir),
-        clean(warga.tanggal_lahir)
-      ].filter(Boolean).join(", ") || "-"],
+     ["Tempat/Tanggal Lahir", [
+  clean(warga.tempat_lahir),
+  warga.tanggal_lahir
+    ? new Date(warga.tanggal_lahir + "T00:00:00").toLocaleDateString("id-ID", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric"
+      })
+    : ""
+].filter(Boolean).join(", ") || "-"],
       ["Jenis Kelamin", clean(warga.jenis_kelamin) || "-"],
       ["Pekerjaan", clean(warga.pekerjaan) || "-"],
       ["Alamat", clean(warga.alamat) || "-"]
