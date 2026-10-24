@@ -2278,26 +2278,51 @@ identity.forEach(([label, value]) => {
 
 doc.moveDown(0.6);
 
-const jenisSurat = clean(letter.jenis_surat).toLowerCase();
+
+const jenisSurat = clean(letter.jenis_surat)
+  .toLowerCase()
+  .replace(/[_-]+/g, " ")
+  .replace(/\s+/g, " ")
+  .trim();
+
 const keperluan = clean(letter.keperluan) || "-";
 
 let isiSurat = "";
+let penutupSurat = "";
 
-if (jenisSurat.includes("tidak mampu") || jenisSurat.includes("sktm")) {
+if (
+  jenisSurat.includes("tidak mampu") ||
+  jenisSurat.includes("sktm")
+) {
   isiSurat =
-    "Yang bersangkutan mengajukan surat pengantar untuk permohonan Surat Keterangan Tidak Mampu (SKTM). Surat ini merupakan pengantar dari lingkungan RT dan tidak menggantikan surat keterangan yang diterbitkan oleh kelurahan atau instansi berwenang.";
+    "Berdasarkan permohonan yang disampaikan, surat ini merupakan surat pengantar dari lingkungan RT untuk keperluan pengajuan Surat Keterangan Tidak Mampu (SKTM). Surat ini tidak menyatakan atau menetapkan status ekonomi pemohon dan tidak menggantikan surat keterangan yang diterbitkan oleh kelurahan atau instansi berwenang.";
+
+  penutupSurat =
+    "Penilaian dan penerbitan Surat Keterangan Tidak Mampu dilakukan oleh instansi berwenang sesuai ketentuan yang berlaku.";
 } else if (jenisSurat.includes("domisili sementara")) {
   isiSurat =
-    "Surat pengantar ini dibuat untuk keperluan permohonan keterangan domisili sementara sesuai alamat dan keterangan yang disampaikan oleh pemohon. Data lebih lanjut dapat diverifikasi oleh kelurahan atau instansi berwenang.";
+    "Surat ini merupakan surat pengantar untuk permohonan keterangan domisili sementara berdasarkan alamat dan keterangan yang disampaikan oleh pemohon. Surat ini belum merupakan penetapan domisili resmi dan dapat digunakan sebagai dokumen pengantar untuk proses verifikasi oleh instansi berwenang.";
+
+  penutupSurat =
+    "Keterangan domisili sementara yang resmi mengikuti hasil verifikasi dan ketentuan instansi berwenang.";
 } else if (jenisSurat.includes("domisili")) {
   isiSurat =
-    "Yang bersangkutan mengajukan surat pengantar untuk permohonan keterangan domisili sesuai alamat yang tercantum di atas. Keterangan domisili resmi mengikuti verifikasi dan ketentuan instansi berwenang.";
+    "Surat ini merupakan surat pengantar untuk permohonan keterangan domisili berdasarkan alamat yang tercantum dalam data pemohon. Kesesuaian alamat dan status domisili perlu diverifikasi sesuai prosedur yang berlaku.";
+
+  penutupSurat =
+    "Penerbitan keterangan domisili resmi mengikuti verifikasi dan ketentuan instansi berwenang.";
 } else if (jenisSurat.includes("skck")) {
   isiSurat =
-    "Yang bersangkutan mengajukan surat pengantar untuk keperluan permohonan Surat Keterangan Catatan Kepolisian (SKCK). Penerbitan SKCK merupakan kewenangan Kepolisian Republik Indonesia.";
+    "Surat ini merupakan surat pengantar dari lingkungan RT untuk keperluan permohonan Surat Keterangan Catatan Kepolisian (SKCK). Surat pengantar ini bukan SKCK dan tidak menyatakan hasil pemeriksaan catatan kepolisian pemohon.";
+
+  penutupSurat =
+    "Penerbitan SKCK dan pemeriksaan persyaratannya merupakan kewenangan Kepolisian Republik Indonesia.";
 } else {
   isiSurat =
-    "Surat pengantar ini dibuat berdasarkan permohonan yang disampaikan oleh warga untuk keperluan sebagaimana tercantum di bawah ini.";
+    "Surat ini merupakan surat pengantar umum berdasarkan permohonan warga untuk keperluan sebagaimana tercantum di bawah ini. Informasi dalam surat disusun berdasarkan data yang tersedia dan keterangan yang disampaikan oleh pemohon.";
+
+  penutupSurat =
+    "Penggunaan surat ini mengikuti tujuan permohonan serta persyaratan instansi atau pihak penerima yang bersangkutan.";
 }
 
 doc.font("Helvetica")
@@ -2332,10 +2357,16 @@ doc.font("Helvetica")
 
 doc.moveDown(0.6);
 
-doc.fontSize(9)
+doc.font("Helvetica")
+  .fontSize(9)
   .text(
-    "Demikian surat pengantar ini dibuat berdasarkan permohonan warga untuk digunakan sesuai keperluannya. Data dan persyaratan tetap mengikuti ketentuan instansi yang berwenang.",
-    { width: 465, align: "justify", lineGap: 2 }
+    "Demikian surat pengantar ini dibuat berdasarkan permohonan warga. " +
+    penutupSurat,
+    {
+      width: 465,
+      align: "justify",
+      lineGap: 2
+    }
   );
 
 
