@@ -2286,78 +2286,98 @@ doc.fontSize(10).text("Nomor: " + nomorSurat, {
         { width: 465, align: "justify", lineGap: 2 }
       );
 
-    // AREA PENGESAHAN
-    const signX = 335;
-    const signY = Math.min(Math.max(doc.y + 15, 475), 570);
+  // AREA PENGESAHAN
+const signX = 335;
+const signY = Math.min(Math.max(doc.y + 15, 475), 570);
 
-    doc.font("Helvetica")
-      .fontSize(9)
-      .fillColor("#000000")
-      .text("Bekasi, ____ / ____ / ______", signX, signY, {
-        width: 180,
-        align: "center"
-      });
-
-    doc.text("Ketua RT 004 / RW 01", signX, signY + 17, {
+doc.font("Helvetica")
+  .fontSize(9)
+  .fillColor("#000000")
+  .text(
+    "Bekasi, " + new Date(
+      letter.created_at || Date.now()
+    ).toLocaleDateString("id-ID", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric"
+    }),
+    signX,
+    signY,
+    {
       width: 180,
       align: "center"
-    });
-
-    const signaturePath = path.join(
-      __dirname,
-      "WhatsApp Image 2026-10-20 at 14.48.18.jpeg"
-    );
-
-    if (fs.existsSync(signaturePath)) {
-      doc.image(signaturePath, signX + 25, signY + 38, {
-        fit: [130, 45]
-      });
     }
+  );
 
-    const stampX = signX + 90;
-    const stampY = signY + 75;
+doc.text("Ketua RT 004 / RW 01", signX, signY + 17, {
+  width: 180,
+  align: "center"
+});
 
-    doc.save();
-    doc.lineWidth(1.5).strokeColor("#B91C1C")
-      .circle(stampX, stampY, 30).stroke();
-    doc.lineWidth(0.7)
-      .circle(stampX, stampY, 25).stroke();
+const signaturePath = path.join(
+  __dirname,
+  "WhatsApp Image 2026-10-20 at 14.48.18.jpeg"
+);
 
-    doc.font("Helvetica-Bold").fontSize(6)
-      .fillColor("#B91C1C")
-      .text("TAMAN BALI KAHURIPAN", stampX - 24, stampY - 12, {
-        width: 48,
-        align: "center"
-      });
+if (fs.existsSync(signaturePath)) {
+  doc.image(signaturePath, signX + 25, signY + 38, {
+    fit: [130, 45]
+  });
+}
 
-    doc.fontSize(8)
-      .text("STEMPEL", stampX - 24, stampY - 2, {
-        width: 48,
-        align: "center"
-      });
+const stampX = signX + 90;
+const stampY = signY + 75;
 
-    doc.fontSize(5.5)
-      .text("TES / PERCOBAAN", stampX - 24, stampY + 8, {
-        width: 48,
-        align: "center"
-      });
-    doc.restore();
+doc.save();
+doc.lineWidth(1.5)
+  .strokeColor("#B91C1C")
+  .circle(stampX, stampY, 30)
+  .stroke();
 
-    doc.font("Helvetica-Bold").fontSize(9)
-      .fillColor("#000000")
-      .text("Nama Ketua RT", signX, signY + 112, {
-        width: 180,
-        align: "center",
-        underline: true
-      });
+doc.lineWidth(0.7)
+  .circle(stampX, stampY, 25)
+  .stroke();
 
-    doc.font("Helvetica").fontSize(7)
-      .fillColor("#B91C1C")
-      .text("CONTOH — BUKAN PENGESAHAN RESMI", signX - 5, signY + 128, {
-        width: 190,
-        align: "center"
-      });
-    doc.end();
+doc.font("Helvetica-Bold")
+  .fontSize(6)
+  .fillColor("#B91C1C")
+  .text("TAMAN BALI KAHURIPAN", stampX - 24, stampY - 12, {
+    width: 48,
+    align: "center"
+  });
+
+doc.fontSize(8)
+  .text("STEMPEL", stampX - 24, stampY - 2, {
+    width: 48,
+    align: "center"
+  });
+
+doc.fontSize(5.5)
+  .text("TES / PERCOBAAN", stampX - 24, stampY + 8, {
+    width: 48,
+    align: "center"
+  });
+
+doc.restore();
+
+doc.font("Helvetica-Bold")
+  .fontSize(9)
+  .fillColor("#000000")
+  .text("Nama Ketua RT", signX, signY + 112, {
+    width: 180,
+    align: "center",
+    underline: true
+  });
+
+doc.font("Helvetica")
+  .fontSize(7)
+  .fillColor("#B91C1C")
+  .text("CONTOH — BUKAN PENGESAHAN RESMI", signX - 5, signY + 128, {
+    width: 190,
+    align: "center"
+  });
+
+doc.end();
 
   } catch (error) {
     console.error("DOWNLOAD LETTER PDF ERROR:", error);
