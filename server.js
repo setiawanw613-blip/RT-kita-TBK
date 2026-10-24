@@ -2371,9 +2371,11 @@ doc.font("Helvetica")
   );
 ```
 
- // AREA PENGESAHAN — DRAF BELUM DISAHKAN
+// AREA PENGESAHAN — DRAF BELUM DISAHKAN
+doc.moveDown(1);
+
 const signX = 335;
-const signY = Math.min(Math.max(doc.y + 20, 475), 570);
+const signY = Math.min(doc.y + 18, 650);
 
 doc.font("Helvetica")
   .fontSize(9)
@@ -2394,25 +2396,20 @@ doc.font("Helvetica")
     }
   );
 
-doc.text("Pengurus RT 004 / RW 01", signX, signY + 18, {
-  width: 180,
-  align: "center"
-});
-
-doc.moveTo(signX + 25, signY + 85)
-  .lineTo(signX + 155, signY + 85)
-  .lineWidth(0.7)
-  .strokeColor("#777777")
-  .stroke();
-
 doc.font("Helvetica")
-  .fontSize(8)
-  .fillColor("#B91C1C")
-  .text("DRAF — BELUM DISAHKAN", signX, signY + 95, {
+  .fontSize(9)
+  .text("Pengurus RT 004 / RW 01", signX, signY + 18, {
     width: 180,
     align: "center"
   });
 
+doc.font("Helvetica")
+  .fontSize(8)
+  .fillColor("#B91C1C")
+  .text("DRAF — BELUM DISAHKAN", signX, signY + 42, {
+    width: 180,
+    align: "center"
+  });
 doc.end();
 
   } catch (error) {
