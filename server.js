@@ -2430,8 +2430,6 @@ doc.end();
 });
 
 /* SURAT SAYA - WARGA */
-
-/* SURAT SAYA - WARGA */
 app.get("/api/my-letters", requireWarga, async (req, res) => {
   try {
     const data = await supabaseRequest("pengajuan_surat", {
