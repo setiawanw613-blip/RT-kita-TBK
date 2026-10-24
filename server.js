@@ -2403,6 +2403,7 @@ doc.font("Helvetica")
     align: "center"
   });
 
+
 doc.font("Helvetica")
   .fontSize(8)
   .fillColor("#B91C1C")
@@ -2410,6 +2411,7 @@ doc.font("Helvetica")
     width: 180,
     align: "center"
   });
+
 doc.end();
 
 } catch (error) {
@@ -2428,6 +2430,8 @@ doc.end();
   });
 }
 });
+
+/* SURAT SAYA - WARGA */
 
 /* SURAT SAYA - WARGA */
 app.get("/api/my-letters", requireWarga, async (req, res) => {
