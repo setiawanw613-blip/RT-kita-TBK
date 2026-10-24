@@ -2412,21 +2412,21 @@ doc.font("Helvetica")
   });
 doc.end();
 
-  } catch (error) {
-    console.error("DOWNLOAD LETTER PDF ERROR:", error);
+} catch (error) {
+  console.error("DOWNLOAD LETTER PDF ERROR:", error);
 
-    if (res.headersSent) {
-      if (!res.destroyed) {
-        res.destroy(error);
-      }
-      return;
+  if (res.headersSent) {
+    if (!res.destroyed && !res.writableEnded) {
+      res.destroy();
     }
-
-    return res.status(500).json({
-      ok: false,
-      message: "Gagal membuat PDF surat"
-    });
+    return;
   }
+
+  return res.status(500).json({
+    ok: false,
+    message: "Gagal membuat PDF surat"
+  });
+}
 });
 
 /* SURAT SAYA - WARGA */
