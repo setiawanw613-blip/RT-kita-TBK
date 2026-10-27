@@ -4,8 +4,234 @@ const crypto = require("crypto");
 const PDFDocument = require("pdfkit");
 const multer = require("multer");
 const app = express();
-
 app.use(express.json());
+
+/* MIDTRANS QRIS SANDBOX */
+async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
+  const serverKey = process.env.MIDTRANS_SERVER_KEY;
+
+  if (!serverKey) {
+    throw new Error("MIDTRANS_SERVER_KEY belum diatur di Vercel.");
+  }
+
+  if (process.env.MIDTRANS_IS_PRODUCTION === "true") {
+    throw new Error("Mode ini khusus Sandbox.");
+  }
+
+  const auth = Buffer.from(`${serverKey}:`).toString("base64");
+
+  const response = await fetch(
+    "https://api.sandbox.midtrans.com/v2/charge",
+    {
+      method: "POST",
+      headers: {
+        "Authorization": `Basic ${auth}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+      },
+      body: JSON.stringify({
+        payment_type: "qris",
+        transaction_details: {
+          order_id: orderId,
+          gross_amount: total
+        },
+        customer_details: {
+          first_name: namaWarga || "Warga RT TBK"
+        },
+        qris: {
+          acquirer: "gopay"
+        }
+      })
+    }
+  );
+
+  const hasil = await response.json();
+
+  if (!response.ok) {
+    console.error("MIDTRANS QRIS ERROR:", hasil);
+    throw new Error("Transaksi QRIS gagal dibuat. Periksa konfigurasi Sandbox.");
+  }
+
+  return hasil;
+}
+
+/* WEBHOOK MIDTRANS QRIS */
+app.post("/api/midtrans/webhook", async (req, res) => {
+  try {
+    const {
+      order_id,
+      status_code,
+      gross_amount,
+      signature_key,
+      transaction_status,
+      fraud_status
+    } = req.body || {};
+
+    const serverKey = process.env.MIDTRANS_SERVER_KEY;
+
+    if (!serverKey || !order_id || !signature_key) {
+      return res.status(400).json({
+        ok: false,
+        message: "Data notifikasi tidak lengkap."
+      });
+    }
+
+    const signatureExpected = crypto
+      .createHash("sha512")
+      .update(
+        `${order_id}${status_code}${gross_amount}${serverKey}`
+      )
+      .digest("hex");
+
+    const signatureBuffer = Buffer.from(signature_key, "hex");
+    const expectedBuffer = Buffer.from(signatureExpected, "hex");
+
+    if (
+      signatureBuffer.length !== expectedBuffer.length ||
+      !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
+    ) {
+      return res.status(403).json({
+        ok: false,
+        message: "Tanda tangan Midtrans tidak valid."
+      });
+    }
+
+    // Hanya pembayaran berhasil yang diproses.
+    const berhasil =
+      transaction_status === "settlement" ||
+      (
+        transaction_status === "capture" &&
+        fraud_status === "accept"
+      );
+
+    if (!berhasil) {
+      return res.status(200).json({
+        ok: true,
+        message: "Status transaksi diterima, belum perlu pelunasan."
+      });
+    }
+
+    // Ambil seluruh iuran yang terhubung ke transaksi ini.
+    const dataIuran = await supabaseRequest("iuran_warga", {
+      query:
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer" +
+        `&bukti_transfer=eq.${encodeURIComponent("MIDTRANS:" + order_id)}`
+    });
+
+    const rows = Array.isArray(dataIuran) ? dataIuran : [];
+
+    if (!rows.length) {
+      console.error("IURAN UNTUK ORDER MIDTRANS TIDAK DITEMUKAN:", order_id);
+      return res.status(200).json({
+        ok: true,
+        message: "Transaksi diterima; catatan iuran belum ditemukan."
+      });
+    }
+
+    const totalCatatan = rows.reduce(
+      (sum, row) => sum + Number(row.total_amount || 0),
+      0
+    );
+
+    if (totalCatatan !== Number(gross_amount)) {
+      console.error("TOTAL MIDTRANS TIDAK COCOK:", {
+        order_id,
+        gross_amount,
+        totalCatatan
+      });
+
+      return res.status(400).json({
+        ok: false,
+        message: "Total transaksi tidak cocok."
+      });
+    }
+
+    for (const iuran of rows) {
+      if (iuran.status === "lunas") continue;
+
+      const bulan = String(iuran.bulan).slice(0, 7);
+      const kategoriKas = [
+        {
+          kategori: "Sampah",
+          jumlah: 15000,
+          keterangan: `Sampah dari iuran ${iuran.bulan} - iuran_id ${iuran.id}`
+        },
+        {
+          kategori: "Keamanan",
+          jumlah: 15000,
+          keterangan: `Keamanan dari iuran ${iuran.bulan} - iuran_id ${iuran.id}`
+        },
+        {
+          kategori: "Kas RT",
+          jumlah: 5000,
+          keterangan: `Kas RT dari iuran ${iuran.bulan} - iuran_id ${iuran.id}`
+        }
+      ];
+
+      for (const kas of kategoriKas) {
+        const ada = await supabaseRequest("kas_rt", {
+          query:
+            "select=id" +
+            `&keterangan=eq.${encodeURIComponent(kas.keterangan)}` +
+            "&limit=1"
+        });
+
+        if (!Array.isArray(ada) || !ada.length) {
+          await supabaseRequest("kas_rt", {
+            method: "POST",
+            body: {
+              jenis: "pemasukan",
+              kategori: kas.kategori,
+              jumlah: kas.jumlah,
+              keterangan: kas.keterangan
+            }
+          });
+        }
+      }
+
+      await supabaseRequest("iuran_warga", {
+        method: "PATCH",
+        query: `id=eq.${encodeURIComponent(iuran.id)}`,
+        body: {
+          status: "lunas",
+          diverifikasi_at: new Date().toISOString(),
+          diverifikasi_oleh: "Midtrans QRIS"
+        }
+      });
+
+      try {
+        await supabaseRequest("notifikasi", {
+          method: "POST",
+          body: {
+            penerima_peran: "warga",
+            penerima_warga_id: iuran.warga_id,
+            judul: "Pembayaran Iuran Berhasil",
+            pesan: `Iuran bulan ${bulan} telah lunas melalui QRIS.`,
+            jenis: "iuran",
+            tautan: "/",
+            referensi_id: iuran.id,
+            sudah_dibaca: false
+          }
+        });
+      } catch (notifError) {
+        console.error("NOTIFIKASI QRIS ERROR:", notifError?.message || notifError);
+      }
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Pembayaran QRIS berhasil diproses."
+    });
+  } catch (error) {
+    console.error("MIDTRANS WEBHOOK ERROR:", error?.message || error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "Gagal memproses notifikasi pembayaran."
+    });
+  }
+});
+
 app.use(express.urlencoded({ extended: true }));
 const uploadFoto = multer({
   storage: multer.memoryStorage(),
@@ -2781,8 +3007,12 @@ app.get("/api/iuran", requireAdmin, async (req, res) => {
 });
 
 
-/* BAYAR IURAN BEBERAPA BULAN SEKALIGUS */
+
+/* BAYAR IURAN BEBERAPA BULAN SEKALIGUS - QRIS */
 app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
+  let orderId = null;
+  let rowsTersimpan = [];
+
   try {
     const bulans = req.body.bulans;
 
@@ -2805,14 +3035,13 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
     if (!valid || new Set(bulans).size !== bulans.length) {
       return res.status(400).json({
         ok: false,
-        message: "Pilihan bulan tidak valid atau ada bulan yang dipilih dua kali."
+        message: "Pilihan bulan tidak valid atau duplikat."
       });
     }
 
     const dipilih = [...bulans].sort();
-    const awalCatatan = "2026-10";
 
-    if (dipilih[0] < awalCatatan) {
+    if (dipilih[0] < "2026-10") {
       return res.status(400).json({
         ok: false,
         message: "Pencatatan iuran dimulai Oktober 2026."
@@ -2849,31 +3078,21 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
       catatan.map(row => [String(row.bulan).slice(0, 7), row])
     );
 
-   
-    // Tolak bulan yang sudah memiliki catatan pembayaran.
     for (const bulan of dipilih) {
-      const record = peta.get(bulan);
+      if (peta.has(bulan)) {
+        const row = peta.get(bulan);
 
-      if (record?.status === "lunas") {
         return res.status(409).json({
           ok: false,
-          message: `Iuran ${bulan} sudah lunas. Silakan periksa status iuran.`
-        });
-      }
-
-      if (record) {
-        return res.status(409).json({
-          ok: false,
-          message: `Iuran ${bulan} sudah diajukan dan masih menunggu verifikasi Ketua RT.`
+          message: row.status === "lunas"
+            ? `Iuran ${bulan} sudah lunas.`
+            : `Iuran ${bulan} sudah tercatat dan belum lunas.`
         });
       }
     }
 
-    // Periksa seluruh urutan bulan sejak awal pencatatan.
     const terakhir = dipilih[dipilih.length - 1];
     const bulanDipilih = new Set(dipilih);
-
-    const mulai = new Date(2026, 9, 1);
     const akhir = new Date(
       Number(terakhir.slice(0, 4)),
       Number(terakhir.slice(5, 7)) - 1,
@@ -2881,71 +3100,75 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
     );
 
     for (
-      let d = new Date(mulai);
+      let d = new Date(2026, 9, 1);
       d <= akhir;
       d.setMonth(d.getMonth() + 1)
     ) {
       const bulan =
         `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-
       const record = peta.get(bulan);
 
-      if (record?.status === "lunas") {
-        continue;
-      }
+      if (record?.status === "lunas") continue;
 
       if (record) {
         return res.status(409).json({
           ok: false,
-          message: `Iuran ${bulan} masih menunggu verifikasi. Selesaikan verifikasi sebelum mengajukan bulan berikutnya.`
+          message: `Iuran ${bulan} masih tercatat dan belum lunas.`
         });
       }
 
-      if (bulanDipilih.has(bulan)) {
-        continue;
+      if (!bulanDipilih.has(bulan)) {
+        return res.status(409).json({
+          ok: false,
+          message: `Pilih juga iuran ${bulan} sebelum mengajukan bulan berikutnya.`
+        });
       }
-
-      return res.status(409).json({
-        ok: false,
-        message: `Iuran ${bulan} masih belum lunas. Silakan pilih dan ajukan bulan tersebut terlebih dahulu sebelum membayar bulan berikutnya.`
-      });
     }
 
+    const total = 35000 * dipilih.length;
+    orderId =
+      `RTTBK-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+
+    // Buat transaksi QRIS terlebih dahulu.
+    const transaksi = await buatTransaksiQRIS({
+      orderId,
+      total,
+      namaWarga: warga.nama_lengkap
+    });
 
     const rowsBaru = dipilih.map(bulan => ({
       warga_id: String(warga.id),
       keluarga_id: keluargaId,
       bulan: bulan + "-01",
       status: "menunggu_verifikasi",
-      total_amount: 35000
+      total_amount: 35000,
+      bukti_transfer: `MIDTRANS:${orderId}`
     }));
 
-    // Kirim semua baris dalam satu permintaan database.
     const hasil = await supabaseRequest("iuran_warga", {
       method: "POST",
       body: rowsBaru
     });
 
-    const tersimpan = Array.isArray(hasil) ? hasil : [];
+    rowsTersimpan = Array.isArray(hasil) ? hasil : [];
 
-    if (tersimpan.length !== rowsBaru.length) {
-      console.error("JUMLAH HASIL PEMBAYARAN TIDAK SESUAI.");
-      return res.status(500).json({
-        ok: false,
-        message: "Hasil penyimpanan perlu diperiksa oleh Ketua RT."
-      });
+    if (rowsTersimpan.length !== rowsBaru.length) {
+      throw new Error(
+        "Jumlah catatan iuran yang tersimpan tidak sesuai."
+      );
     }
 
-    // Buat notifikasi admin untuk setiap bulan.
-    for (const row of tersimpan) {
+    for (const row of rowsTersimpan) {
       try {
         await supabaseRequest("notifikasi", {
           method: "POST",
           body: {
             penerima_peran: "admin",
-            judul: "Pembayaran Iuran Menunggu Verifikasi",
+            judul: "Pembayaran QRIS Menunggu",
             pesan:
-              `${warga.nama_lengkap || "Warga"} mengajukan iuran bulan ${String(row.bulan).slice(0, 7)}. Total Rp35.000. Menunggu verifikasi Ketua RT.`,
+              `${warga.nama_lengkap || "Warga"} membuat transaksi QRIS ` +
+              `untuk iuran ${String(row.bulan).slice(0, 7)}. ` +
+              `Order ID: ${orderId}.`,
             jenis: "iuran",
             tautan: "/admin",
             referensi_id: row.id,
@@ -2953,25 +3176,33 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
           }
         });
       } catch (err) {
-        console.error("NOTIFIKASI IURAN ERROR:", err?.message || err);
+        console.error("NOTIFIKASI QRIS ERROR:", err?.message || err);
       }
     }
 
+    const qrAction = Array.isArray(transaksi.actions)
+      ? transaksi.actions.find(a => a.name === "generate-qr-code")
+      : null;
+
     return res.json({
       ok: true,
-      data: tersimpan,
-      message: "Pengajuan iuran berhasil disimpan."
+      order_id: orderId,
+      total,
+      bulans: dipilih,
+      qr_url: qrAction?.url || null,
+      qr_string: transaksi.qr_string || null,
+      transaction_status: transaksi.transaction_status || "pending",
+      message: "QRIS berhasil dibuat. Selesaikan pembayaran melalui QRIS."
     });
   } catch (error) {
-    console.error("BAYAR IURAN BANYAK ERROR:", error);
+    console.error("BAYAR IURAN QRIS ERROR:", error?.message || error);
 
     return res.status(
       getSupabaseErrorCode(error) === "23505" ? 409 : 500
     ).json({
       ok: false,
-      message: getSupabaseErrorCode(error) === "23505"
-        ? "Ada pembayaran untuk salah satu bulan yang sudah tercatat. Muat ulang halaman dan periksa status iuran."
-        : "Gagal menyimpan pengajuan iuran. Periksa kembali sebelum mencoba lagi."
+      message:
+        "Transaksi QRIS belum berhasil disiapkan. Periksa status iuran sebelum mencoba kembali."
     });
   }
 });
