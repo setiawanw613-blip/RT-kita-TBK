@@ -179,12 +179,13 @@ app.post("/api/midtrans/webhook", async (req, res) => {
         if (!Array.isArray(ada) || !ada.length) {
           await supabaseRequest("kas_rt", {
             method: "POST",
-            body: {
-              jenis: "pemasukan",
-              kategori: kas.kategori,
-              jumlah: kas.jumlah,
-              keterangan: kas.keterangan
-            }
+           body: {
+  tanggal: new Date().toISOString().slice(0, 10),
+  jenis: "masuk",
+  kategori: kas.kategori,
+  jumlah: kas.jumlah,
+  keterangan: kas.keterangan
+}
           });
         }
       }
