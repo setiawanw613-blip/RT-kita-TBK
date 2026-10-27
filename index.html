@@ -2841,14 +2841,41 @@ async function iuranWarga(){
  try {
 
  
-await api("/api/iuran/bayar-banyak", {
+
+const hasil = await api("/api/iuran/bayar-banyak", {
   method: "POST",
   body: JSON.stringify({ bulans: dipilih })
 });
 
+if (hasil.qr_url || hasil.qr_string) {
+  layout("Pembayaran QRIS", `
+    <div class="card" style="text-align:center">
+      <h2>📱 Pembayaran QRIS</h2>
+      <p>Nomor transaksi:</p>
+      <b style="overflow-wrap:anywhere">${esc(hasil.order_id || "-")}</b>
+      <p>Total pembayaran:</p>
+      <h2 style="color:#1267c9">${rupiah(hasil.total)}</h2>
+      ${hasil.qr_url ? `
+        <img src="${esc(hasil.qr_url)}" alt="QRIS"
+          style="display:block;width:100%;max-width:320px;margin:16px auto">
+      ` : ""}
+      ${hasil.qr_string ? `
+        <p>Kode QRIS:</p>
+        <textarea id="kodeQRIS" readonly
+          style="width:100%">${esc(hasil.qr_string)}</textarea>
+        <button class="btn secondary" onclick="navigator.clipboard.writeText(document.getElementById('kodeQRIS').value).then(()=>alert('Kode disalin'))">
+          Salin kode QRIS
+        </button>
+      ` : ""}
+    </div>
+    <button class="btn secondary" style="width:100%" onclick="iuranWarga()">
+      Kembali ke Iuran
+    </button>
+  `, false);
+} else {
+  alert("Transaksi dibuat, tetapi data QRIS belum diterima. Jangan lakukan pembayaran dulu.");
+}
 
-        alert("Pengajuan iuran berhasil dikirim.");
-        await iuranWarga();
       } catch (e) {
         pesan.innerHTML = `
           <div style="background:#fff1f2;color:#b91c1c;padding:12px;border-radius:10px">
