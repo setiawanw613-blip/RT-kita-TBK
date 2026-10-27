@@ -95,9 +95,27 @@ app.post("/api/midtrans/webhook", async (req, res) => {
       });
     }
 
+
     const berhasil =
       transaction_status === "settlement" ||
       (transaction_status === "capture" && fraud_status === "accept");
+
+    const dibatalkan =
+      transaction_status === "expire" ||
+      transaction_status === "cancel" ||
+      transaction_status === "deny";
+
+    if (dibatalkan) {
+      console.log("TRANSAKSI QRIS TIDAK BERHASIL:", {
+        order_id,
+        transaction_status
+      });
+
+      return res.status(200).json({
+        ok: true,
+        message: "Transaksi tidak berhasil. Riwayat iuran tetap tersimpan."
+      });
+    }
 
     if (!berhasil) {
       return res.status(200).json({
@@ -105,6 +123,7 @@ app.post("/api/midtrans/webhook", async (req, res) => {
         message: "Status transaksi diterima, belum perlu pelunasan."
       });
     }
+
 
     const dataIuran = await supabaseRequest("iuran_warga", {
       query:
