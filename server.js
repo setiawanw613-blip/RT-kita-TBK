@@ -173,25 +173,16 @@ app.post("/api/midtrans/webhook", async (req, res) => {
       ];
 
       for (const kas of kategoriKas) {
-        const ada = await supabaseRequest("kas_rt", {
-          query:
-            "select=id" +
-            `&keterangan=eq.${encodeURIComponent(kas.keterangan)}` +
-            "&limit=1"
-        });
-
-        if (!Array.isArray(ada) || !ada.length) {
-          await supabaseRequest("kas_rt", {
-            method: "POST",
-           body: {
-body: {
-  tanggal: new Date().toISOString().slice(0, 10),
-  jenis: "masuk",
-  kategori: kas.kategori,
-  jumlah: kas.jumlah,
-  keterangan: kas.keterangan
-}
-          });
+        await supabaseRequest("kas_rt", {
+  method: "POST",
+  body: {
+    tanggal: new Date().toISOString().slice(0, 10),
+    jenis: "masuk",
+    kategori: kas.kategori,
+    jumlah: kas.jumlah,
+    keterangan: kas.keterangan
+  }
+});
         }
       }
 
