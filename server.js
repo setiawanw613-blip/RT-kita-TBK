@@ -3084,30 +3084,77 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
 
     const keluargaId = String(warga.keluarga_id);
 
-    const dataLama = await supabaseRequest("iuran_warga", {
-      query:
-        "select=id,warga_id,keluarga_id,bulan,status,total_amount" +
-        `&keluarga_id=eq.${encodeURIComponent(keluargaId)}` +
-        "&order=bulan.asc"
-    });
+  const dataLama = await supabaseRequest("iuran_warga", {
+  query:
+    "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer" +
+    `&keluarga_id=eq.${encodeURIComponent(keluargaId)}` +
+    "&order=bulan.asc"
+});
 
     const catatan = Array.isArray(dataLama) ? dataLama : [];
     const peta = new Map(
       catatan.map(row => [String(row.bulan).slice(0, 7), row])
     );
 
-    for (const bulan of dipilih) {
-      if (peta.has(bulan)) {
-        const row = peta.get(bulan);
+   
+const iuranKedaluwarsa = [];
 
-        return res.status(409).json({
-          ok: false,
-          message: row.status === "lunas"
-            ? `Iuran ${bulan} sudah lunas.`
-            : `Iuran ${bulan} sudah tercatat dan belum lunas.`
-        });
-      }
+for (const bulan of dipilih) {
+  if (peta.has(bulan)) {
+    const row = peta.get(bulan);
+
+    if (row.status === "lunas") {
+      return res.status(409).json({
+        ok: false,
+        message: `Iuran ${bulan} sudah lunas.`
+      });
     }
+
+    const bukti = String(row.bukti_transfer || "");
+
+    if (!bukti.startsWith("MIDTRANS:")) {
+      return res.status(409).json({
+        ok: false,
+        message: `Iuran ${bulan} masih tercatat dan belum lunas.`
+      });
+    }
+
+    const orderLama = bukti.slice("MIDTRANS:".length);
+
+    const cek = await fetch(
+      `https://api.sandbox.midtrans.com/v2/${encodeURIComponent(orderLama)}/status`,
+      {
+        headers: {
+          Authorization:
+            "Basic " +
+            Buffer.from(
+              process.env.MIDTRANS_SERVER_KEY + ":"
+            ).toString("base64")
+        }
+      }
+    );
+
+    if (!cek.ok) {
+      return res.status(409).json({
+        ok: false,
+        message: `Status transaksi ${bulan} belum bisa dipastikan.`
+      });
+    }
+
+    const transaksiLama = await cek.json();
+
+    if (!["expire", "cancel", "deny"].includes(
+      transaksiLama.transaction_status
+    )) {
+      return res.status(409).json({
+        ok: false,
+        message: `Transaksi ${bulan} belum dipastikan kedaluwarsa.`
+      });
+    }
+
+    iuranKedaluwarsa.push(row);
+  }
+}
 
     const terakhir = dipilih[dipilih.length - 1];
     const bulanDipilih = new Set(dipilih);
@@ -3128,12 +3175,16 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
 
       if (record?.status === "lunas") continue;
 
-      if (record) {
-        return res.status(409).json({
-          ok: false,
-          message: `Iuran ${bulan} masih tercatat dan belum lunas.`
-        });
-      }
+  
+if (record && !iuranKedaluwarsa.some(
+  row => String(row.id) === String(record.id)
+)) {
+  return res.status(409).json({
+    ok: false,
+    message: `Iuran ${bulan} masih tercatat dan belum lunas.`
+  });
+}
+
 
       if (!bulanDipilih.has(bulan)) {
         return res.status(409).json({
@@ -3154,27 +3205,63 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
       namaWarga: warga.nama_lengkap
     });
 
-    const rowsBaru = dipilih.map(bulan => ({
-      warga_id: String(warga.id),
-      keluarga_id: keluargaId,
-      bulan: bulan + "-01",
+   
+const rowsBaru = dipilih
+  .filter(bulan => !peta.has(bulan))
+  .map(bulan => ({
+    warga_id: String(warga.id),
+    keluarga_id: keluargaId,
+    bulan: bulan + "-01",
+    status: "menunggu_verifikasi",
+    total_amount: 35000,
+    bukti_transfer: `MIDTRANS:${orderId}`
+  }));
+
+rowsTersimpan = [];
+
+for (const rowLama of iuranKedaluwarsa) {
+  const hasilUpdate = await supabaseRequest("iuran_warga", {
+    method: "PATCH",
+    query: `id=eq.${encodeURIComponent(rowLama.id)}`,
+    body: {
       status: "menunggu_verifikasi",
       total_amount: 35000,
       bukti_transfer: `MIDTRANS:${orderId}`
-    }));
-
-    const hasil = await supabaseRequest("iuran_warga", {
-      method: "POST",
-      body: rowsBaru
-    });
-
-    rowsTersimpan = Array.isArray(hasil) ? hasil : [];
-
-    if (rowsTersimpan.length !== rowsBaru.length) {
-      throw new Error(
-        "Jumlah catatan iuran yang tersimpan tidak sesuai."
-      );
     }
+  });
+
+  if (!Array.isArray(hasilUpdate) || hasilUpdate.length !== 1) {
+    throw new Error(
+      `Catatan iuran ${String(rowLama.bulan).slice(0, 7)} gagal diperbarui.`
+    );
+  }
+
+  rowsTersimpan.push(hasilUpdate[0]);
+}
+
+if (rowsBaru.length > 0) {
+  const hasil = await supabaseRequest("iuran_warga", {
+    method: "POST",
+    body: rowsBaru
+  });
+
+  const rowsBaruTersimpan = Array.isArray(hasil) ? hasil : [];
+
+  if (rowsBaruTersimpan.length !== rowsBaru.length) {
+    throw new Error(
+      "Jumlah catatan iuran baru yang tersimpan tidak sesuai."
+    );
+  }
+
+  rowsTersimpan.push(...rowsBaruTersimpan);
+}
+
+if (rowsTersimpan.length !== dipilih.length) {
+  throw new Error(
+    "Jumlah catatan iuran tidak sesuai dengan bulan yang dipilih."
+  );
+}
+
 
     for (const row of rowsTersimpan) {
       try {
