@@ -2938,9 +2938,8 @@ app.post("/api/complaints", requireWarga, async (req, res) => {
   });
 });
 
+
 /* IURAN WARGA */
-
-
 app.get("/api/my-iuran", requireWarga, async (req, res) => {
   try {
     const wargaData = await supabaseRequest("warga", {
@@ -2961,12 +2960,58 @@ app.get("/api/my-iuran", requireWarga, async (req, res) => {
 
     const data = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,warga_id,keluarga_id,bulan,status,total_amount" +
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer" +
         `&keluarga_id=eq.${encodeURIComponent(String(warga.keluarga_id))}` +
         "&order=bulan.desc"
     });
 
-    return res.json(Array.isArray(data) ? data : []);
+    const rows = Array.isArray(data) ? data : [];
+
+    // Tandai transaksi yang dipastikan kedaluwarsa oleh Midtrans.
+    for (const row of rows) {
+      row.transaksi_kedaluwarsa = false;
+
+      if (
+        row.status !== "lunas" &&
+        String(row.bukti_transfer || "").startsWith("MIDTRANS:")
+      ) {
+        try {
+          const orderId = String(row.bukti_transfer).slice("MIDTRANS:".length);
+          const serverKey = process.env.MIDTRANS_SERVER_KEY;
+
+          if (!serverKey || process.env.MIDTRANS_IS_PRODUCTION === "true") {
+            continue;
+          }
+
+          const cek = await fetch(
+            `https://api.sandbox.midtrans.com/v2/${encodeURIComponent(orderId)}/status`,
+            {
+              headers: {
+                Authorization:
+                  "Basic " +
+                  Buffer.from(serverKey + ":").toString("base64")
+              }
+            }
+          );
+
+          if (cek.ok) {
+            const transaksi = await cek.json();
+            row.transaksi_kedaluwarsa = [
+              "expire",
+              "cancel",
+              "deny"
+            ].includes(transaksi.transaction_status);
+          }
+        } catch (err) {
+          console.error(
+            "CEK STATUS MIDTRANS ERROR:",
+            err?.message || err
+          );
+        }
+      }
+    }
+
+    return res.json(rows);
   } catch (error) {
     console.error("MY IURAN ERROR:", error);
 
