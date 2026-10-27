@@ -184,6 +184,7 @@ app.post("/api/midtrans/webhook", async (req, res) => {
           await supabaseRequest("kas_rt", {
             method: "POST",
            body: {
+body: {
   tanggal: new Date().toISOString().slice(0, 10),
   jenis: "masuk",
   kategori: kas.kategori,
