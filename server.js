@@ -120,13 +120,17 @@ app.post("/api/midtrans/webhook", async (req, res) => {
 
     const rows = Array.isArray(dataIuran) ? dataIuran : [];
 
-    if (!rows.length) {
-      console.error("IURAN UNTUK ORDER MIDTRANS TIDAK DITEMUKAN:", order_id);
-      return res.status(200).json({
-        ok: true,
-        message: "Transaksi diterima; catatan iuran belum ditemukan."
-      });
-    }
+ if (!rows.length) {
+  console.error(
+    "IURAN UNTUK ORDER MIDTRANS TIDAK DITEMUKAN:",
+    order_id
+  );
+
+  return res.status(500).json({
+    ok: false,
+    message: "Catatan iuran belum ditemukan. Silakan coba kembali."
+  });
+}
 
     const totalCatatan = rows.reduce(
       (sum, row) => sum + Number(row.total_amount || 0),
