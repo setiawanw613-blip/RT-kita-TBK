@@ -55,6 +55,7 @@ async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
   return hasil;
 }
 
+
 /* WEBHOOK MIDTRANS QRIS */
 app.post("/api/midtrans/webhook", async (req, res) => {
   try {
@@ -78,9 +79,7 @@ app.post("/api/midtrans/webhook", async (req, res) => {
 
     const signatureExpected = crypto
       .createHash("sha512")
-      .update(
-        `${order_id}${status_code}${gross_amount}${serverKey}`
-      )
+      .update(`${order_id}${status_code}${gross_amount}${serverKey}`)
       .digest("hex");
 
     const signatureBuffer = Buffer.from(signature_key, "hex");
@@ -96,13 +95,9 @@ app.post("/api/midtrans/webhook", async (req, res) => {
       });
     }
 
-    // Hanya pembayaran berhasil yang diproses.
     const berhasil =
       transaction_status === "settlement" ||
-      (
-        transaction_status === "capture" &&
-        fraud_status === "accept"
-      );
+      (transaction_status === "capture" && fraud_status === "accept");
 
     if (!berhasil) {
       return res.status(200).json({
@@ -111,7 +106,6 @@ app.post("/api/midtrans/webhook", async (req, res) => {
       });
     }
 
-    // Ambil seluruh iuran yang terhubung ke transaksi ini.
     const dataIuran = await supabaseRequest("iuran_warga", {
       query:
         "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer" +
@@ -120,17 +114,13 @@ app.post("/api/midtrans/webhook", async (req, res) => {
 
     const rows = Array.isArray(dataIuran) ? dataIuran : [];
 
- if (!rows.length) {
-  console.error(
-    "IURAN UNTUK ORDER MIDTRANS TIDAK DITEMUKAN:",
-    order_id
-  );
-
-  return res.status(500).json({
-    ok: false,
-    message: "Catatan iuran belum ditemukan. Silakan coba kembali."
-  });
-}
+    if (!rows.length) {
+      console.error("IURAN UNTUK ORDER MIDTRANS TIDAK DITEMUKAN:", order_id);
+      return res.status(500).json({
+        ok: false,
+        message: "Catatan iuran belum ditemukan. Silakan coba kembali."
+      });
+    }
 
     const totalCatatan = rows.reduce(
       (sum, row) => sum + Number(row.total_amount || 0),
@@ -173,16 +163,24 @@ app.post("/api/midtrans/webhook", async (req, res) => {
       ];
 
       for (const kas of kategoriKas) {
-        await supabaseRequest("kas_rt", {
-  method: "POST",
-  body: {
-    tanggal: new Date().toISOString().slice(0, 10),
-    jenis: "masuk",
-    kategori: kas.kategori,
-    jumlah: kas.jumlah,
-    keterangan: kas.keterangan
-  }
-});
+        const ada = await supabaseRequest("kas_rt", {
+          query:
+            "select=id" +
+            `&keterangan=eq.${encodeURIComponent(kas.keterangan)}` +
+            "&limit=1"
+        });
+
+        if (!Array.isArray(ada) || !ada.length) {
+          await supabaseRequest("kas_rt", {
+            method: "POST",
+            body: {
+              tanggal: new Date().toISOString().slice(0, 10),
+              jenis: "masuk",
+              kategori: kas.kategori,
+              jumlah: kas.jumlah,
+              keterangan: kas.keterangan
+            }
+          });
         }
       }
 
@@ -211,7 +209,10 @@ app.post("/api/midtrans/webhook", async (req, res) => {
           }
         });
       } catch (notifError) {
-        console.error("NOTIFIKASI QRIS ERROR:", notifError?.message || notifError);
+        console.error(
+          "NOTIFIKASI QRIS ERROR:",
+          notifError?.message || notifError
+        );
       }
     }
 
@@ -228,6 +229,7 @@ app.post("/api/midtrans/webhook", async (req, res) => {
     });
   }
 });
+
 
 app.use(express.urlencoded({ extended: true }));
 const uploadFoto = multer({
