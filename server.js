@@ -66,9 +66,11 @@ const {
   signature_key,
   transaction_status,
   fraud_status,
+  transaction_id,
   transaction_time,
   settlement_time
 } = req.body || {};
+
 
     const serverKey = process.env.MIDTRANS_SERVER_KEY;
 
@@ -161,10 +163,49 @@ const {
       });
     }
 
-    for (const iuran of rows) {
-      if (iuran.status === "lunas") continue;
+   
+for (const iuran of rows) {
+  const sudahLunas = iuran.status === "lunas";
 
-      const bulan = String(iuran.bulan).slice(0, 7);
+  // Perbarui bukti transaksi meskipun iuran sudah lunas.
+  const waktuNotifikasi = new Date().toISOString();
+  const dataBukti = {
+    midtrans_notifikasi_at: waktuNotifikasi
+  };
+
+  if (transaction_id) {
+    dataBukti.midtrans_transaction_id = transaction_id;
+  }
+
+  if (transaction_status) {
+    dataBukti.midtrans_status = transaction_status;
+  }
+
+  if (settlement_time) {
+    const waktuSettlement = String(settlement_time).trim();
+    const tanggalSettlement = new Date(
+      /(?:Z|[+-]\d{2}:\d{2})$/.test(waktuSettlement)
+        ? waktuSettlement
+        : waktuSettlement.replace(" ", "T") + "+07:00"
+    );
+
+    if (!Number.isNaN(tanggalSettlement.getTime())) {
+      dataBukti.midtrans_settlement_at =
+        tanggalSettlement.toISOString();
+    }
+  }
+
+  await supabaseRequest("iuran_warga", {
+    method: "PATCH",
+    query: `id=eq.${encodeURIComponent(iuran.id)}`,
+    body: dataBukti
+  });
+
+  // Jika sudah lunas, jangan membuat kas atau notifikasi kedua kali.
+  if (sudahLunas) continue;
+
+  const bulan = String(iuran.bulan).slice(0, 7);
+
       const kategoriKas = [
         {
           kategori: "Sampah",
@@ -222,6 +263,7 @@ if (waktuMidtrans) {
   }
 }
 
+
 const dataUpdate = {
   status: "lunas",
   diverifikasi_at: new Date().toISOString(),
@@ -231,6 +273,29 @@ const dataUpdate = {
 // Jangan mengarang waktu pembayaran jika Midtrans tidak mengirimkannya.
 if (dibayarAt) {
   dataUpdate.dibayar_at = dibayarAt;
+}
+
+// Simpan ID transaksi dan status resmi dari Midtrans.
+if (transaction_id) {
+  dataUpdate.midtrans_transaction_id = transaction_id;
+}
+
+if (transaction_status) {
+  dataUpdate.midtrans_status = transaction_status;
+}
+
+// Waktu Midtrans menggunakan WIB jika tidak mencantumkan zona waktu.
+if (settlement_time) {
+  const waktuSettlement = String(settlement_time).trim();
+  const waktuISO = new Date(
+    /(?:Z|[+-]\d{2}:\d{2})$/.test(waktuSettlement)
+      ? waktuSettlement
+      : waktuSettlement.replace(" ", "T") + "+07:00"
+  );
+
+  if (!Number.isNaN(waktuISO.getTime())) {
+    dataUpdate.midtrans_settlement_at = waktuISO.toISOString();
+  }
 }
 
 await supabaseRequest("iuran_warga", {
@@ -3385,13 +3450,15 @@ if (rowsTersimpan.length !== dipilih.length) {
 });
 
 
+
 /* RIWAYAT TRANSAKSI QRIS - KHUSUS ADMIN */
 app.get("/api/qris/history", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh" +
-        "&bukti_transfer=like." + encodeURIComponent("MIDTRANS:%") +
+        "select=id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh,midtrans_transaction_id,midtrans_status,midtrans_settlement_at,midtrans_notifikasi_at" +
+        "&bukti_transfer=like." +
+        encodeURIComponent("MIDTRANS:%") +
         "&order=bulan.desc&limit=1000"
     });
 
@@ -3408,6 +3475,10 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
       if (!transaksi.has(orderId)) {
         transaksi.set(orderId, {
           order_id: orderId,
+          transaction_id: row.midtrans_transaction_id || null,
+          status_midtrans: row.midtrans_status || null,
+          waktu_settlement: row.midtrans_settlement_at || null,
+          waktu_notifikasi: row.midtrans_notifikasi_at || null,
           total: 0,
           jumlah_bulan: 0,
           bulan: [],
@@ -3419,6 +3490,23 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
 
       const item = transaksi.get(orderId);
       const nominal = Number(row.total_amount) || 0;
+
+      // Ambil bukti yang tersedia dari setiap baris iuran.
+      if (!item.transaction_id && row.midtrans_transaction_id) {
+        item.transaction_id = row.midtrans_transaction_id;
+      }
+
+      if (!item.status_midtrans && row.midtrans_status) {
+        item.status_midtrans = row.midtrans_status;
+      }
+
+      if (!item.waktu_settlement && row.midtrans_settlement_at) {
+        item.waktu_settlement = row.midtrans_settlement_at;
+      }
+
+      if (!item.waktu_notifikasi && row.midtrans_notifikasi_at) {
+        item.waktu_notifikasi = row.midtrans_notifikasi_at;
+      }
 
       item.total += nominal;
       item.jumlah_bulan += 1;
@@ -3460,7 +3548,7 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
       ok: true,
       sumber: "Database iuran RT TBK",
       catatan:
-        "Rincian ini berdasarkan database aplikasi. Konfirmasi transaksi resmi, bukti pembayaran dari penyedia, dan pencairan dana harus diperiksa secara terpisah.",
+        "Data transaksi berasal dari database aplikasi. Status dan waktu Midtrans ditampilkan jika telah diterima dan disimpan dari notifikasi yang valid. Konfirmasi transaksi resmi dan pencairan dana harus diperiksa secara terpisah.",
       data: hasil
     });
   } catch (error) {
@@ -3472,6 +3560,7 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
     });
   }
 });
+
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
