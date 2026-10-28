@@ -1467,6 +1467,67 @@ async function simpanWargaBaru(){
   }
 }
 
+async function transparansiQRIS() {
+  try {
+    const me = await api("/api/me");
+
+    if (!me.user || me.user.role !== "admin") {
+      alert("Halaman ini hanya untuk admin.");
+      return;
+    }
+
+    A.querySelector("main").innerHTML = `
+      <h2>📊 Transparansi Dana QRIS</h2>
+
+      <div class="card" style="margin:12px 0">
+        <h3>Status Integrasi</h3>
+        <div class="pill">SANDBOX / UJI COBA</div>
+        <p>
+          Pembayaran QRIS saat ini menggunakan mode pengujian.
+          Data ini belum boleh dianggap sebagai transaksi uang nyata.
+        </p>
+      </div>
+
+      <div class="card" style="margin:12px 0">
+        <h3>Saldo Aktual Midtrans</h3>
+        <strong>Belum terhubung</strong>
+        <p class="muted">
+          Saldo aktual, biaya QRIS, dan dana yang sudah dicairkan
+          perlu diverifikasi dari laporan resmi Midtrans.
+        </p>
+      </div>
+
+      <div class="card" style="margin:12px 0">
+        <h3>Riwayat dan Bukti Transaksi</h3>
+        <p>
+          Riwayat pembayaran QRIS harus menampilkan nomor pesanan,
+          nominal, status pembayaran, waktu transaksi, dan bukti
+          verifikasi agar dapat dipertanggungjawabkan.
+        </p>
+        <p class="muted">
+          Data riwayat QRIS belum ditampilkan di halaman ini.
+          Jangan menggunakan saldo Kas RT sebagai pengganti
+          saldo aktual Midtrans.
+        </p>
+      </div>
+
+      <div class="card" style="margin:12px 0">
+        <h3>Laporan dan Pencairan</h3>
+        <p>
+          Laporan bulanan, tahunan, biaya layanan, dan pencairan
+          akan ditampilkan setelah sumber data resminya terhubung.
+        </p>
+      </div>
+
+      <button onclick="adminHome()" class="secondary">
+        ← Kembali ke Dashboard
+      </button>
+    `;
+  } catch (e) {
+    alert(e.message || "Gagal membuka Transparansi Dana QRIS.");
+  }
+}
+
 async function cash(){
   layout("Kas RT",`
     <div class="card">
