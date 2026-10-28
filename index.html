@@ -1469,6 +1469,7 @@ async function simpanWargaBaru(){
 
 
 
+
 async function transparansiQRIS() {
   let isiTransaksi = `
     <div style="padding:16px;background:#f8fafc;border-radius:14px;color:#475569">
@@ -1476,6 +1477,17 @@ async function transparansiQRIS() {
     </div>`;
 
   let catatan = "";
+
+  const formatWaktu = nilai => {
+    if (!nilai) return "Belum tersedia";
+    const tanggal = new Date(nilai);
+    return Number.isNaN(tanggal.getTime())
+      ? "Format waktu tidak valid"
+      : tanggal.toLocaleString("id-ID", {
+          dateStyle: "medium",
+          timeStyle: "medium"
+        });
+  };
 
   try {
     const hasil = await api("/api/qris/history");
@@ -1488,33 +1500,76 @@ async function transparansiQRIS() {
 
     isiTransaksi = transaksi.length
       ? transaksi.map(item => {
-          const status = item.status === "lunas"
-            ? "Lunas"
-            : "Menunggu pembayaran";
-
+          const lunas = item.status === "lunas";
+          const status = lunas ? "Lunas" : "Menunggu pembayaran";
+          const rincian = Array.isArray(item.rincian) ? item.rincian : [];
           const waktu = item.waktu
-            ? new Date(item.waktu).toLocaleString("id-ID")
+            ? formatWaktu(item.waktu)
             : "Waktu transaksi belum tersedia";
 
+          const rincianHTML = rincian.length
+            ? rincian.map(bulan => `
+                <div style="padding:12px;margin-top:10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc">
+                  <div style="font-weight:800;color:#1e40af">
+                    Iuran ${esc(bulan.bulan || "-")}
+                  </div>
+                  <div style="display:flex;justify-content:space-between;gap:10px;margin-top:8px">
+                    <span style="color:#64748b">Nominal</span>
+                    <strong>${rupiah(Number(bulan.nominal) || 0)}</strong>
+                  </div>
+                  <div style="margin-top:8px;font-size:13px">
+                    Status: <strong>${esc(bulan.status || "Belum diketahui")}</strong>
+                  </div>
+                  <div style="margin-top:8px;font-size:12px;color:#64748b">
+                    Waktu pembayaran:<br>
+                    <strong style="color:#334155">${esc(formatWaktu(bulan.waktu_pembayaran))}</strong>
+                  </div>
+                  <div style="margin-top:8px;font-size:12px;color:#64748b">
+                    Waktu verifikasi:<br>
+                    <strong style="color:#334155">${esc(formatWaktu(bulan.waktu_verifikasi))}</strong>
+                  </div>
+                  <div style="margin-top:8px;font-size:12px;color:#64748b">
+                    ID data iuran: ${esc(bulan.iuran_id ?? "-")}
+                  </div>
+                  <div style="margin-top:8px;font-size:12px;color:#64748b">
+                    Petugas verifikasi:<br>
+                    <strong style="color:#334155">${esc(bulan.diverifikasi_oleh ?? "Belum tercatat")}</strong>
+                  </div>
+                </div>
+              `).join("")
+            : `
+                <div style="margin-top:12px;padding:12px;background:#fff7ed;border-radius:10px;color:#9a3412;font-size:13px">
+                  Rincian per bulan belum tersedia. Periksa apakah versi terbaru endpoint riwayat QRIS sudah terpasang.
+                </div>
+              `;
+
           return `
-            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:15px;margin-top:12px;overflow-wrap:anywhere">
-              <div style="font-size:12px;color:#64748b">ID Transaksi</div>
-              <div style="font-weight:700;margin:4px 0 10px">${esc(item.order_id || "-")}</div>
+            <div style="background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:15px;margin-top:12px;overflow-wrap:anywhere">
+              <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
+                <span style="font-size:12px;color:#64748b">ID Transaksi</span>
+                <span style="background:${lunas ? "#dcfce7" : "#fef3c7"};color:${lunas ? "#166534" : "#92400e"};padding:5px 9px;border-radius:20px;font-size:12px;font-weight:800">
+                  ${esc(status)}
+                </span>
+              </div>
+              <div style="font-weight:800;margin:6px 0 12px;color:#0f172a">
+                ${esc(item.order_id || "-")}
+              </div>
               <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
                 <span style="color:#64748b">Total transaksi</span>
-                <strong>${rupiah(Number(item.total) || 0)}</strong>
+                <strong style="font-size:18px">${rupiah(Number(item.total) || 0)}</strong>
               </div>
               <div style="margin-top:8px">
                 <span style="color:#64748b">Bulan iuran:</span>
                 ${esc(Array.isArray(item.bulan) ? item.bulan.join(", ") : "-")}
               </div>
-              <div style="margin-top:8px">
-                <span style="color:#64748b">Status:</span>
-                <strong>${esc(status)}</strong>
-              </div>
               <div style="margin-top:8px;font-size:12px;color:#64748b">
-                ${esc(waktu)}
+                Waktu transaksi tercatat:<br>
+                <strong style="color:#334155">${esc(waktu)}</strong>
               </div>
+              <div style="margin-top:16px;font-weight:800;color:#0f172a">
+                Rincian dan jejak verifikasi
+              </div>
+              ${rincianHTML}
             </div>`;
         }).join("")
       : `<div style="padding:18px;background:#f8fafc;border-radius:14px;color:#64748b">
@@ -1523,9 +1578,11 @@ async function transparansiQRIS() {
 
     catatan = esc(hasil.catatan || "");
   } catch (error) {
+    console.error("Gagal memuat riwayat QRIS:", error);
+
     isiTransaksi = `
       <div style="padding:16px;background:#fff1f2;border-radius:14px;color:#9f1239">
-        Riwayat transaksi gagal dimuat. Pastikan login admin masih aktif, lalu coba buka halaman ini kembali.
+        Riwayat transaksi gagal dimuat. Pastikan login admin masih aktif dan endpoint QRIS sudah terpasang dengan benar, lalu coba lagi.
       </div>`;
   }
 
@@ -1553,7 +1610,7 @@ async function transparansiQRIS() {
 
       <h3 style="margin:0 0 6px">Riwayat Transaksi</h3>
       <div style="font-size:13px;color:#64748b;margin-bottom:10px">
-        Data di bawah berasal dari pembukuan iuran RT TBK.
+        Data berasal dari database iuran RT TBK. Data ini bukan bukti pencairan dana dari Midtrans.
       </div>
 
       ${isiTransaksi}
