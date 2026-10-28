@@ -59,14 +59,16 @@ async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
 /* WEBHOOK MIDTRANS QRIS */
 app.post("/api/midtrans/webhook", async (req, res) => {
   try {
-    const {
-      order_id,
-      status_code,
-      gross_amount,
-      signature_key,
-      transaction_status,
-      fraud_status
-    } = req.body || {};
+const {
+  order_id,
+  status_code,
+  gross_amount,
+  signature_key,
+  transaction_status,
+  fraud_status,
+  transaction_time,
+  settlement_time
+} = req.body || {};
 
     const serverKey = process.env.MIDTRANS_SERVER_KEY;
 
@@ -203,15 +205,40 @@ app.post("/api/midtrans/webhook", async (req, res) => {
         }
       }
 
-      await supabaseRequest("iuran_warga", {
-        method: "PATCH",
-        query: `id=eq.${encodeURIComponent(iuran.id)}`,
-        body: {
-          status: "lunas",
-          diverifikasi_at: new Date().toISOString(),
-          diverifikasi_oleh: "Midtrans QRIS"
-        }
-      });
+    
+const waktuMidtrans = settlement_time || transaction_time;
+let dibayarAt = null;
+
+if (waktuMidtrans) {
+  // Waktu dari notifikasi Midtrans menggunakan WIB (GMT+7).
+  const waktuISO = waktuMidtrans.includes("T")
+    ? waktuMidtrans
+    : waktuMidtrans.replace(" ", "T") + "+07:00";
+
+  const tanggalPembayaran = new Date(waktuISO);
+
+  if (!Number.isNaN(tanggalPembayaran.getTime())) {
+    dibayarAt = tanggalPembayaran.toISOString();
+  }
+}
+
+const dataUpdate = {
+  status: "lunas",
+  diverifikasi_at: new Date().toISOString(),
+  diverifikasi_oleh: "Midtrans QRIS"
+};
+
+// Jangan mengarang waktu pembayaran jika Midtrans tidak mengirimkannya.
+if (dibayarAt) {
+  dataUpdate.dibayar_at = dibayarAt;
+}
+
+await supabaseRequest("iuran_warga", {
+  method: "PATCH",
+  query: `id=eq.${encodeURIComponent(iuran.id)}`,
+  body: dataUpdate
+});
+
 
       try {
         await supabaseRequest("notifikasi", {
