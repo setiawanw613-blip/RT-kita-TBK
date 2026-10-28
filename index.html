@@ -1470,6 +1470,7 @@ async function simpanWargaBaru(){
 
 
 
+
 async function transparansiQRIS() {
   let isiTransaksi = `
     <div style="padding:16px;background:#f8fafc;border-radius:14px;color:#475569">
@@ -1480,14 +1481,25 @@ async function transparansiQRIS() {
 
   const formatWaktu = nilai => {
     if (!nilai) return "Belum tersedia";
+
     const tanggal = new Date(nilai);
+
     return Number.isNaN(tanggal.getTime())
       ? "Format waktu tidak valid"
       : tanggal.toLocaleString("id-ID", {
           dateStyle: "medium",
-          timeStyle: "medium"
-        });
+          timeStyle: "medium",
+          timeZone: "Asia/Jakarta"
+        }) + " WIB";
   };
+
+  const barisBukti = (label, nilai) => `
+    <div style="margin-top:10px;font-size:12px;color:#64748b;overflow-wrap:anywhere">
+      ${label}:<br>
+      <strong style="display:block;color:#334155;margin-top:3px">
+        ${esc(nilai || "Belum tersedia")}
+      </strong>
+    </div>`;
 
   try {
     const hasil = await api("/api/qris/history");
@@ -1503,9 +1515,6 @@ async function transparansiQRIS() {
           const lunas = item.status === "lunas";
           const status = lunas ? "Lunas" : "Menunggu pembayaran";
           const rincian = Array.isArray(item.rincian) ? item.rincian : [];
-          const waktu = item.waktu
-            ? formatWaktu(item.waktu)
-            : "Waktu transaksi belum tersedia";
 
           const rincianHTML = rincian.length
             ? rincian.map(bulan => `
@@ -1513,62 +1522,66 @@ async function transparansiQRIS() {
                   <div style="font-weight:800;color:#1e40af">
                     Iuran ${esc(bulan.bulan || "-")}
                   </div>
+
                   <div style="display:flex;justify-content:space-between;gap:10px;margin-top:8px">
                     <span style="color:#64748b">Nominal</span>
                     <strong>${rupiah(Number(bulan.nominal) || 0)}</strong>
                   </div>
+
                   <div style="margin-top:8px;font-size:13px">
-                    Status: <strong>${esc(bulan.status || "Belum diketahui")}</strong>
+                    Status iuran:
+                    <strong>${esc(bulan.status || "Belum diketahui")}</strong>
                   </div>
-                  <div style="margin-top:8px;font-size:12px;color:#64748b">
-                    Waktu pembayaran:<br>
-                    <strong style="color:#334155">${esc(formatWaktu(bulan.waktu_pembayaran))}</strong>
-                  </div>
-                  <div style="margin-top:8px;font-size:12px;color:#64748b">
-                    Waktu verifikasi:<br>
-                    <strong style="color:#334155">${esc(formatWaktu(bulan.waktu_verifikasi))}</strong>
-                  </div>
-                  <div style="margin-top:8px;font-size:12px;color:#64748b">
-                    ID data iuran: ${esc(bulan.iuran_id ?? "-")}
-                  </div>
-                  <div style="margin-top:8px;font-size:12px;color:#64748b">
-                    Petugas verifikasi:<br>
-                    <strong style="color:#334155">${esc(bulan.diverifikasi_oleh ?? "Belum tercatat")}</strong>
-                  </div>
+
+                  ${barisBukti("Waktu pembayaran", formatWaktu(bulan.waktu_pembayaran))}
+                  ${barisBukti("Waktu verifikasi", formatWaktu(bulan.waktu_verifikasi))}
+                  ${barisBukti("ID data iuran", bulan.iuran_id ?? "-")}
+                  ${barisBukti("Petugas verifikasi", bulan.diverifikasi_oleh || "Belum tercatat")}
                 </div>
               `).join("")
             : `
                 <div style="margin-top:12px;padding:12px;background:#fff7ed;border-radius:10px;color:#9a3412;font-size:13px">
-                  Rincian per bulan belum tersedia. Periksa apakah versi terbaru endpoint riwayat QRIS sudah terpasang.
-                </div>
-              `;
+                  Rincian per bulan belum tersedia.
+                </div>`;
 
           return `
             <div style="background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:15px;margin-top:12px;overflow-wrap:anywhere">
+
               <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
-                <span style="font-size:12px;color:#64748b">ID Transaksi</span>
+                <span style="font-size:12px;color:#64748b">Status iuran</span>
                 <span style="background:${lunas ? "#dcfce7" : "#fef3c7"};color:${lunas ? "#166534" : "#92400e"};padding:5px 9px;border-radius:20px;font-size:12px;font-weight:800">
                   ${esc(status)}
                 </span>
               </div>
-              <div style="font-weight:800;margin:6px 0 12px;color:#0f172a">
+
+              <div style="font-size:12px;color:#64748b;margin-top:12px">
+                Order ID Midtrans
+              </div>
+              <div style="font-weight:800;margin-top:4px;color:#0f172a">
                 ${esc(item.order_id || "-")}
               </div>
-              <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+
+              ${barisBukti("Transaction ID Midtrans", item.transaction_id)}
+              ${barisBukti("Status transaksi Midtrans", item.status_midtrans)}
+              ${barisBukti("Waktu settlement Midtrans", formatWaktu(item.waktu_settlement))}
+              ${barisBukti("Waktu notifikasi webhook tercatat", formatWaktu(item.waktu_notifikasi))}
+
+              <div style="border-top:1px solid #e2e8f0;margin-top:14px;padding-top:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
                 <span style="color:#64748b">Total transaksi</span>
                 <strong style="font-size:18px">${rupiah(Number(item.total) || 0)}</strong>
               </div>
+
               <div style="margin-top:8px">
                 <span style="color:#64748b">Bulan iuran:</span>
                 ${esc(Array.isArray(item.bulan) ? item.bulan.join(", ") : "-")}
               </div>
-              <div style="margin-top:8px;font-size:12px;color:#64748b">
-                Waktu transaksi tercatat:<br>
-                <strong style="color:#334155">${esc(waktu)}</strong>
-              </div>
+
+              ${barisBukti("Waktu transaksi tercatat", formatWaktu(item.waktu))}
+
               <div style="margin-top:16px;font-weight:800;color:#0f172a">
                 Rincian dan jejak verifikasi
               </div>
+
               ${rincianHTML}
             </div>`;
         }).join("")
@@ -1610,7 +1623,7 @@ async function transparansiQRIS() {
 
       <h3 style="margin:0 0 6px">Riwayat Transaksi</h3>
       <div style="font-size:13px;color:#64748b;margin-bottom:10px">
-        Data berasal dari database iuran RT TBK. Data ini bukan bukti pencairan dana dari Midtrans.
+        Data berasal dari database iuran RT TBK. Detail transaksi ditampilkan jika tersedia; data ini bukan bukti pencairan dana.
       </div>
 
       ${isiTransaksi}
