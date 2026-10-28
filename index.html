@@ -1647,6 +1647,142 @@ async function transparansiQRIS() {
   `);
 }
 
+async function transparansiQRISWarga() {
+  let isiTransaksi = `
+    <div style="padding:16px;background:#f8fafc;border-radius:14px;color:#475569">
+      Memuat riwayat pembayaran keluarga...
+    </div>`;
+
+  let catatan = "";
+
+  const formatWaktu = nilai => {
+    if (!nilai) return "Belum tersedia";
+    const tanggal = new Date(nilai);
+
+    return Number.isNaN(tanggal.getTime())
+      ? "Format waktu tidak valid"
+      : tanggal.toLocaleString("id-ID", {
+          dateStyle: "medium",
+          timeStyle: "medium",
+          timeZone: "Asia/Jakarta"
+        }) + " WIB";
+  };
+
+  const barisBukti = (label, nilai) => `
+    <div style="margin-top:8px;font-size:12px;color:#64748b;overflow-wrap:anywhere">
+      ${label}:<br>
+      <strong style="display:block;color:#334155;margin-top:3px">
+        ${esc(nilai || "Belum tersedia")}
+      </strong>
+    </div>`;
+
+  try {
+    const hasil = await api("/api/qris/my-history");
+
+    if (!hasil || hasil.ok !== true) {
+      throw new Error(hasil?.message || "Riwayat pembayaran gagal dimuat.");
+    }
+
+    const transaksi = Array.isArray(hasil.data) ? hasil.data : [];
+
+    isiTransaksi = transaksi.length
+      ? transaksi.map(item => {
+          const rincian = Array.isArray(item.rincian) ? item.rincian : [];
+          const lunas = item.status === "lunas";
+
+          return `
+            <div style="background:#fff;border:1px solid #cbd5e1;border-radius:14px;padding:15px;margin-top:12px;overflow-wrap:anywhere">
+              <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                <strong>Status iuran</strong>
+                <span style="background:${lunas ? "#dcfce7" : "#fef3c7"};color:${lunas ? "#166534" : "#92400e"};padding:5px 9px;border-radius:20px;font-size:12px;font-weight:800">
+                  ${lunas ? "Lunas" : "Menunggu pembayaran"}
+                </span>
+              </div>
+
+              ${barisBukti("Order ID Midtrans", item.order_id)}
+              ${barisBukti("Transaction ID Midtrans", item.transaction_id)}
+              ${barisBukti("Status transaksi Midtrans", item.status_midtrans)}
+              ${barisBukti("Waktu settlement", formatWaktu(item.waktu_settlement))}
+              ${barisBukti("Waktu notifikasi tercatat", formatWaktu(item.waktu_notifikasi))}
+
+              <div style="border-top:1px solid #e2e8f0;margin-top:12px;padding-top:12px;display:flex;justify-content:space-between;gap:8px">
+                <span style="color:#64748b">Total pembayaran</span>
+                <strong>${rupiah(Number(item.total) || 0)}</strong>
+              </div>
+
+              <div style="margin-top:8px;font-size:13px">
+                Bulan iuran: ${esc(Array.isArray(item.bulan) ? item.bulan.join(", ") : "-")}
+              </div>
+
+              ${barisBukti("Waktu transaksi tercatat", formatWaktu(item.waktu))}
+
+              <div style="margin-top:14px;font-weight:800">Rincian pembayaran</div>
+
+              ${rincian.map(bulan => `
+                <div style="padding:12px;margin-top:8px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px">
+                  <strong>Iuran ${esc(bulan.bulan || "-")}</strong>
+                  <div style="margin-top:6px">Nominal: ${rupiah(Number(bulan.nominal) || 0)}</div>
+                  <div>Status iuran: ${esc(bulan.status || "Belum diketahui")}</div>
+                  ${barisBukti("Waktu pembayaran", formatWaktu(bulan.waktu_pembayaran))}
+                  ${barisBukti("Waktu verifikasi", formatWaktu(bulan.waktu_verifikasi))}
+                </div>
+              `).join("")}
+            </div>`;
+        }).join("")
+      : `<div style="padding:18px;background:#f8fafc;border-radius:14px;color:#64748b">
+           Belum ada pembayaran QRIS keluarga yang tercatat.
+         </div>`;
+
+    catatan = esc(hasil.catatan || "");
+  } catch (error) {
+    console.error("QRIS WARGA ERROR:", error);
+
+    isiTransaksi = `
+      <div style="padding:16px;background:#fff1f2;border-radius:14px;color:#9f1239">
+        Riwayat pembayaran gagal dimuat. Silakan coba lagi setelah memastikan akun warga sudah login.
+        <div style="margin-top:6px;font-size:12px">${esc(error.message || "")}</div>
+      </div>`;
+  }
+
+  layout("Transparansi Dana QRIS", `
+    <div style="padding:16px;max-width:760px;margin:auto">
+      <div style="background:#eaf3ff;border-radius:16px;padding:18px;margin-bottom:16px">
+        <div style="font-size:22px;font-weight:800;color:#1d4ed8">
+          Transparansi Dana QRIS
+        </div>
+        <div style="margin-top:6px;color:#475569">
+          Periksa riwayat pembayaran iuran QRIS keluarga Anda.
+        </div>
+        <div style="display:inline-block;margin-top:12px;background:#fff7ed;color:#9a3412;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700">
+          MODE SANDBOX / UJI COBA
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:15px;margin-bottom:16px">
+        <strong>Informasi saldo</strong>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">
+          Saldo aktual dan pencairan dana Midtrans belum terhubung ke aplikasi.
+        </div>
+      </div>
+
+      <h3 style="margin:0 0 8px">Riwayat Pembayaran Keluarga</h3>
+      ${isiTransaksi}
+
+      <div style="font-size:12px;color:#64748b;margin-top:14px">${catatan}</div>
+
+      <button type="button" onclick="transparansiQRISWarga()"
+        style="width:100%;margin-top:16px;padding:12px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer">
+        Muat Ulang Riwayat
+      </button>
+
+      <button type="button" onclick="wargaHome()"
+        style="width:100%;margin-top:8px;padding:12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;font-weight:700;cursor:pointer">
+        Kembali ke Dashboard
+      </button>
+    </div>
+  `);
+}
+
 async function cash(){
   layout("Kas RT",`
     <div class="card">
