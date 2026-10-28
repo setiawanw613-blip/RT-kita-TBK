@@ -1468,61 +1468,113 @@ async function simpanWargaBaru(){
 }
 
 
-async function transparansiQRIS() {
-  try {
-    const me = await api("/api/me");
 
-    if (!me.user || me.user.role !== "admin") {
-      alert("Halaman ini hanya untuk admin.");
-      return;
+async function transparansiQRIS() {
+  let isiTransaksi = `
+    <div style="padding:16px;background:#f8fafc;border-radius:14px;color:#475569">
+      Memuat riwayat transaksi QRIS...
+    </div>`;
+
+  let catatan = "";
+
+  try {
+    const hasil = await api("/api/qris/history");
+
+    if (!hasil || hasil.ok !== true) {
+      throw new Error("Riwayat transaksi belum dapat dimuat.");
     }
 
-    layout("Transparansi Dana QRIS", `
-      <div class="card">
-        <h2>📊 Transparansi Dana QRIS</h2>
-        <p class="muted">
-          Informasi transaksi pembayaran QRIS RT TBK.
-        </p>
-        <div class="pill">SANDBOX / UJI COBA</div>
-        <p>
-          Pembayaran saat ini menggunakan mode pengujian.
-          Data ini belum boleh dianggap sebagai transaksi uang nyata.
-        </p>
-      </div>
+    const transaksi = Array.isArray(hasil.data) ? hasil.data : [];
 
-      <div class="card">
-        <h3>💰 Saldo Aktual Midtrans</h3>
-        <strong>Belum terhubung</strong>
-        <p class="muted">
-          Saldo aktual harus diperiksa melalui laporan resmi Midtrans.
-          Saldo Kas RT bukan pengganti saldo Midtrans.
-        </p>
-      </div>
+    isiTransaksi = transaksi.length
+      ? transaksi.map(item => {
+          const status = item.status === "lunas"
+            ? "Lunas"
+            : "Menunggu pembayaran";
 
-      <div class="card">
-        <h3>📜 Riwayat dan Bukti Transaksi</h3>
-        <p>
-          Riwayat QRIS belum terhubung pada halaman ini.
-          Data yang perlu ditampilkan meliputi nomor pesanan,
-          nominal, status pembayaran, waktu transaksi, dan bukti verifikasi.
-        </p>
-      </div>
+          const waktu = item.waktu
+            ? new Date(item.waktu).toLocaleString("id-ID")
+            : "Waktu transaksi belum tersedia";
 
-      <div class="card">
-        <h3>📈 Laporan dan Pencairan</h3>
-        <p>
-          Laporan bulanan, tahunan, biaya layanan, dan pencairan
-          perlu dihubungkan dengan data resmi Midtrans.
-        </p>
-      </div>
+          return `
+            <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:15px;margin-top:12px;overflow-wrap:anywhere">
+              <div style="font-size:12px;color:#64748b">ID Transaksi</div>
+              <div style="font-weight:700;margin:4px 0 10px">${esc(item.order_id || "-")}</div>
+              <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <span style="color:#64748b">Total transaksi</span>
+                <strong>${rupiah(Number(item.total) || 0)}</strong>
+              </div>
+              <div style="margin-top:8px">
+                <span style="color:#64748b">Bulan iuran:</span>
+                ${esc(Array.isArray(item.bulan) ? item.bulan.join(", ") : "-")}
+              </div>
+              <div style="margin-top:8px">
+                <span style="color:#64748b">Status:</span>
+                <strong>${esc(status)}</strong>
+              </div>
+              <div style="margin-top:8px;font-size:12px;color:#64748b">
+                ${esc(waktu)}
+              </div>
+            </div>`;
+        }).join("")
+      : `<div style="padding:18px;background:#f8fafc;border-radius:14px;color:#64748b">
+           Belum ada transaksi QRIS yang tercatat di database RT TBK.
+         </div>`;
 
-      <button class="btn secondary" onclick="adminHome()">
-        ← Kembali ke Dashboard
-      </button>
-    `);
-  } catch (e) {
-    alert(e.message || "Gagal membuka Transparansi Dana QRIS.");
+    catatan = esc(hasil.catatan || "");
+  } catch (error) {
+    isiTransaksi = `
+      <div style="padding:16px;background:#fff1f2;border-radius:14px;color:#9f1239">
+        Riwayat transaksi gagal dimuat. Pastikan login admin masih aktif, lalu coba buka halaman ini kembali.
+      </div>`;
   }
+
+  layout("Transparansi Dana QRIS", `
+    <div style="padding:16px;max-width:760px;margin:auto">
+      <div style="background:#eaf3ff;border-radius:16px;padding:18px;margin-bottom:16px">
+        <div style="font-size:22px;font-weight:800;color:#1d4ed8">
+          Transparansi Dana QRIS
+        </div>
+        <div style="margin-top:6px;color:#475569">
+          Riwayat pembayaran iuran melalui Midtrans yang tercatat di RT TBK.
+        </div>
+        <div style="display:inline-block;margin-top:12px;background:#fff7ed;color:#9a3412;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700">
+          MODE SANDBOX / UJI COBA
+        </div>
+      </div>
+
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:15px;margin-bottom:18px">
+        <div style="font-weight:700;margin-bottom:6px">Saldo Aktual Midtrans</div>
+        <div style="font-size:20px;font-weight:800;color:#64748b">Belum terhubung</div>
+        <div style="font-size:13px;color:#64748b;margin-top:6px">
+          Saldo resmi, biaya transaksi, dan pencairan belum diambil dari laporan Midtrans.
+        </div>
+      </div>
+
+      <h3 style="margin:0 0 6px">Riwayat Transaksi</h3>
+      <div style="font-size:13px;color:#64748b;margin-bottom:10px">
+        Data di bawah berasal dari pembukuan iuran RT TBK.
+      </div>
+
+      ${isiTransaksi}
+
+      <div style="font-size:12px;color:#64748b;margin-top:14px">
+        ${catatan}
+      </div>
+
+      <button type="button"
+        onclick="transparansiQRIS()"
+        style="width:100%;margin-top:16px;padding:12px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer">
+        Muat Ulang Riwayat
+      </button>
+
+      <button type="button"
+        onclick="adminHome()"
+        style="width:100%;margin-top:8px;padding:12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;font-weight:700;cursor:pointer">
+        Kembali ke Dashboard
+      </button>
+    </div>
+  `);
 }
 
 async function cash(){
