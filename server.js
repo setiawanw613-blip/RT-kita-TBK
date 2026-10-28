@@ -3358,6 +3358,80 @@ if (rowsTersimpan.length !== dipilih.length) {
 });
 
 
+/* RIWAYAT TRANSAKSI QRIS - KHUSUS ADMIN */
+app.get("/api/qris/history", requireAdmin, async (req, res) => {
+  try {
+    const data = await supabaseRequest("iuran_warga", {
+      query:
+        "select=id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at" +
+        "&bukti_transfer=like." + encodeURIComponent("MIDTRANS:%") +
+        "&order=bulan.desc&limit=1000"
+    });
+
+    const rows = Array.isArray(data) ? data : [];
+    const transaksi = new Map();
+
+    for (const row of rows) {
+      const bukti = String(row.bukti_transfer || "");
+
+      if (!bukti.startsWith("MIDTRANS:")) continue;
+
+      const orderId = bukti.slice("MIDTRANS:".length);
+      if (!orderId) continue;
+
+      if (!transaksi.has(orderId)) {
+        transaksi.set(orderId, {
+          order_id: orderId,
+          total: 0,
+          jumlah_bulan: 0,
+          bulan: [],
+          status: "lunas",
+          waktu: null
+        });
+      }
+
+      const item = transaksi.get(orderId);
+      item.total += Number(row.total_amount) || 0;
+      item.jumlah_bulan += 1;
+      item.bulan.push(String(row.bulan || "").slice(0, 7));
+
+      if (row.status !== "lunas") {
+        item.status = "menunggu_pembayaran";
+      }
+
+      const waktu = row.dibayar_at || row.diverifikasi_at;
+
+      if (waktu && (!item.waktu || waktu > item.waktu)) {
+        item.waktu = waktu;
+      }
+    }
+
+    const hasil = [...transaksi.values()].map(item => ({
+      ...item,
+      bulan: [...new Set(item.bulan)].sort()
+    }));
+
+    hasil.sort((a, b) =>
+      String(b.waktu || "").localeCompare(String(a.waktu || ""))
+    );
+
+    return res.json({
+      ok: true,
+      sumber: "Data iuran RT TBK",
+      catatan:
+        "Status berdasarkan database aplikasi, bukan saldo atau laporan pencairan resmi Midtrans.",
+      data: hasil
+    });
+  } catch (error) {
+    console.error("QRIS HISTORY ERROR:", error?.message || error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil riwayat transaksi QRIS."
+    });
+  }
+});
+
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
