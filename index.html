@@ -1467,6 +1467,7 @@ async function simpanWargaBaru(){
   }
 }
 
+
 async function transparansiQRIS() {
   try {
     const me = await api("/api/me");
@@ -1476,53 +1477,49 @@ async function transparansiQRIS() {
       return;
     }
 
-    A.querySelector("main").innerHTML = `
-      <h2>📊 Transparansi Dana QRIS</h2>
-
-      <div class="card" style="margin:12px 0">
-        <h3>Status Integrasi</h3>
+    layout("Transparansi Dana QRIS", `
+      <div class="card">
+        <h2>📊 Transparansi Dana QRIS</h2>
+        <p class="muted">
+          Informasi transaksi pembayaran QRIS RT TBK.
+        </p>
         <div class="pill">SANDBOX / UJI COBA</div>
         <p>
-          Pembayaran QRIS saat ini menggunakan mode pengujian.
+          Pembayaran saat ini menggunakan mode pengujian.
           Data ini belum boleh dianggap sebagai transaksi uang nyata.
         </p>
       </div>
 
-      <div class="card" style="margin:12px 0">
-        <h3>Saldo Aktual Midtrans</h3>
+      <div class="card">
+        <h3>💰 Saldo Aktual Midtrans</h3>
         <strong>Belum terhubung</strong>
         <p class="muted">
-          Saldo aktual, biaya QRIS, dan dana yang sudah dicairkan
-          perlu diverifikasi dari laporan resmi Midtrans.
+          Saldo aktual harus diperiksa melalui laporan resmi Midtrans.
+          Saldo Kas RT bukan pengganti saldo Midtrans.
         </p>
       </div>
 
-      <div class="card" style="margin:12px 0">
-        <h3>Riwayat dan Bukti Transaksi</h3>
+      <div class="card">
+        <h3>📜 Riwayat dan Bukti Transaksi</h3>
         <p>
-          Riwayat pembayaran QRIS harus menampilkan nomor pesanan,
-          nominal, status pembayaran, waktu transaksi, dan bukti
-          verifikasi agar dapat dipertanggungjawabkan.
-        </p>
-        <p class="muted">
-          Data riwayat QRIS belum ditampilkan di halaman ini.
-          Jangan menggunakan saldo Kas RT sebagai pengganti
-          saldo aktual Midtrans.
+          Riwayat QRIS belum terhubung pada halaman ini.
+          Data yang perlu ditampilkan meliputi nomor pesanan,
+          nominal, status pembayaran, waktu transaksi, dan bukti verifikasi.
         </p>
       </div>
 
-      <div class="card" style="margin:12px 0">
-        <h3>Laporan dan Pencairan</h3>
+      <div class="card">
+        <h3>📈 Laporan dan Pencairan</h3>
         <p>
           Laporan bulanan, tahunan, biaya layanan, dan pencairan
-          akan ditampilkan setelah sumber data resminya terhubung.
+          perlu dihubungkan dengan data resmi Midtrans.
         </p>
       </div>
 
-      <button onclick="adminHome()" class="secondary">
+      <button class="btn secondary" onclick="adminHome()">
         ← Kembali ke Dashboard
       </button>
-    `;
+    `);
   } catch (e) {
     alert(e.message || "Gagal membuka Transparansi Dana QRIS.");
   }
