@@ -167,11 +167,14 @@ const {
 for (const iuran of rows) {
   const sudahLunas = iuran.status === "lunas";
 
-  // Perbarui bukti transaksi meskipun iuran sudah lunas.
-  const waktuNotifikasi = new Date().toISOString();
-  const dataBukti = {
-    midtrans_notifikasi_at: waktuNotifikasi
-  };
+ 
+  // Simpan waktu notifikasi hanya jika belum pernah tercatat.
+  const dataBukti = {};
+
+  if (!iuran.midtrans_notifikasi_at) {
+    dataBukti.midtrans_notifikasi_at = new Date().toISOString();
+  }
+
 
   if (transaction_id) {
     dataBukti.midtrans_transaction_id = transaction_id;
@@ -3052,7 +3055,7 @@ app.get("/api/my-iuran", requireWarga, async (req, res) => {
 
     const data = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer" +
+       "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at" +
         `&keluarga_id=eq.${encodeURIComponent(String(warga.keluarga_id))}` +
         "&order=bulan.desc"
     });
