@@ -3363,7 +3363,7 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at" +
+        "select=id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh" +
         "&bukti_transfer=like." + encodeURIComponent("MIDTRANS:%") +
         "&order=bulan.desc&limit=1000"
     });
@@ -3373,7 +3373,6 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
 
     for (const row of rows) {
       const bukti = String(row.bukti_transfer || "");
-
       if (!bukti.startsWith("MIDTRANS:")) continue;
 
       const orderId = bukti.slice("MIDTRANS:".length);
@@ -3385,22 +3384,34 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
           total: 0,
           jumlah_bulan: 0,
           bulan: [],
+          rincian: [],
           status: "lunas",
           waktu: null
         });
       }
 
       const item = transaksi.get(orderId);
-      item.total += Number(row.total_amount) || 0;
+      const nominal = Number(row.total_amount) || 0;
+
+      item.total += nominal;
       item.jumlah_bulan += 1;
       item.bulan.push(String(row.bulan || "").slice(0, 7));
+
+      item.rincian.push({
+        iuran_id: row.id,
+        bulan: String(row.bulan || "").slice(0, 7),
+        nominal,
+        status: String(row.status || "belum diketahui"),
+        waktu_pembayaran: row.dibayar_at || null,
+        waktu_verifikasi: row.diverifikasi_at || null,
+        diverifikasi_oleh: row.diverifikasi_oleh || null
+      });
 
       if (row.status !== "lunas") {
         item.status = "menunggu_pembayaran";
       }
 
       const waktu = row.dibayar_at || row.diverifikasi_at;
-
       if (waktu && (!item.waktu || waktu > item.waktu)) {
         item.waktu = waktu;
       }
@@ -3408,7 +3419,10 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
 
     const hasil = [...transaksi.values()].map(item => ({
       ...item,
-      bulan: [...new Set(item.bulan)].sort()
+      bulan: [...new Set(item.bulan)].sort(),
+      rincian: item.rincian.sort((a, b) =>
+        String(a.bulan).localeCompare(String(b.bulan))
+      )
     }));
 
     hasil.sort((a, b) =>
@@ -3417,9 +3431,9 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
 
     return res.json({
       ok: true,
-      sumber: "Data iuran RT TBK",
+      sumber: "Database iuran RT TBK",
       catatan:
-        "Status berdasarkan database aplikasi, bukan saldo atau laporan pencairan resmi Midtrans.",
+        "Rincian ini berdasarkan database aplikasi. Konfirmasi transaksi resmi, bukti pembayaran dari penyedia, dan pencairan dana harus diperiksa secara terpisah.",
       data: hasil
     });
   } catch (error) {
@@ -3431,7 +3445,6 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
     });
   }
 });
-
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
