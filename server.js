@@ -3564,6 +3564,130 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
   }
 });
 
+/* RIWAYAT TRANSAKSI QRIS - KHUSUS WARGA SENDIRI */
+app.get("/api/qris/my-history", requireWarga, async (req, res) => {
+  try {
+    // Identifikasi warga dari sesi login, bukan dari input browser.
+    const wargaData = await supabaseRequest("warga", {
+      query:
+        "select=id,keluarga_id" +
+        `&id=eq.${encodeURIComponent(req.session.wargaId)}` +
+        "&limit=1"
+    });
+
+    const warga = Array.isArray(wargaData) ? wargaData[0] : null;
+
+    if (!warga || !warga.keluarga_id) {
+      return res.status(400).json({
+        ok: false,
+        message: "Data keluarga belum terhubung. Hubungi Ketua RT."
+      });
+    }
+
+    const data = await supabaseRequest("iuran_warga", {
+      query:
+        "select=id,keluarga_id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh,midtrans_transaction_id,midtrans_status,midtrans_settlement_at,midtrans_notifikasi_at" +
+        `&keluarga_id=eq.${encodeURIComponent(String(warga.keluarga_id))}` +
+        "&bukti_transfer=like." +
+        encodeURIComponent("MIDTRANS:%") +
+        "&order=bulan.desc&limit=500"
+    });
+
+    const rows = Array.isArray(data) ? data : [];
+    const transaksi = new Map();
+
+    for (const row of rows) {
+      const bukti = String(row.bukti_transfer || "");
+      if (!bukti.startsWith("MIDTRANS:")) continue;
+
+      const orderId = bukti.slice("MIDTRANS:".length);
+      if (!orderId) continue;
+
+      if (!transaksi.has(orderId)) {
+        transaksi.set(orderId, {
+          order_id: orderId,
+          transaction_id: row.midtrans_transaction_id || null,
+          status_midtrans: row.midtrans_status || null,
+          waktu_settlement: row.midtrans_settlement_at || null,
+          waktu_notifikasi: row.midtrans_notifikasi_at || null,
+          total: 0,
+          jumlah_bulan: 0,
+          bulan: [],
+          rincian: [],
+          status: "lunas",
+          waktu: null
+        });
+      }
+
+      const item = transaksi.get(orderId);
+      const nominal = Number(row.total_amount) || 0;
+
+      if (!item.transaction_id && row.midtrans_transaction_id) {
+        item.transaction_id = row.midtrans_transaction_id;
+      }
+      if (!item.status_midtrans && row.midtrans_status) {
+        item.status_midtrans = row.midtrans_status;
+      }
+      if (!item.waktu_settlement && row.midtrans_settlement_at) {
+        item.waktu_settlement = row.midtrans_settlement_at;
+      }
+      if (!item.waktu_notifikasi && row.midtrans_notifikasi_at) {
+        item.waktu_notifikasi = row.midtrans_notifikasi_at;
+      }
+
+      item.total += nominal;
+      item.jumlah_bulan += 1;
+      item.bulan.push(String(row.bulan || "").slice(0, 7));
+
+      item.rincian.push({
+        iuran_id: row.id,
+        bulan: String(row.bulan || "").slice(0, 7),
+        nominal,
+        status: String(row.status || "belum diketahui"),
+        waktu_pembayaran: row.dibayar_at || null,
+        waktu_verifikasi: row.diverifikasi_at || null,
+        diverifikasi_oleh: row.diverifikasi_oleh || null
+      });
+
+      if (row.status !== "lunas") {
+        item.status = "menunggu_pembayaran";
+      }
+
+      const waktu = row.dibayar_at || row.diverifikasi_at;
+      if (waktu && (!item.waktu || waktu > item.waktu)) {
+        item.waktu = waktu;
+      }
+    }
+
+    const hasil = [...transaksi.values()].map(item => ({
+      ...item,
+      bulan: [...new Set(item.bulan)].sort(),
+      rincian: item.rincian.sort((a, b) =>
+        String(a.bulan).localeCompare(String(b.bulan))
+      )
+    }));
+
+    hasil.sort((a, b) =>
+      String(b.waktu || "").localeCompare(String(a.waktu || ""))
+    );
+
+    return res.json({
+      ok: true,
+      sumber: "Riwayat transaksi keluarga sendiri",
+      catatan:
+        "Data hanya mencakup pembayaran QRIS keluarga yang sedang login. Konfirmasi transaksi resmi dan pencairan dana harus diperiksa secara terpisah.",
+      data: hasil
+    });
+  } catch (error) {
+    console.error("QRIS MY HISTORY ERROR:", error?.message || error);
+
+    return res.status(500).json({
+      ok: false,
+      message: "Gagal mengambil riwayat transaksi QRIS keluarga."
+    });
+  }
+});
+
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
