@@ -1716,6 +1716,19 @@ async function transparansiQRISWarga() {
 
               ${barisBukti("Waktu transaksi tercatat", formatWaktu(item.waktu))}
 
+<button type="button"
+  onclick="salinBuktiQRIS(this)"
+  data-order="${esc(item.order_id || "")}"
+  data-transaction="${esc(item.transaction_id || "")}"
+  data-status="${esc(item.status_midtrans || "")}"
+  data-total="${Number(item.total) || 0}"
+  data-bulan="${esc((item.bulan || []).join(", "))}"
+  data-settlement="${esc(item.waktu_settlement || "")}"
+  data-notifikasi="${esc(item.waktu_notifikasi || "")}"
+  style="width:100%;margin-top:14px;padding:12px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer">
+  📋 Salin Bukti Transaksi
+</button>
+
               <div style="margin-top:14px;font-weight:800">Rincian pembayaran</div>
 
               ${rincian.map(bulan => `
@@ -1783,6 +1796,57 @@ async function transparansiQRISWarga() {
   `);
 }
 
+/* SALIN BUKTI TRANSAKSI QRIS */
+async function salinBuktiQRIS(tombol) {
+  const data = {
+    order_id: tombol.dataset.order || "",
+    transaction_id: tombol.dataset.transaction || "",
+    status_midtrans: tombol.dataset.status || "",
+    total: Number(tombol.dataset.total) || 0,
+    bulan: (tombol.dataset.bulan || "").split(", ").filter(Boolean),
+    waktu_settlement: tombol.dataset.settlement || "",
+    waktu_notifikasi: tombol.dataset.notifikasi || ""
+  };
+
+  const teks = [
+    "BUKTI TRANSAKSI QRIS - RT TBK",
+    "Order ID: " + (data.order_id || "-"),
+    "Transaction ID: " + (data.transaction_id || "-"),
+    "Status Midtrans: " + (data.status_midtrans || "-"),
+    "Total pembayaran: " +
+      (typeof rupiah === "function" ? rupiah(data.total) : String(data.total)),
+    "Bulan iuran: " + (data.bulan.join(", ") || "-"),
+    "Waktu settlement: " + (data.waktu_settlement || "-"),
+    "Waktu notifikasi: " + (data.waktu_notifikasi || "-"),
+    "",
+    "Catatan: Status settlement bukan bukti pencairan dana."
+  ].join("\n");
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(teks);
+    } else {
+      const area = document.createElement("textarea");
+      area.value = teks;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.appendChild(area);
+      area.select();
+
+      const berhasil = document.execCommand("copy");
+      area.remove();
+
+      if (!berhasil) {
+        throw new Error("Penyalinan tidak berhasil.");
+      }
+    }
+
+    alert("Bukti transaksi berhasil disalin.");
+  } catch (error) {
+    console.error("Gagal menyalin bukti QRIS:", error);
+    alert("Tidak dapat menyalin bukti. Silakan coba melalui browser yang mendukung clipboard.");
+  }
+}
 async function cash(){
   layout("Kas RT",`
     <div class="card">
