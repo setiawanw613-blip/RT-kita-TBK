@@ -982,7 +982,7 @@ if (warga.status_warga !== "aktif") {
     message: "Akun Anda sudah dinonaktifkan oleh Ketua RT"
   });
 }
- 
+
 const token = createSessionToken({
   id: warga.id,
   wargaId: warga.id,
@@ -1012,7 +1012,7 @@ const token = createSessionToken({
     ok: false,
     message: "Login belum dikonfigurasi"
   });
-} 
+}
     if (
       username !== ADMIN_USER ||
       password !== ADMIN_PASSWORD
@@ -1023,7 +1023,7 @@ const token = createSessionToken({
       });
     }
 
- 
+
 const token = createSessionToken({
   id: "admin",
   username,
@@ -1504,7 +1504,7 @@ const csv = [
   ...csvRows
 ]
 
-       
+
       .map(row =>
         row.map(value =>
           '"' + String(value ?? "").replace(/"/g, '""') + '"'
@@ -1521,7 +1521,7 @@ const csv = [
       'attachment; filename="data-warga-rt-kita.csv"'
     );
 
-    res.send("\uFEFF" + csv);
+    res.send("﻿" + csv);
 
   } catch (error) {
     console.error("EXPORT WARGA ERROR:", error);
@@ -1877,7 +1877,7 @@ app.post(
         "image/webp": "webp"
       }[contentType];
 
-      
+
 const buktiHash = hashBuktiPengeluaran(req.body);
 const path = await uploadBuktiPengeluaran(
   `bukti.${extension}`,
@@ -2157,7 +2157,7 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
       message: "Transaksi berhasil disimpan",
       data: Array.isArray(data) ? data[0] : data
     });
-  
+
 } catch (error) {
   console.error("ADD CASH ERROR:", error);
 
@@ -2268,7 +2268,7 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
   header,
   ...csvRows
 ]
-     
+
 .map(row =>
   row.map(value =>
     '"' + String(value ?? "").replace(/"/g, '""') + '"'
@@ -2287,7 +2287,7 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
       'attachment; filename="kas-rt-kita.csv"'
     );
 
-    res.send("\uFEFF" + csv);
+    res.send("﻿" + csv);
 
   } catch (error) {
     console.error("EXPORT KAS ERROR:", error);
@@ -2451,6 +2451,479 @@ app.post("/api/letters", requireWarga, async (req, res) => {
 });
 
 
+/* === MULAI TEMPLATE SURAT RT 004 / RW 001 === */
+// Data wilayah sesuai kop surat. Nama ketua bisa diisi lewat Environment
+// Variables Vercel: KETUA_RT_NAMA dan KETUA_RW_NAMA (boleh dikosongkan).
+const SURAT_WILAYAH = {
+  rt: "004",
+  rw: "001",
+  perumahan: "Perumahan Taman Bali Kahuripan",
+  desa: "Sukahurip",
+  kecamatan: "Sukatani",
+  kabupaten: "Bekasi",
+  kotaTtd: "Bekasi"
+};
+
+// Label rincian tambahan yang dikirim dari form "Ajukan Surat".
+// Disimpan di kolom keperluan (baris "Label: isi"), jadi database tidak perlu diubah.
+const LABEL_RINCIAN_SURAT = [
+  "Nama Usaha",
+  "Bidang Usaha",
+  "Alamat Usaha",
+  "Usaha Sejak",
+  "Tinggal Sejak",
+  "Penghasilan per Bulan",
+  "Jumlah Tanggungan"
+];
+
+function uraikanKeperluanSurat(teks) {
+  const rincian = {};
+  const sisa = [];
+
+  String(teks || "").split(/\r?\n/).forEach((baris) => {
+    const cocok = baris.match(/^\s*([^:]{3,40})\s*:\s*(.*)$/);
+    const label = cocok
+      ? LABEL_RINCIAN_SURAT.find(
+          (l) => l.toLowerCase() === cocok[1].trim().toLowerCase()
+        )
+      : null;
+
+    if (label) {
+      if (cocok[2].trim()) rincian[label] = cocok[2].trim();
+    } else if (baris.trim()) {
+      sisa.push(baris.trim());
+    }
+  });
+
+  return { keperluan: sisa.join(" "), rincian };
+}
+
+function kenaliJenisSurat(jenis) {
+  const j = String(jenis || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (j.includes("skck")) return "skck";
+  if (j.includes("tidak mampu") || j.includes("sktm")) return "sktm";
+  if (j.includes("usaha") || j.includes("sku")) return "usaha";
+  if (j.includes("domisili")) return "domisili";
+  return "pengantar";
+}
+
+function tulisIsiSuratPdf(doc, data) {
+  // Ukur dulu di dokumen bayangan; jika isi terlalu panjang, huruf diperkecil
+  // sedikit agar isi + tanda tangan tetap muat dalam satu halaman bingkai.
+  const BATAS_ISI = 632;
+  let skala = 1;
+  for (const s of [1, 0.95, 0.9, 0.86, 0.82, 0.78]) {
+    skala = s;
+    const bayangan = new doc.constructor({ size: "A4", margin: 55 });
+    const yAkhir = tulisKontenSurat(bayangan, data, s);
+    if (yAkhir <= BATAS_ISI) break;
+  }
+  const yAkhir = tulisKontenSurat(doc, data, skala);
+  tulisTandaTanganSurat(doc, data, yAkhir);
+}
+
+function infoTanggalSurat(letter) {
+  const tanggal = new Date(letter.created_at || Date.now());
+  return {
+    tanggalSurat: tanggal.toLocaleDateString("id-ID", {
+      day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta"
+    }),
+    bulan: Number(tanggal.toLocaleString("en-US", { month: "numeric", timeZone: "Asia/Jakarta" })),
+    tahun: tanggal.toLocaleString("en-US", { year: "numeric", timeZone: "Asia/Jakarta" })
+  };
+}
+
+function tulisKontenSurat(doc, { id, letter, warga }, skala = 1) {
+  const W = SURAT_WILAYAH;
+  const clean = (v) => (v == null ? "" : String(v).replace(/\s+/g, " ").trim());
+  const potong = (v, max) => {
+    const s = clean(v);
+    return s.length > max ? s.slice(0, max - 1).trim() + "…" : s;
+  };
+
+  const X = 72;              // batas kiri isi surat
+  const LEBAR = 451;         // lebar area isi surat
+  const UKURAN = 11 * skala; // ukuran huruf isi
+  const FONT = "Times-Roman";
+  const FONT_TEBAL = "Times-Bold";
+
+  const jenis = kenaliJenisSurat(letter.jenis_surat);
+  const { keperluan: keperluanAsli, rincian } =
+    uraikanKeperluanSurat(letter.keperluan);
+  const keperluan = potong(keperluanAsli, 300) || "-";
+  const { bulan: bulanJakarta, tahun: tahunJakarta } = infoTanggalSurat(letter);
+  const romawi = ["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII"][bulanJakarta - 1];
+
+  const wilayahLengkap =
+    `RT ${W.rt} RW ${W.rw} ${W.perumahan}, Desa ${W.desa}, ` +
+    `Kecamatan ${W.kecamatan}, Kabupaten ${W.kabupaten}`;
+
+  // ---------- Pengaturan per jenis surat ----------
+  const PENGATURAN = {
+    pengantar: {
+      judul: "SURAT PENGANTAR",
+      kode: "SP",
+      pembuka: "memberikan pengantar kepada:",
+      isi: [
+        `Orang tersebut di atas adalah benar warga ${wilayahLengkap}, ` +
+        `yang bertempat tinggal di alamat tersebut di atas.`,
+        "Surat pengantar ini diberikan kepada yang bersangkutan untuk mengurus keperluan sebagai berikut:"
+      ],
+      setelahKeperluan:
+        `Mohon kiranya Bapak/Ibu Kepala Desa ${W.desa} atau pejabat/instansi terkait ` +
+        "dapat memberikan bantuan dan pelayanan sebagaimana mestinya kepada yang bersangkutan.",
+      penutup: "Demikian surat pengantar ini kami buat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya."
+    },
+
+    domisili: {
+      judul: "SURAT KETERANGAN DOMISILI",
+      kode: "SKD",
+      pembuka: "dengan ini menerangkan bahwa:",
+      tambahIdentitas: [["Status Hunian", clean(warga.status_hunian) || "-"]],
+      isi: [
+        `Nama tersebut di atas adalah benar warga yang bertempat tinggal / berdomisili di ` +
+        `${wilayahLengkap}` +
+        (rincian["Tinggal Sejak"] ? `, sejak ${potong(rincian["Tinggal Sejak"], 40)}` : "") +
+        (clean(warga.status_hunian)
+          ? `, dengan status hunian sebagai ${clean(warga.status_hunian).toLowerCase()}.`
+          : "."),
+        "Surat keterangan domisili ini diberikan kepada yang bersangkutan untuk keperluan:"
+      ],
+      penutup: "Demikian surat keterangan domisili ini kami buat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya."
+    },
+
+    sktm: {
+      judul: "SURAT KETERANGAN TIDAK MAMPU",
+      kode: "SKTM",
+      pembuka: "dengan ini menerangkan bahwa:",
+      isi: [
+        `Nama tersebut di atas adalah benar warga ${wilayahLengkap}. ` +
+        "Berdasarkan pengamatan dan sepengetahuan kami, yang bersangkutan beserta keluarganya " +
+        "tergolong keluarga kurang mampu / berpenghasilan rendah."
+      ],
+      rincian: [
+        ["Penghasilan per Bulan", rincian["Penghasilan per Bulan"]],
+        ["Jumlah Tanggungan", rincian["Jumlah Tanggungan"]]
+      ],
+      isiSetelahRincian:
+        `Surat keterangan ini diberikan sebagai pengantar untuk pengurusan Surat Keterangan ` +
+        `Tidak Mampu (SKTM) di Pemerintah Desa ${W.desa}, guna keperluan:`,
+      penutup: "Demikian surat keterangan ini kami buat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya."
+    },
+
+    usaha: {
+      judul: "SURAT KETERANGAN USAHA",
+      kode: "SKU",
+      pembuka: "dengan ini menerangkan bahwa:",
+      isi: [
+        `Nama tersebut di atas adalah benar warga ${wilayahLengkap}, ` +
+        "dan benar memiliki serta menjalankan usaha dengan keterangan sebagai berikut:"
+      ],
+      rincian: [
+        ["Nama Usaha", rincian["Nama Usaha"] || "-"],
+        ["Bidang Usaha", rincian["Bidang Usaha"] || "-"],
+        ["Alamat Usaha", rincian["Alamat Usaha"] || "-"],
+        ["Usaha Sejak", rincian["Usaha Sejak"]]
+      ],
+      isiSetelahRincian:
+        "Sepanjang sepengetahuan kami, usaha tersebut sampai saat ini masih berjalan dan tidak " +
+        "mengganggu ketertiban lingkungan. Surat keterangan ini diberikan untuk keperluan:",
+      penutup: "Demikian surat keterangan usaha ini kami buat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya."
+    },
+
+    skck: {
+      judul: "SURAT PENGANTAR SKCK",
+      subjudul: "Permohonan Surat Keterangan Catatan Kepolisian",
+      kode: "SP-SKCK",
+      pembuka: "memberikan pengantar kepada:",
+      isi: [
+        `Orang tersebut di atas adalah benar warga ${wilayahLengkap}. ` +
+        "Sepanjang pengetahuan kami, selama bertempat tinggal di lingkungan kami yang bersangkutan " +
+        "berkelakuan baik dan tidak pernah tercatat melakukan pelanggaran ketertiban maupun " +
+        "perbuatan tercela di lingkungan RT.",
+        "Surat pengantar ini diberikan untuk melengkapi persyaratan permohonan Surat Keterangan " +
+        "Catatan Kepolisian (SKCK) pada Kepolisian Negara Republik Indonesia, guna keperluan:"
+      ],
+      setelahKeperluan:
+        "Mohon kiranya pihak Kepolisian dapat memberikan pelayanan sebagaimana mestinya kepada yang bersangkutan.",
+      penutup: "Demikian surat pengantar ini kami buat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya."
+    }
+  };
+
+  const P = PENGATURAN[jenis];
+
+  // ---------- Helper tulis ----------
+  const paragraf = (teks, opsi = {}) => {
+    doc.font(opsi.tebal ? FONT_TEBAL : FONT)
+      .fontSize(opsi.ukuran || UKURAN)
+      .fillColor("#000000")
+      .text(teks, opsi.x || X, doc.y, {
+        width: opsi.lebar || LEBAR,
+        align: opsi.align || "justify",
+        lineGap: 2,
+        indent: opsi.indent || 0
+      });
+  };
+
+  const tabel = (baris, opsi = {}) => {
+    const xLabel = opsi.x || X + 24;
+    const xTitik = xLabel + 130;
+    const xNilai = xTitik + 10;
+    const lebarNilai = X + LEBAR - xNilai;
+
+    baris
+      .filter(([, nilai]) => clean(nilai))
+      .forEach(([label, nilai, tebal, maks]) => {
+        const y = doc.y;
+        doc.font(FONT).fontSize(UKURAN);
+        doc.text(label, xLabel, y, { width: 128, lineBreak: false });
+        doc.text(":", xTitik, y, { width: 8, lineBreak: false });
+        doc.font(tebal ? FONT_TEBAL : FONT)
+          .text(potong(nilai, maks || 160), xNilai, y, { width: lebarNilai, lineGap: 1 });
+        doc.y = Math.max(doc.y, y + UKURAN * 1.25) + 2 * skala;
+      });
+  };
+
+  const jarak = (n) => { doc.y += n * skala; };
+
+  // ---------- Judul & nomor ----------
+  doc.y = 132;
+  doc.font(FONT_TEBAL).fontSize(14).fillColor("#000000")
+    .text(P.judul, X, doc.y, { width: LEBAR, align: "center", underline: true });
+
+  if (P.subjudul) {
+    doc.font(FONT).fontSize(10.5)
+      .text(P.subjudul, X, doc.y + 1, { width: LEBAR, align: "center" });
+  }
+
+  const nomorSurat =
+    `${String(id).padStart(3, "0")}/${P.kode}/RT.${W.rt}/RW.${W.rw}/${romawi}/${tahunJakarta}`;
+
+  doc.font(FONT).fontSize(UKURAN)
+    .text("Nomor : " + nomorSurat, X, doc.y + 2, { width: LEBAR, align: "center" });
+
+  jarak(16);
+
+  // ---------- Pembuka ----------
+  paragraf(
+    `Yang bertanda tangan di bawah ini, Ketua Rukun Tetangga (RT) ${W.rt} Rukun Warga (RW) ${W.rw} ` +
+    `${W.perumahan}, Desa ${W.desa}, Kecamatan ${W.kecamatan}, Kabupaten ${W.kabupaten}, ` +
+    P.pembuka,
+    { indent: 28 }
+  );
+  jarak(8);
+
+  // ---------- Identitas warga ----------
+  const tglLahir = warga.tanggal_lahir
+    ? new Date(String(warga.tanggal_lahir).slice(0, 10) + "T00:00:00Z")
+        .toLocaleDateString("id-ID", {
+          day: "numeric", month: "long", year: "numeric", timeZone: "UTC"
+        })
+    : "";
+
+  let alamat = clean(warga.alamat);
+  const alamatKecil = alamat.toLowerCase();
+  const tambahanAlamat = [];
+  if (!/\brt\b/.test(alamatKecil)) tambahanAlamat.push(`RT ${W.rt} / RW ${W.rw}`);
+  if (!alamatKecil.includes("kahuripan")) tambahanAlamat.push(W.perumahan);
+  if (!alamatKecil.includes("sukahurip")) {
+    tambahanAlamat.push(`Desa ${W.desa}, Kec. ${W.kecamatan}, Kab. ${W.kabupaten}`);
+  }
+  alamat = [alamat, ...tambahanAlamat].filter(Boolean).join(", ");
+
+  tabel([
+    ["Nama Lengkap", clean(warga.nama_lengkap).toUpperCase() || "-", true],
+    ["NIK", clean(warga.nik) || "-"],
+    ["Nomor KK", clean(warga.no_kk) || "-"],
+    ["Tempat, Tgl. Lahir", [clean(warga.tempat_lahir), tglLahir].filter(Boolean).join(", ") || "-"],
+    ["Jenis Kelamin", clean(warga.jenis_kelamin) || "-"],
+    ["Status Perkawinan", clean(warga.status_perkawinan) || "-"],
+    ["Pekerjaan", clean(warga.pekerjaan) || "-"],
+    ["Kewarganegaraan", "Indonesia"],
+    ...(P.tambahIdentitas || []),
+    ["Alamat", alamat || "-", false, 240]
+  ]);
+  jarak(8);
+
+  // ---------- Isi sesuai jenis surat ----------
+  P.isi.forEach((teks, i) => {
+    paragraf(teks, { indent: 28 });
+    if (i < P.isi.length - 1) jarak(5);
+  });
+
+  if (P.rincian) {
+    jarak(6);
+    tabel(P.rincian);
+    jarak(6);
+    paragraf(P.isiSetelahRincian, { indent: 28 });
+  }
+
+  // Keperluan dicetak tebal agar mudah dibaca petugas.
+  jarak(6);
+  paragraf(keperluan, { tebal: true, x: X + 24, lebar: LEBAR - 24, align: "left" });
+
+  if (P.setelahKeperluan) {
+    jarak(6);
+    paragraf(P.setelahKeperluan, { indent: 28 });
+  }
+
+  jarak(6);
+  paragraf(P.penutup, { indent: 28 });
+
+  return doc.y;
+}
+
+// CAP TESTING: cap stempel RT digambar otomatis (vektor).
+// Untuk memakai cap asli, unggah file "cap-rt.png" (latar transparan) ke repo,
+// maka cap testing ini otomatis diganti dengan gambar cap asli.
+function gambarCapRT(doc, cx, cy, r) {
+  const W = SURAT_WILAYAH;
+  const WARNA = "#1F3A93";
+  const teksKeliling =
+    `RT ${W.rt} / RW ${W.rw} • DESA ${W.desa.toUpperCase()} • ` +
+    `KAB. ${W.kabupaten.toUpperCase()} • `;
+
+  doc.save();
+  doc.translate(cx, cy).rotate(-12);
+  doc.fillOpacity(0.85).strokeOpacity(0.85);
+  doc.strokeColor(WARNA).fillColor(WARNA);
+
+  doc.lineWidth(1.8).circle(0, 0, r).stroke();
+  doc.lineWidth(0.6).circle(0, 0, r - 3.2).stroke();
+  doc.lineWidth(0.9).circle(0, 0, r * 0.6).stroke();
+
+  // Teks melingkar di pita cap
+  const fs = r * 0.13;
+  doc.font("Helvetica-Bold").fontSize(fs);
+  const lebar = [...teksKeliling].map((c) => doc.widthOfString(c));
+  const total = lebar.reduce((x, y) => x + y, 0);
+  const rTeks = ((r - 3.2) + r * 0.6) / 2 - fs * 0.35;
+  let jalan = 0;
+  [...teksKeliling].forEach((c, i) => {
+    const sudut = ((jalan + lebar[i] / 2) / total) * 360;
+    jalan += lebar[i];
+    const rad = (sudut * Math.PI) / 180;
+    doc.save();
+    doc.translate(rTeks * Math.sin(rad), -rTeks * Math.cos(rad)).rotate(sudut);
+    doc.text(c, -lebar[i] / 2, -fs / 2, { lineBreak: false });
+    doc.restore();
+  });
+
+  // Isi tengah cap
+  const lebarTengah = r * 1.1;
+  doc.font("Helvetica-Bold").fontSize(r * 0.14)
+    .text("KETUA RT", -lebarTengah / 2, -r * 0.33, { width: lebarTengah, align: "center", lineBreak: false });
+  doc.fontSize(r * 0.3)
+    .text(W.rt, -lebarTengah / 2, -r * 0.17, { width: lebarTengah, align: "center", lineBreak: false });
+  // Penanda cap sementara (testing). Hilang otomatis setelah file cap-rt.png diunggah.
+  doc.font("Helvetica-Bold").fontSize(r * 0.13)
+    .text("UJI COBA", -lebarTengah / 2, r * 0.2, { width: lebarTengah, align: "center", lineBreak: false });
+
+  doc.restore();
+  doc.fillOpacity(1).strokeOpacity(1).fillColor("#000000").strokeColor("#000000");
+}
+
+function kodeVerifikasiSurat(id, letter) {
+  const crypto = require("crypto");
+  const kunci = process.env.SESSION_SECRET || "rt-kita-tbk";
+  const hex = crypto
+    .createHmac("sha256", kunci)
+    .update(`surat:${id}:${letter.created_at || ""}:${letter.jenis_surat || ""}`)
+    .digest("hex")
+    .slice(0, 10)
+    .toUpperCase();
+  return `RT004-${hex.slice(0, 5)}-${hex.slice(5)}`;
+}
+
+function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
+  const fs = require("fs");
+  const path = require("path");
+  const W = SURAT_WILAYAH;
+  const clean = (v) => (v == null ? "" : String(v).replace(/\s+/g, " ").trim());
+  const X = 72;
+  const LEBAR = 451;
+  const UKURAN = 11;
+  const FONT = "Times-Roman";
+  const FONT_TEBAL = "Times-Bold";
+  const { tanggalSurat } = infoTanggalSurat(letter);
+
+  // ---------- Tanda tangan ----------
+  const namaRT = clean(process.env.KETUA_RT_NAMA);
+  const namaRW = clean(process.env.KETUA_RW_NAMA);
+  const garisNama = "(.......................................)";
+
+  const yTtd = Math.min(yAkhir + 18, 652);
+  const lebarTtd = 200;
+  const xKiri = X;
+  const xKanan = X + LEBAR - lebarTtd;
+  const ruangTtd = 62;
+  const yNama = yTtd + 15 + ruangTtd;
+
+  doc.font(FONT).fontSize(UKURAN).fillColor("#000000");
+
+  // Kanan: Ketua RT
+  doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xKanan, yTtd, { width: lebarTtd, align: "center" });
+  doc.text(`Ketua RT ${W.rt} / RW ${W.rw}`, xKanan, yTtd + 15, { width: lebarTtd, align: "center" });
+
+  // Tanda tangan otomatis: pakai gambar ttd-ketua-rt.png bila ada di repo.
+  const fileTtd = path.join(__dirname, "ttd-ketua-rt.png");
+  if (fs.existsSync(fileTtd)) {
+    try {
+      doc.image(fileTtd, xKanan + lebarTtd / 2 - 55, yTtd + 30, { fit: [130, 48], align: "center", valign: "center" });
+    } catch (e) {
+      console.error("GAMBAR TTD KETUA RT GAGAL DIMUAT:", e?.message || e);
+    }
+  }
+
+  // Cap RT otomatis, menimpa sebagian area tanda tangan seperti cap basah.
+  const fileCap = path.join(__dirname, "cap-rt.png");
+  let capAsliTerpasang = false;
+  if (fs.existsSync(fileCap)) {
+    try {
+      doc.save();
+      doc.opacity(0.9);
+      doc.image(fileCap, xKanan + lebarTtd / 2 - 84, yTtd + 18, { fit: [80, 80], align: "center", valign: "center" });
+      doc.restore();
+      capAsliTerpasang = true;
+    } catch (e) {
+      doc.restore();
+      console.error("GAMBAR CAP RT GAGAL DIMUAT:", e?.message || e);
+    }
+  }
+  if (!capAsliTerpasang) {
+    gambarCapRT(doc, xKanan + lebarTtd / 2 - 44, yTtd + 58, 35);
+  }
+
+  doc.font(namaRT ? FONT_TEBAL : FONT).fontSize(UKURAN).fillColor("#000000")
+    .text(namaRT ? namaRT.toUpperCase() : garisNama, xKanan, yNama, {
+      width: lebarTtd,
+      align: "center",
+      underline: Boolean(namaRT)
+    });
+
+  doc.font("Helvetica-Oblique").fontSize(6.5).fillColor("#444444")
+    .text("Ditandatangani & dicap secara elektronik", xKanan, yNama + 15, { width: lebarTtd, align: "center" })
+    .text("Kode verifikasi: " + kodeVerifikasiSurat(id, letter), xKanan, yNama + 23, { width: lebarTtd, align: "center" });
+  doc.fillColor("#000000");
+
+  // Kiri: Mengetahui Ketua RW
+  doc.font(FONT).fontSize(UKURAN)
+    .text("Mengetahui,", xKiri, yTtd, { width: lebarTtd, align: "center" });
+  doc.text(`Ketua RW ${W.rw}`, xKiri, yTtd + 15, { width: lebarTtd, align: "center" });
+  doc.font(namaRW ? FONT_TEBAL : FONT)
+    .text(namaRW ? namaRW.toUpperCase() : garisNama, xKiri, yNama, {
+      width: lebarTtd,
+      align: "center",
+      underline: Boolean(namaRW)
+    });
+}
+/* === AKHIR TEMPLATE SURAT RT 004 / RW 001 === */
+
 /* UNDUH PDF SURAT - WARGA DAN KETUA RT */
 app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
   try {
@@ -2491,11 +2964,11 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
       });
     }
 
-   
+
     // Ambil data pemilik surat yang dipilih.
     const residents = await supabaseRequest("warga", {
       query:
-        "select=id,nama_lengkap,nik,no_kk,alamat,jenis_kelamin,tempat_lahir,tanggal_lahir,pekerjaan" +
+        "select=id,nama_lengkap,nik,no_kk,alamat,rt,rw,jenis_kelamin,tempat_lahir,tanggal_lahir,status_perkawinan,pekerjaan,status_hunian" +
         "&id=eq." + encodeURIComponent(letter.warga_id)
     });
 
@@ -2505,7 +2978,7 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
         message: "Data warga pemilik surat tidak ditemukan"
       });
     }
-  
+
     const warga = residents[0];
     const clean = (value) =>
       value == null ? "" : String(value).trim();
@@ -2527,8 +3000,8 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
 
     doc.pipe(res);
 
-  
-   
+
+
 
     // TEMPLATE SURAT TBK — LATAR A4 PENUH
     const kopTemplatePath = path.join(
@@ -2544,212 +3017,10 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     } else {
       console.error("GAMBAR TEMPLATE KOP SURAT TIDAK DITEMUKAN");
     }
-    // ISI SURAT DI AREA DALAM BINGKAI
-    doc.y = 175;
-    doc.fillColor("#000000");
+    // ISI SURAT (kop surat tetap; isi, tanda tangan & cap otomatis sesuai jenis surat)
+    tulisIsiSuratPdf(doc, { id, letter, warga });
 
-    doc.font("Helvetica-Bold")
-      .fontSize(13)
-      .text(clean(letter.jenis_surat).toUpperCase(), 65, doc.y, {
-        width: 465,
-        align: "center"
-      });
-
-   doc.moveDown(0.4);
-
-const tanggalSurat = new Date(letter.created_at || Date.now());
-
-const bulanRomawi = [
-  "I", "II", "III", "IV", "V", "VI",
-  "VII", "VIII", "IX", "X", "XI", "XII"
-][tanggalSurat.getMonth()];
-
-const nomorSurat =
-  String(id).padStart(3, "0") +
-  "/RT.04/RW.01/" +
-  String(tanggalSurat.getMonth() + 1).padStart(2, "0") +
-  "/" + bulanRomawi +
-  "/" + tanggalSurat.getFullYear();
-
-doc.font("Helvetica")
-  .fontSize(10)
-  .text("Nomor: " + nomorSurat, {
-    width: 465,
-    align: "center"
-  });
-
-doc.moveDown(1);
-    doc.fontSize(10)
-      .text("Yang bertanda tangan di bawah ini menerangkan bahwa:", {
-        width: 465
-      });
-
-  
-doc.moveDown(0.6);
-
-const identity = [
-  ["Nama", clean(warga.nama_lengkap)],
-  ["NIK", clean(warga.nik) || "-"],
-  ["Nomor KK", clean(warga.no_kk) || "-"],
-  ["Tempat/Tanggal Lahir", [
-    clean(warga.tempat_lahir),
-    warga.tanggal_lahir
-      ? new Date(warga.tanggal_lahir + "T00:00:00").toLocaleDateString("id-ID", {
-          day: "2-digit",
-          month: "long",
-          year: "numeric"
-        })
-      : ""
-  ].filter(Boolean).join(", ") || "-"],
-  ["Jenis Kelamin", clean(warga.jenis_kelamin) || "-"],
-  ["Pekerjaan", clean(warga.pekerjaan) || "-"],
-  ["Alamat", clean(warga.alamat) || "-"]
-];
-
-identity.forEach(([label, value]) => {
-  const y = doc.y;
-  doc.font("Helvetica").fontSize(9);
-  doc.text(label, 70, y, { width: 125 });
-  doc.text(":", 198, y, { width: 10 });
-  doc.text(value, 215, y, { width: 300 });
-  doc.moveDown(0.35);
-});
-
-doc.moveDown(0.6);
-
-const jenisSurat = clean(letter.jenis_surat)
-  .toLowerCase()
-  .replace(/[_-]+/g, " ")
-  .replace(/\s+/g, " ")
-  .trim();
-
-const keperluan = clean(letter.keperluan) || "-";
-
-let isiSurat = "";
-let penutupSurat = "";
-
-if (
-  jenisSurat.includes("tidak mampu") ||
-  jenisSurat.includes("sktm")
-) {
-  isiSurat =
-    "Berdasarkan permohonan warga, yang bersangkutan mengajukan surat pengantar untuk keperluan permohonan Surat Keterangan Tidak Mampu (SKTM). Surat pengantar ini dibuat berdasarkan data administrasi warga yang tersedia dan keterangan pemohon, untuk diproses lebih lanjut oleh kelurahan atau instansi yang berwenang.";
-
-  penutupSurat =
-    "Penetapan dan penerbitan Surat Keterangan Tidak Mampu merupakan kewenangan instansi yang berwenang sesuai ketentuan yang berlaku.";
-} else if (jenisSurat.includes("domisili sementara")) {
-  isiSurat =
-    "Berdasarkan permohonan warga, yang bersangkutan mengajukan surat pengantar keterangan domisili sementara sesuai alamat yang tercantum pada data administrasi warga. Keterangan mengenai tempat tinggal dan jangka waktu domisili mengikuti hasil pemeriksaan serta verifikasi oleh pihak yang berwenang.";
-
-  penutupSurat =
-    "Surat pengantar ini digunakan untuk mendukung proses permohonan dan bukan merupakan penetapan domisili resmi.";
-} else if (jenisSurat.includes("domisili")) {
-  isiSurat =
-    "Berdasarkan permohonan warga, yang bersangkutan mengajukan surat pengantar keterangan domisili sesuai alamat yang tercantum pada data administrasi warga. Kesesuaian alamat dan keterangan tempat tinggal dapat diverifikasi lebih lanjut oleh pihak yang berwenang.";
-
-  penutupSurat =
-    "Penerbitan keterangan domisili resmi mengikuti hasil verifikasi dan ketentuan instansi yang berwenang.";
-} else if (jenisSurat.includes("skck")) {
-  isiSurat =
-    "Berdasarkan permohonan warga, yang bersangkutan mengajukan surat pengantar untuk keperluan permohonan Surat Keterangan Catatan Kepolisian (SKCK). Surat pengantar ini bukan SKCK dan tidak memuat pernyataan mengenai catatan kepolisian pemohon.";
-
-  penutupSurat =
-    "Permohonan, pemeriksaan persyaratan, dan penerbitan SKCK diproses oleh Kepolisian Republik Indonesia sesuai ketentuan yang berlaku.";
-} else {
-  isiSurat =
-    "Berdasarkan permohonan warga, surat pengantar ini dibuat untuk mendukung keperluan administrasi sebagaimana disebutkan dalam permohonan. Data identitas mengacu pada data administrasi warga yang tersedia.";
-
-  penutupSurat =
-    "Penggunaan dan tindak lanjut surat ini mengikuti tujuan permohonan serta persyaratan pihak penerima.";
-}
-
-doc.font("Helvetica")
-  .fontSize(10)
-  .text("Dengan ini diterangkan bahwa:", {
-    width: 465,
-    align: "justify",
-    lineGap: 2
-  });
-
-doc.moveDown(0.5);
-
-doc.text(isiSurat, {
-  width: 465,
-  align: "justify",
-  lineGap: 3
-});
-
-doc.moveDown(0.6);
-
-doc.font("Helvetica-Bold")
-  .fontSize(9)
-  .text("Keperluan:", { width: 465 });
-
-doc.font("Helvetica")
-  .fontSize(10)
-  .text(keperluan, {
-    width: 465,
-    align: "justify",
-    lineGap: 2
-  });
-
-doc.moveDown(0.6);
-
-doc.font("Helvetica")
-  .fontSize(9)
-  .text(
-    "Demikian surat pengantar ini dibuat untuk digunakan sebagaimana mestinya. " +
-    penutupSurat,
-    {
-      width: 465,
-      align: "justify",
-      lineGap: 2
-    }
-  );
-
-
-// AREA PENGESAHAN — DRAF BELUM DISAHKAN
-doc.moveDown(1);
-
-const signX = 335;
-const signY = Math.min(doc.y + 18, 650);
-
-doc.font("Helvetica")
-  .fontSize(9)
-  .fillColor("#000000")
-  .text(
-    "Bekasi, " + new Date(
-      letter.created_at || Date.now()
-    ).toLocaleDateString("id-ID", {
-      day: "2-digit",
-      month: "long",
-      year: "numeric"
-    }),
-    signX,
-    signY,
-    {
-      width: 180,
-      align: "center"
-    }
-  );
-
-doc.font("Helvetica")
-  .fontSize(9)
-  .text("Pengurus RT 004 / RW 01", signX, signY + 18, {
-    width: 180,
-    align: "center"
-  });
-
-
-doc.font("Helvetica")
-  .fontSize(8)
-  .fillColor("#B91C1C")
-  .text("DRAF — BELUM DISAHKAN", signX, signY + 42, {
-    width: 180,
-    align: "center"
-  });
-
-doc.end();
+    doc.end();
 
 } catch (error) {
   console.error("DOWNLOAD LETTER PDF ERROR:", error);
@@ -3236,7 +3507,7 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
       catatan.map(row => [String(row.bulan).slice(0, 7), row])
     );
 
-   
+
 const iuranKedaluwarsa = [];
 
 for (const bulan of dipilih) {
@@ -3315,7 +3586,7 @@ for (const bulan of dipilih) {
 
       if (record?.status === "lunas") continue;
 
-  
+
 if (record && !iuranKedaluwarsa.some(
   row => String(row.id) === String(record.id)
 )) {
@@ -3345,7 +3616,7 @@ if (record && !iuranKedaluwarsa.some(
       namaWarga: warga.nama_lengkap
     });
 
-   
+
 const rowsBaru = dipilih
   .filter(bulan => !peta.has(bulan))
   .map(bulan => ({
@@ -4137,9 +4408,27 @@ app.get("/health", (req, res) => {
 });
 
 /* FILE FRONTEND */
+// index.html dikirim dengan tambahan script form surat (surat-form.js).
+function kirimHalamanUtama(req, res) {
+  const fs = require("fs");
+  try {
+    const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
+    const tambahan = '<script src="/surat-form.js?v=2"></script>';
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(
+      html.includes("</body>")
+        ? html.replace("</body>", tambahan + "\n</body>")
+        : html + tambahan
+    );
+  } catch (error) {
+    console.error("KIRIM INDEX ERROR:", error);
+    res.sendFile(path.join(__dirname, "index.html"));
+  }
+}
+
+app.get("/index.html", kirimHalamanUtama);
 app.use(express.static(__dirname, { index: false }));
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
+app.get("*", kirimHalamanUtama);
 
 module.exports = app;
