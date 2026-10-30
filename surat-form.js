@@ -144,3 +144,6 @@ async function saveLetter(){
     alert(e.message);
   }
 }
+
+/* Perbaikan tampilan HP (header, menu bawah, kartu saldo) */
+(function(){var s=document.createElement("script");s.src="/tampilan-hp.js?v=1";document.head.appendChild(s);})();
