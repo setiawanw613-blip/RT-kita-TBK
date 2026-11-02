@@ -4688,7 +4688,10 @@ const fotoPengukuranURL = await buatUrlFotoPrivat(
     }
 
     pasangKop();
-    doc.on("pageAdded", pasangKop);
+   doc.on("pageAdded", () => {
+  pasangKop();
+  doc.y = 145;
+});
 
     // Isi dokumen dimulai di bawah kop
     doc.y = 135;
@@ -4734,29 +4737,84 @@ const fotoPengukuranURL = await buatUrlFotoPrivat(
     doc.font("Helvetica").fontSize(9)
       .text(a.uraian || "-", { align: "justify", lineGap: 3 });
 
-    judulBagian("C. PERBANDINGAN UKURAN KONDISI DAN USULAN");
+   judulBagian("C. PERBANDINGAN UKURAN KONDISI DAN USULAN");
 
-    const satuan = d.satuan || "meter";
-    const ukuran = [
-      ["Panjang", d.kondisi_panjang, d.usulan_panjang],
-      ["Lebar", d.kondisi_lebar, d.usulan_lebar],
-      ["Tinggi / kedalaman", d.kondisi_tinggi, d.usulan_tinggi]
-    ];
+const satuan = d.satuan || "meter";
+const ukuran = [
+  ["Panjang", d.kondisi_panjang, d.usulan_panjang],
+  ["Lebar", d.kondisi_lebar, d.usulan_lebar],
+  ["Tinggi / kedalaman", d.kondisi_tinggi, d.usulan_tinggi]
+];
 
-    doc.font("Helvetica-Bold").fontSize(9);
-    doc.text("Parameter", 48, doc.y, { continued: true, width: 160 });
-    doc.text("Kondisi saat ini", { continued: true, width: 150 });
-    doc.text("Ukuran usulan");
-    doc.moveTo(48, doc.y + 3).lineTo(547, doc.y + 3).stroke();
-    doc.moveDown(0.5);
+const tabelX = 48;
+const lebarKolom = [150, 170, 179];
+const tinggiHeader = 30;
+const tinggiBaris = 27;
 
-    ukuran.forEach((item) => {
-      doc.font("Helvetica").fontSize(9);
-      doc.text(item[0], 48, doc.y, { continued: true, width: 160 });
-      doc.text((item[1] ?? "-") + " " + satuan, { continued: true, width: 150 });
-      doc.text((item[2] ?? "-") + " " + satuan);
-    });
+function headerUkuran() {
+  const y = doc.y;
 
+  doc.rect(tabelX, y, 499, tinggiHeader)
+    .fill("#D9EAF7");
+
+  doc.fillColor("#000000")
+    .font("Helvetica-Bold")
+    .fontSize(8);
+
+  doc.text("PARAMETER", tabelX + 7, y + 10, {
+    width: lebarKolom[0] - 10
+  });
+
+  doc.text("KONDISI SAAT INI", tabelX + lebarKolom[0] + 5, y + 10, {
+    width: lebarKolom[1] - 10
+  });
+
+  doc.text("UKURAN USULAN",
+    tabelX + lebarKolom[0] + lebarKolom[1] + 5,
+    y + 10,
+    { width: lebarKolom[2] - 10 }
+  );
+
+  doc.y = y + tinggiHeader;
+}
+
+headerUkuran();
+
+ukuran.forEach((item) => {
+  if (doc.y + tinggiBaris > doc.page.height - 65) {
+    doc.addPage();
+    doc.y = 145;
+    headerUkuran();
+  }
+
+  const y = doc.y;
+
+  doc.font("Helvetica").fontSize(9).fillColor("#000000");
+
+  doc.text(item[0], tabelX + 7, y + 8, {
+    width: lebarKolom[0] - 10
+  });
+
+  doc.text(
+    (item[1] ?? "-") + " " + satuan,
+    tabelX + lebarKolom[0] + 5,
+    y + 8,
+    { width: lebarKolom[1] - 10 }
+  );
+
+  doc.text(
+    (item[2] ?? "-") + " " + satuan,
+    tabelX + lebarKolom[0] + lebarKolom[1] + 5,
+    y + 8,
+    { width: lebarKolom[2] - 10 }
+  );
+
+  doc.rect(tabelX, y, 499, tinggiBaris)
+    .strokeColor("#BBBBBB")
+    .stroke();
+
+  doc.y = y + tinggiBaris;
+});
     // Sketsa penampang: skematis, bukan gambar hasil survei
     judulBagian("D. SKETSA PENAMPANG SALURAN (ILUSTRASI)");
     doc.font("Helvetica-Oblique").fontSize(8)
@@ -4801,73 +4859,85 @@ const fotoPengukuranURL = await buatUrlFotoPrivat(
       doc.font("Helvetica").fontSize(9)
         .text("RAB belum disusun atau belum diverifikasi oleh pengurus RT.");
     } else {
-      const x = [48, 75, 205, 340, 390, 465];
-      const widths = [27, 130, 135, 50, 75, 82];
+      const x = [48, 75, 190, 305, 355, 445];
+const widths = [27, 115, 115, 50, 90, 102];
+const lebarTabel = 499;
 
-      function headerRAB() {
-        const y = doc.y;
-        doc.rect(48, y, 499, 24).fill("#D9EAF7");
-        doc.fillColor("#000000").font("Helvetica-Bold").fontSize(8);
-        ["No", "Item / spesifikasi", "Kegunaan", "Volume", "Harga satuan", "Jumlah"]
-          .forEach((v, i) => doc.text(v, x[i] + 2, y + 7, {
-            width: widths[i] - 4, align: "left"
-          }));
-        doc.y = y + 27;
-      }
+function headerRAB() {
+  const y = doc.y;
 
-      headerRAB();
-      let total = 0;
+  doc.rect(48, y, lebarTabel, 30).fill("#D9EAF7");
+  doc.fillColor("#000000").font("Helvetica-Bold").fontSize(7);
 
-      rab.forEach((item, i) => {
-     const volume = Number(item.volume || 0);
-const hargaSatuan = Number(item.harga_satuan || 0);
+  ["No", "Item / spesifikasi", "Kegunaan", "Volume", "Harga satuan", "Jumlah"]
+    .forEach((v, i) => {
+      doc.text(v, x[i] + 3, y + 10, {
+        width: widths[i] - 6,
+        align: "left"
+      });
+    });
 
-const subtotal = Number(item.total || (volume * hargaSatuan));
-total += subtotal;
-
-        const y = doc.y;
-        const baris = [
-          String(i + 1),
-          (item.item || "-") + "\n" + (item.spesifikasi || "-"),
-          item.tujuan || "-",
-          String(item.volume || 0) + " " + (item.satuan || ""),
-          rupiah(item.harga_satuan),
-          rupiah(subtotal)
-        ];
-
-        const tinggi = Math.max(
-          30,
-          ...baris.map((v, j) => doc.heightOfString(v, {
-            width: widths[j] - 5,
-            font: "Helvetica",
-            fontSize: 7
-          }) + 10)
-        );
-
-      const batasBawah = doc.page.height - 65;
-
-if (doc.y + tinggi > batasBawah) {
-  doc.addPage();
-  doc.y = 145;
-  headerRAB();
+  doc.y = y + 30;
 }
 
-        const rowY = doc.y;
-        baris.forEach((v, j) => {
-          doc.font("Helvetica").fontSize(7)
-            .text(v, x[j] + 2, rowY + 5, {
-              width: widths[j] - 5,
-              height: tinggi - 5
-            });
-        });
-        doc.rect(48, rowY, 499, tinggi).strokeColor("#BBBBBB").stroke();
-        doc.y = rowY + tinggi;
-      });
+headerRAB();
+let total = 0;
 
-      doc.moveDown(0.5);
-      doc.font("Helvetica-Bold").fontSize(10)
-        .text("TOTAL RAB PERKIRAAN: " + rupiah(total), { align: "right" });
-    }
+rab.forEach((item, i) => {
+  const volume = Number(item.volume || 0);
+  const hargaSatuan = Number(item.harga_satuan || 0);
+  const subtotal = Number(item.total || (volume * hargaSatuan));
+  total += subtotal;
+
+  const baris = [
+    String(i + 1),
+    (item.item || "-") + "\n" + (item.spesifikasi || "-"),
+    item.tujuan || "-",
+    String(item.volume || 0) + " " + (item.satuan || ""),
+    rupiah(hargaSatuan),
+    rupiah(subtotal)
+  ];
+
+  const tinggi = Math.max(
+    38,
+    ...baris.map((v, j) =>
+      doc.heightOfString(v, {
+        width: widths[j] - 8,
+        font: "Helvetica",
+        fontSize: 7
+      }) + 12
+    )
+  );
+
+  const batasBawah = doc.page.height - 65;
+
+  if (doc.y + tinggi > batasBawah) {
+    doc.addPage();
+    doc.y = 145;
+    headerRAB();
+  }
+
+  const rowY = doc.y;
+
+  baris.forEach((v, j) => {
+    doc.font("Helvetica").fontSize(7).fillColor("#000000")
+      .text(v, x[j] + 3, rowY + 6, {
+        width: widths[j] - 8,
+        height: tinggi - 8
+      });
+  });
+
+  doc.rect(48, rowY, lebarTabel, tinggi)
+    .strokeColor("#BBBBBB").stroke();
+
+  doc.y = rowY + tinggi;
+});
+
+doc.moveDown(0.7);
+doc.font("Helvetica-Bold").fontSize(10)
+  .text("TOTAL RAB PERKIRAAN: " + rupiah(total), {
+    align: "right"
+  });
 // DOKUMENTASI FOTO LAPANGAN
 judulBagian("G. DOKUMENTASI KONDISI LAPANGAN");
 
