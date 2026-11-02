@@ -4625,40 +4625,46 @@ app.patch("/api/aspirasi/:id", requireAdmin, async (req, res) => {
 });
 
 
+
 app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
   try {
     const fs = require("fs");
+
     const rows = await supabaseRequest("aspirasi_warga", {
       query: "select=*&id=eq." + encodeURIComponent(req.params.id) + "&limit=1"
     });
 
     const a = Array.isArray(rows) ? rows[0] : null;
     if (!a) {
-      return res.status(404).json({ ok: false, message: "Aspirasi tidak ditemukan." });
+      return res.status(404).json({
+        ok: false,
+        message: "Aspirasi tidak ditemukan."
+      });
     }
 
     const warga = await namaPemilikAspirasi(a.warga_id);
     const d = a.dimensi || {};
     const rab = Array.isArray(a.rab) ? a.rab : [];
-    // Ambil dokumentasi foto aspirasi dari Supabase Storage
-const dokumentasi = a.realisasi?.dokumentasi || {};
+    const dokumentasi = a.realisasi?.dokumentasi || {};
 
-const fotoKondisiURL = await buatUrlFotoPrivat(
-  dokumentasi.foto_kondisi
-);
+    const fotoKondisiURL = await buatUrlFotoPrivat(
+      dokumentasi.foto_kondisi
+    );
+    const fotoPengukuranURL = await buatUrlFotoPrivat(
+      dokumentasi.foto_pengukuran
+    );
 
-const fotoPengukuranURL = await buatUrlFotoPrivat(
-  dokumentasi.foto_pengukuran
-);
-
-    const kopPath = path.join(__dirname, "contoh kop surat kosong tbk.png");
+    const kopPath = path.join(
+      __dirname,
+      "contoh kop surat kosong tbk.png"
+    );
     const pakaiKop = fs.existsSync(kopPath);
 
-   const doc = new PDFDocument({
-  size: "A4",
-  margin: 48,
-  bufferPages: true
-});
+    const doc = new PDFDocument({
+      size: "A4",
+      margin: 48,
+      bufferPages: true
+    });
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -4667,7 +4673,13 @@ const fotoPengukuranURL = await buatUrlFotoPrivat(
     );
     doc.pipe(res);
 
-    // KOP SURAT YANG SAMA DENGAN MENU SURAT
+    const KIRI = 48;
+    const KANAN = 48;
+    const LEBAR = doc.page.width - KIRI - KANAN;
+    const BATAS = doc.page.height - 55;
+    const ATAS = 145;
+    const satuan = d.satuan || "meter";
+
     function pasangKop() {
       if (pakaiKop) {
         doc.image(kopPath, 0, 0, {
@@ -4677,432 +4689,652 @@ const fotoPengukuranURL = await buatUrlFotoPrivat(
       } else {
         doc.save();
         doc.font("Helvetica-Bold").fontSize(15)
-          .text("TAMAN BALI KAHURIPAN", 48, 35, { align: "center" });
-        doc.fontSize(11).text("PENGURUS RT 004 / RW 01", { align: "center" });
+          .text("TAMAN BALI KAHURIPAN", KIRI, 35, {
+            width: LEBAR,
+            align: "center"
+          });
+        doc.fontSize(11)
+          .text("PENGURUS RT 004 / RW 01", {
+            width: LEBAR,
+            align: "center"
+          });
         doc.font("Helvetica").fontSize(9)
-          .text("Desa Sukahurip, Kecamatan Sukatani, Kabupaten Bekasi",
-            { align: "center" });
-        doc.moveTo(48, 105).lineTo(547, 105).lineWidth(1).stroke();
+          .text(
+            "Desa Sukahurip, Kecamatan Sukatani, Kabupaten Bekasi",
+            { width: LEBAR, align: "center" }
+          );
+        doc.moveTo(KIRI, 105)
+          .lineTo(doc.page.width - KANAN, 105)
+          .lineWidth(1)
+          .stroke();
         doc.restore();
       }
     }
 
+    function halamanBaru() {
+      doc.addPage();
+      doc.x = KIRI;
+      doc.y = ATAS;
+    }
+
+    doc.on("pageAdded", () => {
+      pasangKop();
+      doc.x = KIRI;
+      doc.y = ATAS;
+    });
+
     pasangKop();
-   doc.on("pageAdded", () => {
-  pasangKop();
-  doc.y = 145;
-});
-
-   // Area isi dokumen A4
-const MARGIN_KIRI = 48;
-const MARGIN_KANAN = 48;
-const LEBAR_ISI = doc.page.width - MARGIN_KIRI - MARGIN_KANAN;
-const BATAS_BAWAH = doc.page.height - 60;
-doc.x = MARGIN_KIRI;
-doc.y = 145;
-
-  function judulBagian(teks) {
-  const tinggiJudul = doc.heightOfString(teks, {
-    width: LEBAR_ISI,
-    font: "Helvetica-Bold",
-    fontSize: 11
-  });
-
-  if (doc.y + tinggiJudul + 25 > BATAS_BAWAH) {
-    doc.addPage();
-    doc.x = MARGIN_KIRI;
-    doc.y = 145;
-  }
-
-  doc.moveDown(0.5);
-  doc.x = MARGIN_KIRI;
-  doc.font("Helvetica-Bold")
-    .fontSize(11)
-    .fillColor("#17365D")
-    .text(teks, {
-      width: LEBAR_ISI,
-      align: "left"
-    });
-
-  doc.moveDown(0.3);
-  doc.fillColor("#000000");
-  doc.x = MARGIN_KIRI;
-}
-
-   function teks(label, isi) {
-  doc.x = MARGIN_KIRI;
-  doc.font("Helvetica-Bold").fontSize(9)
-    .text(label, { continued: true, width: LEBAR_ISI });
-
-  doc.font("Helvetica").fontSize(9)
-    .text(" " + (isi || "-"), {
-      width: LEBAR_ISI,
-      align: "left"
-    });
-
-  doc.x = MARGIN_KIRI;
-}
+    doc.x = KIRI;
+    doc.y = ATAS;
 
     function rupiah(nilai) {
       return "Rp " + Number(nilai || 0).toLocaleString("id-ID");
     }
 
+    function nilaiUkuran(nilai) {
+      if (
+        nilai === null ||
+        nilai === undefined ||
+        String(nilai).trim() === ""
+      ) {
+        return "Belum diukur";
+      }
+      return String(nilai) + " " + satuan;
+    }
+
+    function judul(teks) {
+      doc.moveDown(0.5);
+      doc.font("Helvetica-Bold")
+        .fontSize(11)
+        .fillColor("#17365D")
+        .text(teks, KIRI, doc.y, {
+          width: LEBAR
+        });
+      doc.moveDown(0.3);
+      doc.fillColor("#000000");
+    }
+
+    function teks(label, isi) {
+      doc.font("Helvetica-Bold").fontSize(9)
+        .text(label, {
+          continued: true,
+          width: LEBAR
+        });
+      doc.font("Helvetica").fontSize(9)
+        .text(" " + (isi || "-"), {
+          width: LEBAR,
+          lineGap: 2
+        });
+    }
+
+    function teksParagraf(isi) {
+      doc.font("Helvetica").fontSize(9)
+        .text(isi || "-", {
+          width: LEBAR,
+          align: "justify",
+          lineGap: 3
+        });
+    }
+
+    function garisTabel(y, tinggi, x, lebar) {
+      doc.rect(x, y, lebar, tinggi)
+        .lineWidth(0.5)
+        .strokeColor("#BBBBBB")
+        .stroke();
+    }
+
+    // ==================================================
+    // HALAMAN 1 - IDENTITAS, PERMOHONAN, DAN UKURAN
+    // ==================================================
+
     doc.font("Helvetica-Bold").fontSize(15)
-      .text("PROPOSAL ASPIRASI WARGA", { align: "center" });
+      .text("PROPOSAL ASPIRASI WARGA", {
+        width: LEBAR,
+        align: "center"
+      });
+
     doc.moveDown(0.3);
     doc.font("Helvetica").fontSize(9)
-      .text("Dokumen usulan untuk bahan peninjauan dan pertimbangan pihak kelurahan/desa.",
-        { align: "center" });
+      .text(
+        "Dokumen usulan untuk bahan peninjauan dan pertimbangan pemerintah desa/kelurahan.",
+        { width: LEBAR, align: "center" }
+      );
 
-    judulBagian("A. IDENTITAS DAN PERMOHONAN");
+    judul("A. IDENTITAS DAN PERMOHONAN");
     teks("Nomor usulan:", "ASP-" + a.id);
     teks("Judul:", a.judul);
     teks("Nama pengusul:", warga);
     teks("Kategori:", a.kategori);
     teks("Tingkat urgensi:", a.urgensi);
     teks("Lokasi:", a.lokasi);
-    teks("Tanggal pengajuan:", a.created_at
-      ? new Date(a.created_at).toLocaleDateString("id-ID")
-      : "-");
+    teks(
+      "Tanggal pengajuan:",
+      a.created_at
+        ? new Date(a.created_at).toLocaleDateString("id-ID")
+        : "-"
+    );
     teks("Status:", a.status);
 
-    judulBagian("B. LATAR BELAKANG DAN KONDISI LAPANGAN");
-    doc.font("Helvetica").fontSize(9)
-      .text(a.uraian || "-", { align: "justify", lineGap: 3 });
+    judul("B. LATAR BELAKANG DAN KONDISI LAPANGAN");
+    teksParagraf(a.uraian);
 
-   judulBagian("C. PERBANDINGAN UKURAN KONDISI DAN USULAN");
+    judul("C. PERBANDINGAN UKURAN KONDISI DAN USULAN");
 
-const satuan = d.satuan || "meter";
-const ukuran = [
-  ["Panjang", d.kondisi_panjang, d.usulan_panjang],
-  ["Lebar", d.kondisi_lebar, d.usulan_lebar],
-  ["Tinggi / kedalaman", d.kondisi_tinggi, d.usulan_tinggi]
-];
+    const ukuran = [
+      ["Panjang", d.kondisi_panjang, d.usulan_panjang],
+      ["Lebar", d.kondisi_lebar, d.usulan_lebar],
+      ["Tinggi / kedalaman", d.kondisi_tinggi, d.usulan_tinggi]
+    ];
 
-const tabelX = 48;
-const lebarKolom = [150, 170, 179];
-const tinggiHeader = 30;
-const tinggiBaris = 27;
+    const kolomUkuran = [145, 177, 177];
+    const tinggiHeader = 32;
+    const tinggiBaris = 34;
 
-function headerUkuran() {
-  const y = doc.y;
+    function headerUkuran() {
+      const y = doc.y;
+      let x = KIRI;
 
-  doc.rect(tabelX, y, 499, tinggiHeader)
-    .fill("#D9EAF7");
+      ["PARAMETER", "KONDISI SAAT INI", "UKURAN USULAN"]
+        .forEach((label, i) => {
+          doc.rect(x, y, kolomUkuran[i], tinggiHeader)
+            .fill("#D9EAF7");
+          doc.fillColor("#000000")
+            .font("Helvetica-Bold")
+            .fontSize(8)
+            .text(label, x + 5, y + 11, {
+              width: kolomUkuran[i] - 10,
+              align: "center"
+            });
+          x += kolomUkuran[i];
+        });
 
-  doc.fillColor("#000000")
-    .font("Helvetica-Bold")
-    .fontSize(8);
-
-  doc.text("PARAMETER", tabelX + 7, y + 10, {
-    width: lebarKolom[0] - 10
-  });
-
-  doc.text("KONDISI SAAT INI", tabelX + lebarKolom[0] + 5, y + 10, {
-    width: lebarKolom[1] - 10
-  });
-
-  doc.text("UKURAN USULAN",
-    tabelX + lebarKolom[0] + lebarKolom[1] + 5,
-    y + 10,
-    { width: lebarKolom[2] - 10 }
-  );
-
-  doc.y = y + tinggiHeader;
-}
-
-headerUkuran();
-
-ukuran.forEach((item) => {
-  if (doc.y + tinggiBaris > doc.page.height - 65) {
-    doc.addPage();
-    doc.y = 145;
-    headerUkuran();
-  }
-
-  const y = doc.y;
-
-  doc.font("Helvetica").fontSize(9).fillColor("#000000");
-
-  doc.text(item[0], tabelX + 7, y + 8, {
-    width: lebarKolom[0] - 10
-  });
-
-  doc.text(
-    (item[1] ?? "-") + " " + satuan,
-    tabelX + lebarKolom[0] + 5,
-    y + 8,
-    { width: lebarKolom[1] - 10 }
-  );
-
-  doc.text(
-    (item[2] ?? "-") + " " + satuan,
-    tabelX + lebarKolom[0] + lebarKolom[1] + 5,
-    y + 8,
-    { width: lebarKolom[2] - 10 }
-  );
-
-  doc.rect(tabelX, y, 499, tinggiBaris)
-    .strokeColor("#BBBBBB")
-    .stroke();
-
-  doc.y = y + tinggiBaris;
-});
-    // Sketsa penampang: skematis, bukan gambar hasil survei
-    judulBagian("D. SKETSA PENAMPANG SALURAN (ILUSTRASI)");
-    doc.font("Helvetica-Oblique").fontSize(8)
-      .text("Sketsa berikut hanya ilustrasi berdasarkan ukuran yang dimasukkan.");
-    doc.moveDown(0.5);
-
-    function gambarPenampang(x, y, lebar, tinggi, label, ukuranLebar, ukuranTinggi) {
-      const skala = 35;
-      const w = Math.max(35, Math.min(Number(lebar || 0) * skala, 130));
-      const h = Math.max(25, Math.min(Number(tinggi || 0) * skala, 85));
-
-      doc.font("Helvetica-Bold").fontSize(9)
-        .text(label, x, y - 18, { width: 150, align: "center" });
-
-      doc.rect(x + 15, y, w, h).lineWidth(1.2).stroke();
-      doc.moveTo(x + 15, y + 5).lineTo(x + 15 + w, y + 5).stroke();
-
-      doc.font("Helvetica").fontSize(8)
-        .text("Lebar: " + (ukuranLebar ?? "-") + " " + satuan,
-          x - 5, y + h + 6, { width: w + 40, align: "center" });
-      doc.text("Kedalaman: " + (ukuranTinggi ?? "-") + " " + satuan,
-        x - 5, y + h + 18, { width: w + 40, align: "center" });
+      doc.y = y + tinggiHeader;
     }
 
-    const posisiY = doc.y + 25;
-    gambarPenampang(105, posisiY, d.kondisi_lebar, d.kondisi_tinggi,
-      "KONDISI SAAT INI", d.kondisi_lebar, d.kondisi_tinggi);
-    gambarPenampang(340, posisiY, d.usulan_lebar, d.usulan_tinggi,
-      "UKURAN USULAN", d.usulan_lebar, d.usulan_tinggi);
+    headerUkuran();
 
-    doc.y = posisiY + 145;
-    teks("Panjang kondisi saat ini:", (d.kondisi_panjang ?? "-") + " " + satuan);
-    teks("Panjang usulan:", (d.usulan_panjang ?? "-") + " " + satuan);
+    ukuran.forEach((item) => {
+      const y = doc.y;
+      let x = KIRI;
+      const isi = [
+        item[0],
+        nilaiUkuran(item[1]),
+        nilaiUkuran(item[2])
+      ];
 
-    judulBagian("E. SOLUSI YANG DIUSULKAN");
-    doc.font("Helvetica").fontSize(9)
-      .text(a.solusi_usulan || "-", { align: "justify", lineGap: 3 });
-
-    judulBagian("F. RENCANA ANGGARAN BIAYA (RAB)");
-
-    if (!rab.length) {
-      doc.font("Helvetica").fontSize(9)
-        .text("RAB belum disusun atau belum diverifikasi oleh pengurus RT.");
-    } else {
-   const lebarTabel = LEBAR_ISI;
-const x = [
-  MARGIN_KIRI,
-  MARGIN_KIRI + 25,
-  MARGIN_KIRI + 125,
-  MARGIN_KIRI + 225,
-  MARGIN_KIRI + 275,
-  MARGIN_KIRI + 365
-];
-const widths = [25, 100, 100, 50, 90, 109];
-function headerRAB() {
-  const y = doc.y;
-
-  doc.rect(48, y, lebarTabel, 30).fill("#D9EAF7");
-  doc.fillColor("#000000").font("Helvetica-Bold").fontSize(7);
-
-  ["No", "Item / spesifikasi", "Kegunaan", "Volume", "Harga satuan", "Jumlah"]
-    .forEach((v, i) => {
-      doc.text(v, x[i] + 3, y + 10, {
-        width: widths[i] - 6,
-        align: "left"
+      isi.forEach((v, i) => {
+        garisTabel(y, tinggiBaris, x, kolomUkuran[i]);
+        doc.font("Helvetica").fontSize(8)
+          .fillColor("#000000")
+          .text(v, x + 5, y + 10, {
+            width: kolomUkuran[i] - 10,
+            align: i === 0 ? "left" : "center"
+          });
+        x += kolomUkuran[i];
       });
+
+      doc.y = y + tinggiBaris;
     });
 
-  doc.y = y + 30;
-}
+    doc.moveDown(0.5);
+    doc.font("Helvetica-Oblique").fontSize(8)
+      .text(
+        "Catatan: Ukuran kondisi lama dan usulan harus diverifikasi melalui pengukuran lapangan. Data yang belum diisi tidak dianggap sebagai hasil pengukuran.",
+        { width: LEBAR, lineGap: 2 }
+      );
 
-headerRAB();
-let total = 0;
+    // ==================================================
+    // HALAMAN 2 - SKETSA DAN DOKUMENTASI
+    // ==================================================
 
-rab.forEach((item, i) => {
-  const volume = Number(item.volume || 0);
-  const hargaSatuan = Number(item.harga_satuan || 0);
-  const subtotal = Number(item.total || (volume * hargaSatuan));
-  total += subtotal;
+    halamanBaru();
 
-  const baris = [
-    String(i + 1),
-    (item.item || "-") + "\n" + (item.spesifikasi || "-"),
-    item.tujuan || "-",
-    String(item.volume || 0) + " " + (item.satuan || ""),
-    rupiah(hargaSatuan),
-    rupiah(subtotal)
-  ];
-
-  const tinggi = Math.max(
-    38,
-    ...baris.map((v, j) =>
-      doc.heightOfString(v, {
-        width: widths[j] - 8,
-        font: "Helvetica",
-        fontSize: 7
-      }) + 12
-    )
-  );
-
-  const batasBawah = doc.page.height - 65;
-
-  if (doc.y + tinggi > batasBawah) {
-    doc.addPage();
-    doc.y = 145;
-    headerRAB();
-  }
-
-  const rowY = doc.y;
-
-  baris.forEach((v, j) => {
-    doc.font("Helvetica").fontSize(7).fillColor("#000000")
-      .text(v, x[j] + 3, rowY + 6, {
-        width: widths[j] - 8,
-        height: tinggi - 8
-      });
-  });
-
-  doc.rect(48, rowY, lebarTabel, tinggi)
-    .strokeColor("#BBBBBB").stroke();
-
-  doc.y = rowY + tinggi;
-});
-
-doc.moveDown(0.7);
-doc.font("Helvetica-Bold").fontSize(10)
-  .text("TOTAL RAB PERKIRAAN: " + rupiah(total), {
-    align: "right"
-  });
-}
-// DOKUMENTASI FOTO LAPANGAN
-judulBagian("G. DOKUMENTASI KONDISI LAPANGAN");
-
-async function pasangFotoDokumentasi(url, judul) {
-  doc.font("Helvetica-Bold").fontSize(9).text(judul);
-  doc.moveDown(0.3);
-
-  if (url) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error("Foto gagal diambil");
-
-      const buffer = Buffer.from(await response.arrayBuffer());
-
-      if (doc.y + 190 > doc.page.height - 65) {
-        doc.addPage();
-        doc.y = 145;
-      }
-
-      doc.image(buffer, 90, doc.y, {
-        fit: [400, 155],
+    doc.font("Helvetica-Bold").fontSize(13)
+      .text("SKETSA DAN DOKUMENTASI LAPANGAN", {
+        width: LEBAR,
         align: "center"
       });
 
-      doc.y += 170;
-    } catch (error) {
+    judul("D. SKETSA PENAMPANG SALURAN");
+
+    doc.font("Helvetica-Oblique").fontSize(8)
+      .text(
+        "Sketsa bersifat ilustrasi dan bukan gambar teknis hasil survei.",
+        { width: LEBAR }
+      );
+
+    doc.moveDown(1);
+
+    function gambarPenampang(x, y, label, lebar, tinggi) {
+      const tersedia =
+        lebar !== null &&
+        lebar !== undefined &&
+        String(lebar).trim() !== "" &&
+        tinggi !== null &&
+        tinggi !== undefined &&
+        String(tinggi).trim() !== "";
+
+      doc.font("Helvetica-Bold").fontSize(9)
+        .text(label, x, y, {
+          width: 210,
+          align: "center"
+        });
+
+      if (!tersedia) {
+        doc.rect(x + 25, y + 25, 160, 75)
+          .lineWidth(0.8)
+          .strokeColor("#999999")
+          .stroke();
+        doc.font("Helvetica-Oblique").fontSize(8)
+          .text("Sketsa belum dapat dibuat\nUkuran belum lengkap", x + 30, y + 52, {
+            width: 150,
+            align: "center"
+          });
+        return;
+      }
+
+      const w = Math.max(
+        35,
+        Math.min(Number(lebar) * 45, 150)
+      );
+      const h = Math.max(
+        25,
+        Math.min(Number(tinggi) * 45, 85)
+      );
+
+      doc.rect(x + 25, y + 25, w, h)
+        .lineWidth(1.2)
+        .strokeColor("#000000")
+        .stroke();
+
       doc.font("Helvetica").fontSize(8)
-        .text("Foto tidak dapat dimuat. Silakan periksa dokumentasi di aplikasi.");
-      doc.moveDown(0.5);
+        .text("Lebar: " + nilaiUkuran(lebar), x, y + 115, {
+          width: 210,
+          align: "center"
+        });
+      doc.text("Kedalaman: " + nilaiUkuran(tinggi), x, y + 130, {
+        width: 210,
+        align: "center"
+      });
     }
-  } else {
+
+    gambarPenampang(
+      55,
+      doc.y,
+      "KONDISI SAAT INI",
+      d.kondisi_lebar,
+      d.kondisi_tinggi
+    );
+
+    gambarPenampang(
+      320,
+      doc.y,
+      "UKURAN USULAN",
+      d.usulan_lebar,
+      d.usulan_tinggi
+    );
+
+    doc.y += 185;
+
+    teks("Panjang kondisi saat ini:", nilaiUkuran(d.kondisi_panjang));
+    teks("Panjang usulan:", nilaiUkuran(d.usulan_panjang));
+
+    judul("E. SOLUSI YANG DIUSULKAN");
+    teksParagraf(a.solusi_usulan);
+
+    judul("F. DOKUMENTASI KONDISI LAPANGAN");
+
+    async function pasangFoto(url, label) {
+      if (doc.y + 205 > BATAS) {
+        halamanBaru();
+      }
+
+      doc.font("Helvetica-Bold").fontSize(9)
+        .text(label, KIRI, doc.y, { width: LEBAR });
+      doc.moveDown(0.3);
+
+      if (!url) {
+        doc.font("Helvetica-Oblique").fontSize(8)
+          .text("Foto dokumentasi belum tersedia.", {
+            width: LEBAR
+          });
+        doc.moveDown(0.8);
+        return;
+      }
+
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error("Foto gagal diambil");
+        }
+
+        const buffer = Buffer.from(await response.arrayBuffer());
+
+        if (doc.y + 175 > BATAS) {
+          halamanBaru();
+        }
+
+        const y = doc.y;
+        doc.image(buffer, KIRI + 45, y, {
+          fit: [LEBAR - 90, 145],
+          align: "center"
+        });
+        doc.y = y + 160;
+      } catch (error) {
+        doc.font("Helvetica-Oblique").fontSize(8)
+          .text(
+            "Foto tersimpan tetapi tidak dapat dimuat. Periksa kembali dokumentasi di aplikasi.",
+            { width: LEBAR }
+          );
+        doc.moveDown(0.5);
+      }
+    }
+
+    await pasangFoto(
+      fotoKondisiURL,
+      "1. Foto kondisi sebelum perbaikan"
+    );
+
+    await pasangFoto(
+      fotoPengukuranURL,
+      "2. Foto pengukuran lapangan"
+    );
+
+    // ==================================================
+    // HALAMAN 3 - RENCANA ANGGARAN BIAYA
+    // ==================================================
+
+    halamanBaru();
+
+    doc.font("Helvetica-Bold").fontSize(13)
+      .text("RENCANA ANGGARAN BIAYA", {
+        width: LEBAR,
+        align: "center"
+      });
+
+    doc.moveDown(0.3);
     doc.font("Helvetica").fontSize(8)
-      .text("Foto dokumentasi belum tersedia.");
-    doc.moveDown(0.5);
-  }
-}
+      .text(
+        "Rincian biaya berikut mengikuti data yang dimasukkan pada aplikasi dan harus diverifikasi berdasarkan survei serta harga setempat.",
+        { width: LEBAR, align: "justify" }
+      );
 
-await pasangFotoDokumentasi(
-  fotoKondisiURL,
-  "1. Foto Kondisi Sebelum Perbaikan"
-);
+    judul("G. RINCIAN RENCANA ANGGARAN BIAYA");
 
-await pasangFotoDokumentasi(
-  fotoPengukuranURL,
-  "2. Foto Pengukuran Lapangan"
-);
-    judulBagian("H. RENCANA PELAKSANAAN DAN TINDAKAN");
-    const rencanaKerja = a.rencana_kerja ||
-  "Tahapan, jadwal, penanggung jawab, dan metode pelaksanaan perlu ditetapkan setelah survei dan persetujuan pihak terkait.";
+    if (!rab.length) {
+      doc.font("Helvetica-Oblique").fontSize(9)
+        .text(
+          "RAB belum disusun. Rincian pekerjaan, volume, dan harga satuan perlu dilengkapi setelah survei lapangan.",
+          { width: LEBAR, lineGap: 3 }
+        );
+    } else {
+      const kolom = [24, 112, 94, 58, 100, 111];
+      const totalLebar = kolom.reduce((sum, v) => sum + v, 0);
 
-const tinggiRencana = doc.heightOfString(rencanaKerja, {
-  width: LEBAR_ISI,
-  font: "Helvetica",
-  fontSize: 9,
-  lineGap: 3
-});
+      const judulKolom = [
+        "No",
+        "Item / spesifikasi",
+        "Kegunaan",
+        "Volume",
+        "Harga satuan",
+        "Jumlah"
+      ];
 
-if (doc.y + tinggiRencana > BATAS_BAWAH) {
-  doc.addPage();
-  doc.x = MARGIN_KIRI;
-  doc.y = 145;
-}
+      function headerRAB() {
+        const y = doc.y;
+        let x = KIRI;
 
-doc.font("Helvetica")
-  .fontSize(9)
-  .text(rencanaKerja, {
-    width: LEBAR_ISI,
-    align: "left",
-    lineGap: 3
-  });
+        judulKolom.forEach((label, i) => {
+          doc.rect(x, y, kolom[i], 34)
+            .fill("#D9EAF7");
+          doc.fillColor("#000000")
+            .font("Helvetica-Bold")
+            .fontSize(7)
+            .text(label, x + 3, y + 10, {
+              width: kolom[i] - 6,
+              align: "center"
+            });
+          x += kolom[i];
+        });
 
-judulBagian("I. CATATAN DAN VERIFIKASI");
+        doc.y = y + 34;
+      }
+
+      headerRAB();
+
+      let total = 0;
+
+      for (let i = 0; i < rab.length; i++) {
+        const item = rab[i] || {};
+        const volume = Number(item.volume || 0);
+        const harga = Number(item.harga_satuan || 0);
+        const subtotal =
+          item.total !== null &&
+          item.total !== undefined &&
+          item.total !== ""
+            ? Number(item.total)
+            : volume * harga;
+
+        total += Number.isFinite(subtotal) ? subtotal : 0;
+
+        const isi = [
+          String(i + 1),
+          (item.item || "-") +
+            (item.spesifikasi ? "\n" + item.spesifikasi : ""),
+          item.tujuan || "-",
+          String(item.volume ?? "-") + " " + (item.satuan || ""),
+          rupiah(harga),
+          rupiah(subtotal)
+        ];
+
+        const tinggi = Math.max(
+          42,
+          ...isi.map((v, j) => {
+            doc.font("Helvetica").fontSize(7);
+            return doc.heightOfString(String(v), {
+              width: kolom[j] - 8
+            }) + 12;
+          })
+        );
+
+        if (doc.y + tinggi + 5 > BATAS) {
+          halamanBaru();
+          headerRAB();
+        }
+
+        const y = doc.y;
+        let x = KIRI;
+
+        isi.forEach((v, j) => {
+          garisTabel(y, tinggi, x, kolom[j]);
+          doc.font("Helvetica").fontSize(7)
+            .fillColor("#000000")
+            .text(String(v), x + 4, y + 6, {
+              width: kolom[j] - 8,
+              height: tinggi - 10,
+              align: j === 0 || j === 3 ? "center" : "left"
+            });
+          x += kolom[j];
+        });
+
+        doc.y = y + tinggi;
+      }
+
+      doc.moveDown(0.7);
+      doc.font("Helvetica-Bold").fontSize(10)
+        .text(
+          "TOTAL RAB PERKIRAAN: " + rupiah(total),
+          KIRI,
+          doc.y,
+          { width: totalLebar, align: "right" }
+        );
+    }
+
+    doc.moveDown(1);
+    doc.font("Helvetica-Oblique").fontSize(8)
+      .text(
+        "Catatan: RAB ini bukan penetapan anggaran. Volume dan harga harus diperiksa melalui survei lapangan serta disesuaikan dengan harga bahan dan upah setempat.",
+        { width: LEBAR, align: "justify", lineGap: 2 }
+      );
+
+    // ==================================================
+    // HALAMAN 4 - PELAKSANAAN DAN PENGESAHAN
+    // ==================================================
+
+    halamanBaru();
+
+    doc.font("Helvetica-Bold").fontSize(13)
+      .text("RENCANA PELAKSANAAN DAN PENGESAHAN", {
+        width: LEBAR,
+        align: "center"
+      });
+
+    judul("H. RENCANA PELAKSANAAN DAN TINDAKAN");
+
+    const rencanaKerja = (
+      a.rencana_kerja ||
+      "1. Melakukan survei dan pengukuran kondisi lapangan.\n" +
+      "2. Memeriksa kebutuhan serta kondisi saluran.\n" +
+      "3. Menyusun gambar teknis dan spesifikasi pekerjaan.\n" +
+      "4. Menyusun RAB berdasarkan volume dan harga setempat.\n" +
+      "5. Mengajukan proposal kepada pemerintah desa/kelurahan.\n" +
+      "6. Pelaksanaan dilakukan setelah memperoleh persetujuan dan sumber anggaran.\n" +
+      "7. Melakukan pemeriksaan hasil pekerjaan dan dokumentasi."
+    ).replace(/\*\*/g, "");
+
     doc.font("Helvetica").fontSize(9)
-      .text("Dokumen ini merupakan konsep usulan warga. Data ukuran, volume pekerjaan, harga satuan, dan kondisi lokasi harus diperiksa melalui survei lapangan. Dokumen ini bukan bukti persetujuan anggaran atau perintah pelaksanaan pekerjaan.",
-        { align: "justify", lineGap: 3 });
+      .text(rencanaKerja, {
+        width: LEBAR,
+        lineGap: 4
+      });
 
- // TANDA TANGAN
-const tinggiTandaTangan = 130;
+    judul("I. CATATAN DAN VERIFIKASI");
 
-if (doc.y + tinggiTandaTangan > BATAS_BAWAH) {
-  doc.addPage();
+    teksParagraf(
+      "Dokumen ini merupakan usulan warga. Ukuran, volume pekerjaan, harga satuan, kondisi lokasi, dan kebutuhan teknis wajib diperiksa melalui survei lapangan. Dokumen ini bukan bukti persetujuan anggaran atau perintah pelaksanaan pekerjaan."
+    );
+
+    doc.moveDown(1);
+    doc.font("Helvetica-Bold").fontSize(10)
+      .text("J. HALAMAN PENGESAHAN", {
+        width: LEBAR,
+        align: "center"
+      });
+
+    doc.moveDown(0.3);
+    doc.font("Helvetica").fontSize(8)
+      .text(
+        "Proposal ini disampaikan untuk diperiksa, dipertimbangkan, dan ditindaklanjuti sesuai kewenangan serta ketentuan yang berlaku.",
+        { width: LEBAR, align: "center" }
+      );
+
+    doc.moveDown(1.5);
+
+   const lebarTTD = 155;
+const jarak = (LEBAR - (lebarTTD * 3)) / 2;
+
+const posisi = [
+  KIRI,
+  KIRI + lebarTTD + jarak,
+  KIRI + (lebarTTD + jarak) * 2
+];
+
+const jabatan = [
+  "Pengusul",
+  "Ketua RT 004 / RW 01",
+  "Kepala Desa / Lurah"
+];
+
+const yTanggal = doc.y;
+const yJabatan = yTanggal + 16;
+const yTandaTangan = yTanggal + 105;
+
+for (let i = 0; i < 3; i++) {
+  doc.font("Helvetica").fontSize(8)
+    .text("Bekasi, ______________", posisi[i], yTanggal, {
+      width: lebarTTD,
+      align: "center"
+    });
+
+  doc.font("Helvetica-Bold").fontSize(8)
+    .text(jabatan[i], posisi[i], yJabatan, {
+      width: lebarTTD,
+      align: "center"
+    });
+
+  doc.font("Helvetica").fontSize(8)
+    .text("(_____________________)", posisi[i], yTandaTangan, {
+      width: lebarTTD,
+      align: "center"
+    });
 }
 
-const lebarKolomTTD = 220;
-const posisiXTTD = doc.page.width - MARGIN_KANAN - lebarKolomTTD;
+doc.y = yTandaTangan + 25;
 
-doc.moveDown(1);
-doc.font("Helvetica").fontSize(9)
-  .text("Bekasi, __________________", posisiXTTD, doc.y, {
-    width: lebarKolomTTD,
-    align: "center"
-  });
+doc.font("Helvetica-Oblique").fontSize(8)
+  .text(
+    "Kolom tanda tangan dan persetujuan diisi oleh pihak terkait setelah pemeriksaan dan proses persetujuan.",
+    { width: LEBAR, align: "center" }
+  );
+     const lebarTTD = 155;
+const jarak = (LEBAR - (lebarTTD * 3)) / 2;
 
-doc.moveDown(0.3);
-doc.text("Pengurus RT 004 / RW 01", posisiXTTD, doc.y, {
-  width: lebarKolomTTD,
-  align: "center"
-});
+const posisi = [
+  KIRI,
+  KIRI + lebarTTD + jarak,
+  KIRI + (lebarTTD + jarak) * 2
+];
 
-doc.moveDown(3);
-doc.text("(____________________________)", posisiXTTD, doc.y, {
-  width: lebarKolomTTD,
-  align: "center"
-});
+const jabatan = [
+  "Pengusul",
+  "Ketua RT 004 / RW 01",
+  "Kepala Desa / Lurah"
+];
 
-doc.text("Ketua RT", posisiXTTD, doc.y, {
-  width: lebarKolomTTD,
-  align: "center"
-});
+const yTanggal = doc.y;
+const yJabatan = yTanggal + 16;
+const yTandaTangan = yTanggal + 105;
 
-doc.moveDown(1);
-doc.x = MARGIN_KIRI;
-doc.font("Helvetica-Bold").fontSize(8)
-  .text("Catatan: Tanda tangan dibubuhkan setelah verifikasi dan persetujuan.", {
-    width: LEBAR_ISI,
-    align: "left"
-  });
+for (let i = 0; i < 3; i++) {
+  doc.font("Helvetica").fontSize(8)
+    .text("Bekasi, ______________", posisi[i], yTanggal, {
+      width: lebarTTD,
+      align: "center"
+    });
+
+  doc.font("Helvetica-Bold").fontSize(8)
+    .text(jabatan[i], posisi[i], yJabatan, {
+      width: lebarTTD,
+      align: "center"
+    });
+
+  doc.font("Helvetica").fontSize(8)
+    .text("(_____________________)", posisi[i], yTandaTangan, {
+      width: lebarTTD,
+      align: "center"
+    });
+}
+
+doc.y = yTandaTangan + 25;
+
+doc.font("Helvetica-Oblique").fontSize(8)
+  .text(
+    "Kolom tanda tangan dan persetujuan diisi oleh pihak terkait setelah pemeriksaan dan proses persetujuan.",
+    { width: LEBAR, align: "center" }
+  );
+
 doc.end();
+
   } catch (error) {
     console.error("ASPIRASI PDF ERROR:", error?.message || error);
+
     if (!res.headersSent) {
       res.status(500).json({
         ok: false,
         message: "Gagal membuat PDF aspirasi."
       });
+    } else {
+      res.end();
     }
   }
 });
