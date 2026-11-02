@@ -4693,22 +4693,55 @@ const fotoPengukuranURL = await buatUrlFotoPrivat(
   doc.y = 145;
 });
 
-    // Isi dokumen dimulai di bawah kop
-    doc.y = 135;
+   // Area isi dokumen A4
+const MARGIN_KIRI = 48;
+const MARGIN_KANAN = 48;
+const LEBAR_ISI = doc.page.width - MARGIN_KIRI - MARGIN_KANAN;
+const BATAS_BAWAH = doc.page.height - 60;
+doc.x = MARGIN_KIRI;
+doc.y = 145;
 
-    function judulBagian(teks) {
-      if (doc.y > 700) doc.addPage();
-      doc.moveDown(0.6);
-      doc.font("Helvetica-Bold").fontSize(11).fillColor("#17365D")
-        .text(teks, { underline: false });
-      doc.moveDown(0.3);
-      doc.fillColor("#000000");
-    }
+  function judulBagian(teks) {
+  const tinggiJudul = doc.heightOfString(teks, {
+    width: LEBAR_ISI,
+    font: "Helvetica-Bold",
+    fontSize: 11
+  });
 
-    function teks(label, isi) {
-      doc.font("Helvetica-Bold").fontSize(9).text(label, { continued: true });
-      doc.font("Helvetica").text(" " + (isi || "-"));
-    }
+  if (doc.y + tinggiJudul + 25 > BATAS_BAWAH) {
+    doc.addPage();
+    doc.x = MARGIN_KIRI;
+    doc.y = 145;
+  }
+
+  doc.moveDown(0.5);
+  doc.x = MARGIN_KIRI;
+  doc.font("Helvetica-Bold")
+    .fontSize(11)
+    .fillColor("#17365D")
+    .text(teks, {
+      width: LEBAR_ISI,
+      align: "left"
+    });
+
+  doc.moveDown(0.3);
+  doc.fillColor("#000000");
+  doc.x = MARGIN_KIRI;
+}
+
+   function teks(label, isi) {
+  doc.x = MARGIN_KIRI;
+  doc.font("Helvetica-Bold").fontSize(9)
+    .text(label, { continued: true, width: LEBAR_ISI });
+
+  doc.font("Helvetica").fontSize(9)
+    .text(" " + (isi || "-"), {
+      width: LEBAR_ISI,
+      align: "left"
+    });
+
+  doc.x = MARGIN_KIRI;
+}
 
     function rupiah(nilai) {
       return "Rp " + Number(nilai || 0).toLocaleString("id-ID");
@@ -4859,10 +4892,16 @@ ukuran.forEach((item) => {
       doc.font("Helvetica").fontSize(9)
         .text("RAB belum disusun atau belum diverifikasi oleh pengurus RT.");
     } else {
-      const x = [48, 75, 190, 305, 355, 445];
-const widths = [27, 115, 115, 50, 90, 102];
-const lebarTabel = 499;
-
+   const lebarTabel = LEBAR_ISI;
+const x = [
+  MARGIN_KIRI,
+  MARGIN_KIRI + 25,
+  MARGIN_KIRI + 125,
+  MARGIN_KIRI + 225,
+  MARGIN_KIRI + 275,
+  MARGIN_KIRI + 365
+];
+const widths = [25, 100, 100, 50, 90, 109];
 function headerRAB() {
   const y = doc.y;
 
@@ -4986,60 +5025,76 @@ await pasangFotoDokumentasi(
   "2. Foto Pengukuran Lapangan"
 );
     judulBagian("H. RENCANA PELAKSANAAN DAN TINDAKAN");
-    doc.font("Helvetica").fontSize(9)
-      .text(a.rencana_kerja ||
-        "Tahapan, jadwal, penanggung jawab, dan metode pelaksanaan perlu ditetapkan setelah survei dan persetujuan pihak terkait.",
-        { align: "justify", lineGap: 3 });
+    const rencanaKerja = a.rencana_kerja ||
+  "Tahapan, jadwal, penanggung jawab, dan metode pelaksanaan perlu ditetapkan setelah survei dan persetujuan pihak terkait.";
+
+const tinggiRencana = doc.heightOfString(rencanaKerja, {
+  width: LEBAR_ISI,
+  font: "Helvetica",
+  fontSize: 9,
+  lineGap: 3
+});
+
+if (doc.y + tinggiRencana > BATAS_BAWAH) {
+  doc.addPage();
+  doc.x = MARGIN_KIRI;
+  doc.y = 145;
+}
+
+doc.font("Helvetica")
+  .fontSize(9)
+  .text(rencanaKerja, {
+    width: LEBAR_ISI,
+    align: "left",
+    lineGap: 3
+  });
 
 judulBagian("I. CATATAN DAN VERIFIKASI");
     doc.font("Helvetica").fontSize(9)
       .text("Dokumen ini merupakan konsep usulan warga. Data ukuran, volume pekerjaan, harga satuan, dan kondisi lokasi harus diperiksa melalui survei lapangan. Dokumen ini bukan bukti persetujuan anggaran atau perintah pelaksanaan pekerjaan.",
         { align: "justify", lineGap: 3 });
 
-   // TANDA TANGAN — dijaga agar tetap dalam satu halaman
-const tinggiTandaTangan = 155;
-const batasBawah = doc.page.height - 55;
+ // TANDA TANGAN
+const tinggiTandaTangan = 130;
 
-if (doc.y + tinggiTandaTangan > batasBawah) {
+if (doc.y + tinggiTandaTangan > BATAS_BAWAH) {
   doc.addPage();
-  doc.y = 145;
-} else {
-  doc.moveDown(1.5);
 }
 
+const lebarKolomTTD = 220;
+const posisiXTTD = doc.page.width - MARGIN_KANAN - lebarKolomTTD;
+
+doc.moveDown(1);
 doc.font("Helvetica").fontSize(9)
-  .text("Bekasi, __________________", 330, doc.y, {
-    width: 210,
+  .text("Bekasi, __________________", posisiXTTD, doc.y, {
+    width: lebarKolomTTD,
     align: "center"
   });
 
 doc.moveDown(0.3);
-doc.text("Pengurus RT 004 / RW 01", {
-  width: 210,
-  align: "center",
-  indent: 330
+doc.text("Pengurus RT 004 / RW 01", posisiXTTD, doc.y, {
+  width: lebarKolomTTD,
+  align: "center"
 });
 
 doc.moveDown(3);
-doc.text("(____________________________)", {
-  width: 210,
-  align: "center",
-  indent: 330
+doc.text("(____________________________)", posisiXTTD, doc.y, {
+  width: lebarKolomTTD,
+  align: "center"
 });
 
-doc.text("Ketua RT", {
-  width: 210,
-  align: "center",
-  indent: 330
+doc.text("Ketua RT", posisiXTTD, doc.y, {
+  width: lebarKolomTTD,
+  align: "center"
 });
 
 doc.moveDown(1);
+doc.x = MARGIN_KIRI;
 doc.font("Helvetica-Bold").fontSize(8)
   .text("Catatan: Tanda tangan dibubuhkan setelah verifikasi dan persetujuan.", {
-    width: 499,
+    width: LEBAR_ISI,
     align: "left"
   });
-
 doc.end();
   } catch (error) {
     console.error("ASPIRASI PDF ERROR:", error?.message || error);
