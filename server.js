@@ -4938,6 +4938,7 @@ doc.font("Helvetica-Bold").fontSize(10)
   .text("TOTAL RAB PERKIRAAN: " + rupiah(total), {
     align: "right"
   });
+}
 // DOKUMENTASI FOTO LAPANGAN
 judulBagian("G. DOKUMENTASI KONDISI LAPANGAN");
 
