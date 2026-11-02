@@ -4640,15 +4640,25 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     const warga = await namaPemilikAspirasi(a.warga_id);
     const d = a.dimensi || {};
     const rab = Array.isArray(a.rab) ? a.rab : [];
+    // Ambil dokumentasi foto aspirasi dari Supabase Storage
+const dokumentasi = a.realisasi?.dokumentasi || {};
+
+const fotoKondisiURL = await buatUrlFotoPrivat(
+  dokumentasi.foto_kondisi
+);
+
+const fotoPengukuranURL = await buatUrlFotoPrivat(
+  dokumentasi.foto_pengukuran
+);
 
     const kopPath = path.join(__dirname, "contoh kop surat kosong tbk.png");
     const pakaiKop = fs.existsSync(kopPath);
 
-    const doc = new PDFDocument({
-      size: "A4",
-      margins: { top: 145, bottom: 55, left: 48, right: 48 },
-      bufferPages: true
-    });
+   const doc = new PDFDocument({
+  size: "A4",
+  margin: 48,
+  bufferPages: true
+});
 
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
@@ -4809,8 +4819,11 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       let total = 0;
 
       rab.forEach((item, i) => {
-        const subtotal = Number(item.total || 0);
-        total += subtotal;
+     const volume = Number(item.volume || 0);
+const hargaSatuan = Number(item.harga_satuan || 0);
+
+const subtotal = Number(item.total || (volume * hargaSatuan));
+total += subtotal;
 
         const y = doc.y;
         const baris = [
@@ -4831,11 +4844,13 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
           }) + 10)
         );
 
-        if (y + tinggi > 730) {
-          doc.addPage();
-          doc.y = 135;
-          headerRAB();
-        }
+      const batasBawah = doc.page.height - 65;
+
+if (doc.y + tinggi > batasBawah) {
+  doc.addPage();
+  doc.y = 145;
+  headerRAB();
+}
 
         const rowY = doc.y;
         baris.forEach((v, j) => {
@@ -4853,27 +4868,108 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       doc.font("Helvetica-Bold").fontSize(10)
         .text("TOTAL RAB PERKIRAAN: " + rupiah(total), { align: "right" });
     }
+// DOKUMENTASI FOTO LAPANGAN
+judulBagian("G. DOKUMENTASI KONDISI LAPANGAN");
 
-    judulBagian("G. RENCANA PELAKSANAAN DAN TINDAKAN");
+async function pasangFotoDokumentasi(url, judul) {
+  doc.font("Helvetica-Bold").fontSize(9).text(judul);
+  doc.moveDown(0.3);
+
+  if (url) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Foto gagal diambil");
+
+      const buffer = Buffer.from(await response.arrayBuffer());
+
+      if (doc.y + 190 > doc.page.height - 65) {
+        doc.addPage();
+        doc.y = 145;
+      }
+
+      doc.image(buffer, 90, doc.y, {
+        fit: [400, 155],
+        align: "center"
+      });
+
+      doc.y += 170;
+    } catch (error) {
+      doc.font("Helvetica").fontSize(8)
+        .text("Foto tidak dapat dimuat. Silakan periksa dokumentasi di aplikasi.");
+      doc.moveDown(0.5);
+    }
+  } else {
+    doc.font("Helvetica").fontSize(8)
+      .text("Foto dokumentasi belum tersedia.");
+    doc.moveDown(0.5);
+  }
+}
+
+await pasangFotoDokumentasi(
+  fotoKondisiURL,
+  "1. Foto Kondisi Sebelum Perbaikan"
+);
+
+await pasangFotoDokumentasi(
+  fotoPengukuranURL,
+  "2. Foto Pengukuran Lapangan"
+);
+    judulBagian("H. RENCANA PELAKSANAAN DAN TINDAKAN");
     doc.font("Helvetica").fontSize(9)
       .text(a.rencana_kerja ||
         "Tahapan, jadwal, penanggung jawab, dan metode pelaksanaan perlu ditetapkan setelah survei dan persetujuan pihak terkait.",
         { align: "justify", lineGap: 3 });
 
-    judulBagian("H. CATATAN DAN VERIFIKASI");
+judulBagian("I. CATATAN DAN VERIFIKASI");
     doc.font("Helvetica").fontSize(9)
       .text("Dokumen ini merupakan konsep usulan warga. Data ukuran, volume pekerjaan, harga satuan, dan kondisi lokasi harus diperiksa melalui survei lapangan. Dokumen ini bukan bukti persetujuan anggaran atau perintah pelaksanaan pekerjaan.",
         { align: "justify", lineGap: 3 });
 
-    doc.moveDown(1.5);
-    doc.font("Helvetica").fontSize(9)
-      .text("Bekasi, __________________", { align: "right" });
-    doc.text("Pengurus RT 004 / RW 01", { align: "right" });
-    doc.moveDown(3);
-    doc.text("(____________________________)", { align: "right" });
-    doc.text("Tanda tangan setelah verifikasi dan persetujuan", { align: "right" });
+   // TANDA TANGAN — dijaga agar tetap dalam satu halaman
+const tinggiTandaTangan = 155;
+const batasBawah = doc.page.height - 55;
 
-    doc.end();
+if (doc.y + tinggiTandaTangan > batasBawah) {
+  doc.addPage();
+  doc.y = 145;
+} else {
+  doc.moveDown(1.5);
+}
+
+doc.font("Helvetica").fontSize(9)
+  .text("Bekasi, __________________", 330, doc.y, {
+    width: 210,
+    align: "center"
+  });
+
+doc.moveDown(0.3);
+doc.text("Pengurus RT 004 / RW 01", {
+  width: 210,
+  align: "center",
+  indent: 330
+});
+
+doc.moveDown(3);
+doc.text("(____________________________)", {
+  width: 210,
+  align: "center",
+  indent: 330
+});
+
+doc.text("Ketua RT", {
+  width: 210,
+  align: "center",
+  indent: 330
+});
+
+doc.moveDown(1);
+doc.font("Helvetica-Bold").fontSize(8)
+  .text("Catatan: Tanda tangan dibubuhkan setelah verifikasi dan persetujuan.", {
+    width: 499,
+    align: "left"
+  });
+
+doc.end();
   } catch (error) {
     console.error("ASPIRASI PDF ERROR:", error?.message || error);
     if (!res.headersSent) {
