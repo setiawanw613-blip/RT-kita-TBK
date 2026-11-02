@@ -4525,7 +4525,27 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     if (!a) return res.status(404).json({ok:false,message:"Aspirasi tidak ditemukan."});
     const warga = await namaPemilikAspirasi(a.warga_id);
     const d = a.dimensi || {};
-    const rab = Array.isArray(a.rab) ? a.rab : [];
+   let rab = [];
+
+try {
+  const rabData = Array.isArray(a.rab)
+    ? a.rab
+    : typeof a.rab === "string"
+      ? JSON.parse(a.rab || "[]")
+      : [];
+
+  rab = Array.isArray(rabData)
+    ? rabData.map(x => ({
+        ...x,
+        volume: Number(x.volume) || 0,
+        harga_satuan: Number(x.harga_satuan) || 0,
+        total: (Number(x.volume) || 0) * (Number(x.harga_satuan) || 0)
+      }))
+    : [];
+} catch (error) {
+  console.error("GAGAL MEMBACA RAB PDF:", error);
+  rab = [];
+}
     const doc = new PDFDocument({ size:"A4", margin:48, bufferPages:true });
     res.setHeader("Content-Type","application/pdf");
     res.setHeader("Content-Disposition",`attachment; filename="Proposal-Aspirasi-${a.id}.pdf"`);
