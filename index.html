@@ -4231,7 +4231,19 @@ function aspirasiWarga(){
       <div class="grid"><div><label>Panjang</label><input id="aspKP" type="number" min="0" step=".01"></div><div><label>Lebar</label><input id="aspKL" type="number" min="0" step=".01"></div><div><label>Tinggi / kedalaman</label><input id="aspKT" type="number" min="0" step=".01"></div></div>
       <h3>Ukuran yang diusulkan (meter)</h3>
       <div class="grid"><div><label>Panjang</label><input id="aspUP" type="number" min="0" step=".01"></div><div><label>Lebar</label><input id="aspUL" type="number" min="0" step=".01"></div><div><label>Tinggi / kedalaman</label><input id="aspUT" type="number" min="0" step=".01"></div></div>
-      <label>Solusi yang diharapkan</label><textarea id="aspSolusi" placeholder="Contoh: memperbesar saluran dan memperbaiki kemiringan aliran"></textarea>
+     <label>Solusi yang diharapkan</label>
+<textarea id="aspSolusi" placeholder="Contoh: memperbesar saluran dan memperbaiki kemiringan aliran"></textarea>
+
+<h3>Dokumentasi Lapangan</h3>
+<p class="muted">Foto membantu pengurus RT dan pihak kelurahan memahami kondisi sebenarnya.</p>
+
+<label>Foto kondisi awal</label>
+<input id="aspFotoKondisi" type="file" accept="image/jpeg,image/png">
+<small class="muted">Foto lokasi sebelum perbaikan, maksimal 2 MB.</small>
+
+<label>Foto pengukuran lapangan</label>
+<input id="aspFotoPengukuran" type="file" accept="image/jpeg,image/png">
+<small class="muted">Foto saat mengukur panjang, lebar, atau kedalaman, maksimal 2 MB.</small>
       <button class="btn" style="width:100%;margin-top:14px" onclick="simpanAspirasi()">Kirim Aspirasi</button>
     </div>
     <div class="card"><h3>Riwayat Aspirasi Saya</h3><div id="aspRiwayat">Memuat...</div></div>
@@ -4240,15 +4252,48 @@ function aspirasiWarga(){
 }
 async function simpanAspirasi(){
   const val=id=>document.getElementById(id)?.value?.trim()||"";
+
   try{
-    await api("/api/aspirasi",{method:"POST",body:JSON.stringify({
-      judul:val("aspJudul"),kategori:val("aspKategori"),urgensi:val("aspUrgensi"),lokasi:val("aspLokasi"),uraian:val("aspUraian"),
-      kondisi_panjang:val("aspKP"),kondisi_lebar:val("aspKL"),kondisi_tinggi:val("aspKT"),
-      usulan_panjang:val("aspUP"),usulan_lebar:val("aspUL"),usulan_tinggi:val("aspUT"),solusi_usulan:val("aspSolusi")
-    })});
+    const hasil=await api("/api/aspirasi",{
+      method:"POST",
+      body:JSON.stringify({
+        judul:val("aspJudul"),
+        kategori:val("aspKategori"),
+        urgensi:val("aspUrgensi"),
+        lokasi:val("aspLokasi"),
+        uraian:val("aspUraian"),
+        kondisi_panjang:val("aspKP"),
+        kondisi_lebar:val("aspKL"),
+        kondisi_tinggi:val("aspKT"),
+        usulan_panjang:val("aspUP"),
+        usulan_lebar:val("aspUL"),
+        usulan_tinggi:val("aspUT"),
+        solusi_usulan:val("aspSolusi")
+      })
+    });
+
+    const id=hasil?.data?.id || hasil?.id;
+    if(!id) throw new Error("Aspirasi tersimpan, tetapi ID tidak ditemukan.");
+
+    const fotoKondisi=document.getElementById("aspFotoKondisi")?.files?.[0];
+    const fotoPengukuran=document.getElementById("aspFotoPengukuran")?.files?.[0];
+
+    if(fotoKondisi || fotoPengukuran){
+      const form=new FormData();
+      if(fotoKondisi) form.append("foto_kondisi",fotoKondisi);
+      if(fotoPengukuran) form.append("foto_pengukuran",fotoPengukuran);
+
+      await api(`/api/aspirasi/${encodeURIComponent(id)}/dokumentasi`,{
+        method:"POST",
+        body:form
+      });
+    }
+
     alert("Aspirasi berhasil dikirim.");
     aspirasiWarga();
-  }catch(e){alert(e.message);}
+  }catch(e){
+    alert(e.message);
+  }
 }
 async function muatAspirasiWarga(){
   const box=document.getElementById("aspRiwayat"); if(!box)return;
