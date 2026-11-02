@@ -4525,25 +4525,34 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     if (!a) return res.status(404).json({ok:false,message:"Aspirasi tidak ditemukan."});
     const warga = await namaPemilikAspirasi(a.warga_id);
     const d = a.dimensi || {};
-   let rab = [];
+let rab = [];
 
 try {
-  const rabData = Array.isArray(a.rab)
-    ? a.rab
-    : typeof a.rab === "string"
-      ? JSON.parse(a.rab || "[]")
+  const hasilRab = await supabaseRequest("aspirasi_warga", {
+    query: "select=rab&id=eq." + encodeURIComponent(req.params.id) + "&limit=1"
+  });
+
+  const dataRab = Array.isArray(hasilRab) ? hasilRab[0]?.rab : null;
+
+  rab = Array.isArray(dataRab)
+    ? dataRab.filter(x => x && x.item)
+    : typeof dataRab === "string"
+      ? JSON.parse(dataRab || "[]")
       : [];
 
-  rab = Array.isArray(rabData)
-    ? rabData.map(x => ({
-        ...x,
-        volume: Number(x.volume) || 0,
-        harga_satuan: Number(x.harga_satuan) || 0,
-        total: (Number(x.volume) || 0) * (Number(x.harga_satuan) || 0)
-      }))
-    : [];
+  rab = rab.map(x => ({
+    item: x.item || "-",
+    spesifikasi: x.spesifikasi || "-",
+    tujuan: x.tujuan || "-",
+    volume: Number(x.volume) || 0,
+    satuan: x.satuan || "",
+    harga_satuan: Number(x.harga_satuan) || 0,
+    total: Number(x.volume || 0) * Number(x.harga_satuan || 0)
+  }));
+
+  console.log("DATA RAB PDF:", JSON.stringify(rab));
 } catch (error) {
-  console.error("GAGAL MEMBACA RAB PDF:", error);
+  console.error("GAGAL AMBIL RAB PDF:", error);
   rab = [];
 }
     const doc = new PDFDocument({ size:"A4", margin:48, bufferPages:true });
