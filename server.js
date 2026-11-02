@@ -5276,52 +5276,7 @@ doc.font("Helvetica-Oblique").fontSize(8)
     "Kolom tanda tangan dan persetujuan diisi oleh pihak terkait setelah pemeriksaan dan proses persetujuan.",
     { width: LEBAR, align: "center" }
   );
-     const lebarTTD = 155;
-const jarak = (LEBAR - (lebarTTD * 3)) / 2;
-
-const posisi = [
-  KIRI,
-  KIRI + lebarTTD + jarak,
-  KIRI + (lebarTTD + jarak) * 2
-];
-
-const jabatan = [
-  "Pengusul",
-  "Ketua RT 004 / RW 01",
-  "Kepala Desa / Lurah"
-];
-
-const yTanggal = doc.y;
-const yJabatan = yTanggal + 16;
-const yTandaTangan = yTanggal + 105;
-
-for (let i = 0; i < 3; i++) {
-  doc.font("Helvetica").fontSize(8)
-    .text("Bekasi, ______________", posisi[i], yTanggal, {
-      width: lebarTTD,
-      align: "center"
-    });
-
-  doc.font("Helvetica-Bold").fontSize(8)
-    .text(jabatan[i], posisi[i], yJabatan, {
-      width: lebarTTD,
-      align: "center"
-    });
-
-  doc.font("Helvetica").fontSize(8)
-    .text("(_____________________)", posisi[i], yTandaTangan, {
-      width: lebarTTD,
-      align: "center"
-    });
-}
-
-doc.y = yTandaTangan + 25;
-
-doc.font("Helvetica-Oblique").fontSize(8)
-  .text(
-    "Kolom tanda tangan dan persetujuan diisi oleh pihak terkait setelah pemeriksaan dan proses persetujuan.",
-    { width: LEBAR, align: "center" }
-  );
+  
 
 doc.end();
 
