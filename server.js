@@ -4400,6 +4400,179 @@ app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
 });
 
 /* HEALTH CHECK */
+
+/* ASPIRASI WARGA RT TBK */
+async function namaPemilikAspirasi(wargaId) {
+  const rows = await supabaseRequest("warga", {
+    query: "select=id,nama_lengkap&id=eq." + encodeURIComponent(wargaId) + "&limit=1"
+  });
+  return Array.isArray(rows) && rows[0] ? rows[0].nama_lengkap : "Warga";
+}
+
+app.get("/api/aspirasi", requireLogin, async (req, res) => {
+  try {
+    const admin = req.session.role === "admin";
+    const query = admin
+      ? "select=*&order=created_at.desc&limit=500"
+      : "select=*&warga_id=eq." + encodeURIComponent(req.session.wargaId) + "&order=created_at.desc";
+    const rows = await supabaseRequest("aspirasi_warga", { query });
+    if (admin && Array.isArray(rows)) {
+      const ids = [...new Set(rows.map(x => String(x.warga_id)).filter(x => /^\d+$/.test(x)))];
+      const map = new Map();
+      if (ids.length) {
+        const warga = await supabaseRequest("warga", { query: "select=id,nama_lengkap&id=in.(" + ids.join(",") + ")" });
+        (Array.isArray(warga) ? warga : []).forEach(x => map.set(String(x.id), x.nama_lengkap));
+      }
+      return res.json(rows.map(x => ({ ...x, nama_warga: map.get(String(x.warga_id)) || "Warga" })));
+    }
+    return res.json(Array.isArray(rows) ? rows : []);
+  } catch (error) {
+    console.error("ASPIRASI LIST ERROR:", error?.message || error);
+    return res.status(500).json({ ok:false, message:"Gagal memuat aspirasi. Pastikan tabel aspirasi_warga sudah dibuat di Supabase." });
+  }
+});
+
+app.post("/api/aspirasi", requireWarga, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const judul = String(b.judul || "").trim();
+    const kategori = String(b.kategori || "").trim();
+    const lokasi = String(b.lokasi || "").trim();
+    const uraian = String(b.uraian || "").trim();
+    if (!judul || !kategori || !lokasi || !uraian) {
+      return res.status(400).json({ ok:false, message:"Judul, kategori, lokasi, dan uraian wajib diisi." });
+    }
+    const dimensi = {
+      kondisi_panjang: b.kondisi_panjang || null,
+      kondisi_lebar: b.kondisi_lebar || null,
+      kondisi_tinggi: b.kondisi_tinggi || null,
+      usulan_panjang: b.usulan_panjang || null,
+      usulan_lebar: b.usulan_lebar || null,
+      usulan_tinggi: b.usulan_tinggi || null,
+      satuan: b.satuan || "meter"
+    };
+    const data = await supabaseRequest("aspirasi_warga", {
+      method:"POST",
+      body:{
+        warga_id:req.session.wargaId,
+        judul:judul.slice(0,200),
+        kategori:kategori.slice(0,80),
+        urgensi:["Urgent","Prioritas","Reguler"].includes(b.urgensi) ? b.urgensi : "Reguler",
+        lokasi:lokasi.slice(0,500),
+        uraian:uraian.slice(0,5000),
+        solusi_usulan:String(b.solusi_usulan || "").slice(0,5000),
+        dimensi,
+        rab:[],
+        status:"Diajukan"
+      }
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    try {
+      await supabaseRequest("notifikasi", { method:"POST", body:{
+        penerima_peran:"admin", judul:"Aspirasi Warga Baru",
+        pesan:`${req.session.nama || "Warga"} mengajukan aspirasi: ${judul}`,
+        jenis:"aspirasi", tautan:"/admin", referensi_id:Number(req.session.wargaId), sudah_dibaca:false
+      }});
+    } catch(e) { console.error("NOTIF ASPIRASI ERROR:", e?.message || e); }
+    return res.json({ok:true, data:row});
+  } catch(error) {
+    console.error("ASPIRASI CREATE ERROR:", error?.message || error);
+    return res.status(500).json({ok:false, message:"Gagal menyimpan aspirasi. Periksa tabel aspirasi_warga di Supabase."});
+  }
+});
+
+app.patch("/api/aspirasi/:id", requireAdmin, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const allowed = ["Verifikasi RT","Perlu revisi","Disetujui RT","Diteruskan ke kelurahan","Dalam pengerjaan","Selesai","Ditunda","Ditolak"];
+    const body = {};
+    if (allowed.includes(b.status)) body.status = b.status;
+    if (b.catatan !== undefined) body.catatan = String(b.catatan).slice(0,3000);
+    if (b.rab !== undefined) {
+      if (!Array.isArray(b.rab)) return res.status(400).json({ok:false,message:"Format RAB tidak valid."});
+      body.rab = b.rab.slice(0,100).map(x => ({
+        item:String(x.item || "").slice(0,200),
+        spesifikasi:String(x.spesifikasi || "").slice(0,500),
+        tujuan:String(x.tujuan || "").slice(0,500),
+        volume:Number(x.volume) || 0,
+        satuan:String(x.satuan || "").slice(0,30),
+        harga_satuan:Number(x.harga_satuan) || 0,
+        total:(Number(x.volume)||0)*(Number(x.harga_satuan)||0)
+      }));
+    }
+    if (b.rencana_kerja !== undefined) body.rencana_kerja = String(b.rencana_kerja).slice(0,5000);
+    if (b.realisasi !== undefined) body.realisasi = b.realisasi;
+    if (!Object.keys(body).length) return res.status(400).json({ok:false,message:"Tidak ada perubahan."});
+    body.updated_at = new Date().toISOString();
+    const data = await supabaseRequest("aspirasi_warga", {
+      method:"PATCH",
+      query:"id=eq." + encodeURIComponent(req.params.id),
+      body
+    });
+    return res.json({ok:true,data:Array.isArray(data)?data[0]:data});
+  } catch(error) {
+    console.error("ASPIRASI UPDATE ERROR:", error?.message || error);
+    return res.status(500).json({ok:false,message:"Gagal memperbarui aspirasi."});
+  }
+});
+
+app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
+  try {
+    const rows = await supabaseRequest("aspirasi_warga", {
+      query:"select=*&id=eq." + encodeURIComponent(req.params.id) + "&limit=1"
+    });
+    const a = Array.isArray(rows) ? rows[0] : null;
+    if (!a) return res.status(404).json({ok:false,message:"Aspirasi tidak ditemukan."});
+    const warga = await namaPemilikAspirasi(a.warga_id);
+    const d = a.dimensi || {};
+    const rab = Array.isArray(a.rab) ? a.rab : [];
+    const doc = new PDFDocument({ size:"A4", margin:48, bufferPages:true });
+    res.setHeader("Content-Type","application/pdf");
+    res.setHeader("Content-Disposition",`attachment; filename="Proposal-Aspirasi-${a.id}.pdf"`);
+    doc.pipe(res);
+    doc.fontSize(15).font("Helvetica-Bold").text("TAMAN BALI KAHURIPAN", {align:"center"});
+    doc.fontSize(11).text("RT 004 / RW 01", {align:"center"});
+    doc.moveDown().fontSize(16).text("PROPOSAL ASPIRASI WARGA", {align:"center"});
+    doc.moveDown();
+    doc.fontSize(11).font("Helvetica-Bold").text("A. IDENTITAS DAN PERMOHONAN");
+    doc.font("Helvetica").text(`Judul: ${a.judul || "-"}`);
+    doc.text(`Pengusul: ${warga}`);
+    doc.text(`Kategori: ${a.kategori || "-"}`);
+    doc.text(`Tingkat urgensi: ${a.urgensi || "-"}`);
+    doc.text(`Lokasi: ${a.lokasi || "-"}`);
+    doc.text(`Tanggal pengajuan: ${a.created_at ? new Date(a.created_at).toLocaleDateString("id-ID") : "-"}`);
+    doc.moveDown().font("Helvetica-Bold").text("B. LATAR BELAKANG / KONDISI");
+    doc.font("Helvetica").text(a.uraian || "-", {paragraphGap:5});
+    doc.moveDown().font("Helvetica-Bold").text("C. UKURAN KONDISI DAN USULAN");
+    doc.font("Helvetica").text(`Kondisi saat ini: panjang ${d.kondisi_panjang || "-"} m, lebar ${d.kondisi_lebar || "-"} m, tinggi/kedalaman ${d.kondisi_tinggi || "-"} m.`);
+    doc.text(`Usulan: panjang ${d.usulan_panjang || "-"} m, lebar ${d.usulan_lebar || "-"} m, tinggi/kedalaman ${d.usulan_tinggi || "-"} m.`);
+    doc.moveDown().font("Helvetica-Bold").text("D. SOLUSI YANG DIUSULKAN");
+    doc.font("Helvetica").text(a.solusi_usulan || "-");
+    doc.moveDown().font("Helvetica-Bold").text("E. RENCANA ANGGARAN BIAYA (RAB)");
+    if (!rab.length) doc.font("Helvetica").text("RAB belum disusun / diverifikasi oleh pengurus RT.");
+    else {
+      rab.forEach((x,i) => {
+        doc.font("Helvetica-Bold").text(`${i+1}. ${x.item || "-"}`);
+        doc.font("Helvetica").text(`Spesifikasi: ${x.spesifikasi || "-"} | Kegunaan: ${x.tujuan || "-"}`);
+        doc.text(`Volume: ${x.volume} ${x.satuan || ""} x ${Number(x.harga_satuan||0).toLocaleString("id-ID")} = ${Number(x.total||0).toLocaleString("id-ID")}`);
+      });
+      const total = rab.reduce((n,x)=>n+Number(x.total||0),0);
+      doc.moveDown().font("Helvetica-Bold").text(`TOTAL RAB PERKIRAAN: Rp ${total.toLocaleString("id-ID")}`);
+    }
+    doc.moveDown().font("Helvetica-Bold").text("F. RENCANA PELAKSANAAN");
+    doc.font("Helvetica").text(a.rencana_kerja || "Tahapan dan jadwal pelaksanaan menunggu survei serta persetujuan pihak terkait.");
+    doc.moveDown().font("Helvetica-Bold").text("G. CATATAN");
+    doc.font("Helvetica").text("Dokumen ini merupakan usulan/proposal warga melalui RT, bukan persetujuan atau pencairan dana dari kelurahan/desa. Volume, spesifikasi, dan harga perlu diverifikasi melalui survei lapangan dan harga setempat.");
+    doc.moveDown().text("Pengurus RT 004 / RW 01", {align:"right"});
+    doc.moveDown().moveDown().text("(________________________)", {align:"right"});
+    doc.end();
+  } catch(error) {
+    console.error("ASPIRASI PDF ERROR:", error?.message || error);
+    if (!res.headersSent) res.status(500).json({ok:false,message:"Gagal membuat PDF aspirasi."});
+  }
+});
+
+
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
