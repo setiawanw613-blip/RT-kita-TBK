@@ -4624,238 +4624,267 @@ app.patch("/api/aspirasi/:id", requireAdmin, async (req, res) => {
   }
 });
 
+
 app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
   try {
+    const fs = require("fs");
     const rows = await supabaseRequest("aspirasi_warga", {
       query: "select=*&id=eq." + encodeURIComponent(req.params.id) + "&limit=1"
     });
+
     const a = Array.isArray(rows) ? rows[0] : null;
-    if (!a) return res.status(404).json({ok:false,message:"Aspirasi tidak ditemukan."});
+    if (!a) {
+      return res.status(404).json({ ok: false, message: "Aspirasi tidak ditemukan." });
+    }
 
     const warga = await namaPemilikAspirasi(a.warga_id);
     const d = a.dimensi || {};
     const rab = Array.isArray(a.rab) ? a.rab : [];
-    const doc = new PDFDocument({size:"A4",margin:48,bufferPages:true});
 
-    res.setHeader("Content-Type","application/pdf");
-    res.setHeader("Content-Disposition",`attachment; filename="Proposal-Aspirasi-${a.id}.pdf"`);
+    const kopPath = path.join(__dirname, "contoh kop surat kosong tbk.png");
+    const pakaiKop = fs.existsSync(kopPath);
+
+    const doc = new PDFDocument({
+      size: "A4",
+      margins: { top: 145, bottom: 55, left: 48, right: 48 },
+      bufferPages: true
+    });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="Proposal-Aspirasi-${a.id}.pdf"`
+    );
     doc.pipe(res);
 
-    const rupiah = n => "Rp " + Number(n || 0).toLocaleString("id-ID");
-    const section = title => {
-      if (doc.y > 700) doc.addPage();
-      doc.moveDown(.7).font("Helvetica-Bold").fontSize(12)
-        .fillColor("#17365D").text(title);
-      doc.fillColor("#000").moveDown(.25);
-    };
-    const line = (label,value) =>
-      doc.font("Helvetica").fontSize(10).text(`${label}: ${value || "-"}`,{paragraphGap:3});
-
-    // HALAMAN SAMPUL
-    doc.font("Helvetica-Bold").fontSize(18).fillColor("#17365D")
-      .text("TAMAN BALI KAHURIPAN",{align:"center"});
-    doc.fontSize(11).fillColor("#000")
-      .text("RT 004 / RW 01 · Desa Sukahurip · Kecamatan Sukatani · Kabupaten Bekasi",{align:"center"});
-    doc.moveDown(2).fontSize(17).font("Helvetica-Bold")
-      .text("PROPOSAL ASPIRASI WARGA",{align:"center"});
-    doc.moveDown().fontSize(12).text(a.judul || "Usulan Kegiatan",{align:"center"});
-    doc.moveDown(2).font("Helvetica").fontSize(11)
-      .text("Diajukan kepada Yth. Lurah/Kepala Desa Sukahurip",{align:"center"});
-    doc.moveDown(4).fontSize(10)
-      .text("Dokumen usulan untuk bahan verifikasi dan pembahasan lebih lanjut. Dokumen ini bukan surat persetujuan atau perintah pencairan anggaran.",{align:"center",width:450});
-    doc.moveDown(3).text(
-      `Tanggal pengajuan: ${a.created_at ? new Date(a.created_at).toLocaleDateString("id-ID") : "-"}`,
-      {align:"center"}
-    );
-
-    // IDENTITAS DAN KONDISI
-    doc.addPage();
-    section("1. IDENTITAS DAN PERMOHONAN");
-    line("Judul",a.judul);
-    line("Pengusul",warga);
-    line("Kategori",a.kategori);
-    line("Urgensi",a.urgensi);
-    line("Lokasi",a.lokasi);
-    line("Status RT",a.status);
-    line("Tanggal",a.created_at ? new Date(a.created_at).toLocaleDateString("id-ID") : "-");
-
-    section("2. LATAR BELAKANG DAN KONDISI LAPANGAN");
-    doc.font("Helvetica").fontSize(10)
-      .text(a.uraian || "Belum diisi.",{width:500,align:"justify"});
-    if (a.catatan) {
-      doc.moveDown(.5).font("Helvetica-Bold").text("Catatan / hasil verifikasi RT:");
-      doc.font("Helvetica").text(a.catatan,{width:500,align:"justify"});
-    }
-
-    // PERBANDINGAN UKURAN
-    section("3. PERBANDINGAN UKURAN");
-    const dims = [
-      ["Panjang",d.kondisi_panjang,d.usulan_panjang],
-      ["Lebar",d.kondisi_lebar,d.usulan_lebar],
-      ["Tinggi / kedalaman",d.kondisi_tinggi,d.usulan_tinggi]
-    ];
-    doc.font("Helvetica-Bold").fontSize(9)
-      .text("Dimensi | Kondisi saat ini | Ukuran usulan");
-    dims.forEach(x =>
-      doc.font("Helvetica").text(
-        `${x[0]} | ${x[1] || "Belum diukur"} m | ${x[2] || "Belum ditentukan"} m`
-      )
-    );
-
-    doc.moveDown(.5).font("Helvetica-Bold")
-      .text("Sketsa penampang (skematis, bukan gambar kerja):");
-    const drawCross = (x,y,w,h,label) => {
-      doc.rect(x,y,w,h).stroke();
-      doc.moveTo(x,y+h*.55).lineTo(x+w,y+h*.55).stroke();
-      doc.font("Helvetica").fontSize(8)
-        .text(label,x,y+h+5,{width:w,align:"center"});
-    };
-    const sy = doc.y + 8;
-    drawCross(65,sy,145,55,"Kondisi saat ini");
-    drawCross(300,sy,145,75,"Ukuran usulan");
-    doc.moveDown(8).font("Helvetica").fontSize(9)
-      .text("Sketsa hanya membantu membaca perbandingan dimensi. Ukuran akhir wajib diverifikasi melalui pengukuran lapangan dan perencanaan teknis.");
-
-    section("4. SOLUSI YANG DIUSULKAN");
-    doc.font("Helvetica").fontSize(10)
-      .text(a.solusi_usulan || "Belum diisi.",{width:500,align:"justify"});
-
-    // DOKUMENTASI FOTO
-    doc.addPage();
-    section("5. DOKUMENTASI LAPANGAN");
-    const docs = a.realisasi?.dokumentasi || {};
-
-    for (const [key,label] of [
-      ["foto_kondisi","Foto kondisi awal"],
-      ["foto_pengukuran","Foto pengukuran lapangan"]
-    ]) {
-      const meta = docs[key];
-      doc.font("Helvetica-Bold").fontSize(10).text(label);
-
-      if (meta?.path) {
-        try {
-          const signed = await buatUrlFotoPrivat(meta.path);
-          if (signed) {
-            const img = await fetch(signed);
-            if (img.ok) {
-              const buf = Buffer.from(await img.arrayBuffer());
-              if (doc.y > 570) doc.addPage();
-              doc.image(buf,{fit:[440,250],align:"center"});
-              doc.moveDown(.5);
-            } else {
-              doc.font("Helvetica").text("Foto tersimpan, tetapi gagal dibaca saat membuat PDF.");
-            }
-          } else {
-            doc.font("Helvetica").text("Foto tersimpan; tautan privat tidak tersedia.");
-          }
-        } catch(e) {
-          doc.font("Helvetica").text("Foto tidak dapat dimuat ke PDF.");
-        }
-      } else {
-        doc.font("Helvetica").text("Belum ada foto. Dokumentasi lapangan perlu dilengkapi sebelum proposal diteruskan.");
-      }
-      doc.moveDown();
-    }
-
-    // RAB
-    section("6. RENCANA ANGGARAN BIAYA (RAB)");
-    if (!rab.length) {
-      doc.font("Helvetica").fontSize(10)
-        .text("RAB belum disusun. Harga dan volume harus diisi berdasarkan survei serta harga setempat.");
-    } else {
-      const headers = ["No","Uraian pekerjaan/material","Spesifikasi","Volume","Harga satuan","Jumlah"];
-      const widths = [24,125,100,55,85,85];
-
-      const drawHeader = () => {
-        let x = 48;
-        const y = doc.y;
-        headers.forEach((h,i) => {
-          doc.rect(x,y,widths[i],27).fillAndStroke("#E8EEF7","#9AA9BD");
-          doc.fillColor("#17365D").font("Helvetica-Bold").fontSize(7)
-            .text(h,x+3,y+5,{width:widths[i]-6,height:18});
-          x += widths[i];
+    // KOP SURAT YANG SAMA DENGAN MENU SURAT
+    function pasangKop() {
+      if (pakaiKop) {
+        doc.image(kopPath, 0, 0, {
+          width: doc.page.width,
+          height: doc.page.height
         });
-        doc.fillColor("#000");
-        doc.y = y + 27;
-      };
+      } else {
+        doc.save();
+        doc.font("Helvetica-Bold").fontSize(15)
+          .text("TAMAN BALI KAHURIPAN", 48, 35, { align: "center" });
+        doc.fontSize(11).text("PENGURUS RT 004 / RW 01", { align: "center" });
+        doc.font("Helvetica").fontSize(9)
+          .text("Desa Sukahurip, Kecamatan Sukatani, Kabupaten Bekasi",
+            { align: "center" });
+        doc.moveTo(48, 105).lineTo(547, 105).lineWidth(1).stroke();
+        doc.restore();
+      }
+    }
 
-      drawHeader();
+    pasangKop();
+    doc.on("pageAdded", pasangKop);
+
+    // Isi dokumen dimulai di bawah kop
+    doc.y = 135;
+
+    function judulBagian(teks) {
+      if (doc.y > 700) doc.addPage();
+      doc.moveDown(0.6);
+      doc.font("Helvetica-Bold").fontSize(11).fillColor("#17365D")
+        .text(teks, { underline: false });
+      doc.moveDown(0.3);
+      doc.fillColor("#000000");
+    }
+
+    function teks(label, isi) {
+      doc.font("Helvetica-Bold").fontSize(9).text(label, { continued: true });
+      doc.font("Helvetica").text(" " + (isi || "-"));
+    }
+
+    function rupiah(nilai) {
+      return "Rp " + Number(nilai || 0).toLocaleString("id-ID");
+    }
+
+    doc.font("Helvetica-Bold").fontSize(15)
+      .text("PROPOSAL ASPIRASI WARGA", { align: "center" });
+    doc.moveDown(0.3);
+    doc.font("Helvetica").fontSize(9)
+      .text("Dokumen usulan untuk bahan peninjauan dan pertimbangan pihak kelurahan/desa.",
+        { align: "center" });
+
+    judulBagian("A. IDENTITAS DAN PERMOHONAN");
+    teks("Nomor usulan:", "ASP-" + a.id);
+    teks("Judul:", a.judul);
+    teks("Nama pengusul:", warga);
+    teks("Kategori:", a.kategori);
+    teks("Tingkat urgensi:", a.urgensi);
+    teks("Lokasi:", a.lokasi);
+    teks("Tanggal pengajuan:", a.created_at
+      ? new Date(a.created_at).toLocaleDateString("id-ID")
+      : "-");
+    teks("Status:", a.status);
+
+    judulBagian("B. LATAR BELAKANG DAN KONDISI LAPANGAN");
+    doc.font("Helvetica").fontSize(9)
+      .text(a.uraian || "-", { align: "justify", lineGap: 3 });
+
+    judulBagian("C. PERBANDINGAN UKURAN KONDISI DAN USULAN");
+
+    const satuan = d.satuan || "meter";
+    const ukuran = [
+      ["Panjang", d.kondisi_panjang, d.usulan_panjang],
+      ["Lebar", d.kondisi_lebar, d.usulan_lebar],
+      ["Tinggi / kedalaman", d.kondisi_tinggi, d.usulan_tinggi]
+    ];
+
+    doc.font("Helvetica-Bold").fontSize(9);
+    doc.text("Parameter", 48, doc.y, { continued: true, width: 160 });
+    doc.text("Kondisi saat ini", { continued: true, width: 150 });
+    doc.text("Ukuran usulan");
+    doc.moveTo(48, doc.y + 3).lineTo(547, doc.y + 3).stroke();
+    doc.moveDown(0.5);
+
+    ukuran.forEach((item) => {
+      doc.font("Helvetica").fontSize(9);
+      doc.text(item[0], 48, doc.y, { continued: true, width: 160 });
+      doc.text((item[1] ?? "-") + " " + satuan, { continued: true, width: 150 });
+      doc.text((item[2] ?? "-") + " " + satuan);
+    });
+
+    // Sketsa penampang: skematis, bukan gambar hasil survei
+    judulBagian("D. SKETSA PENAMPANG SALURAN (ILUSTRASI)");
+    doc.font("Helvetica-Oblique").fontSize(8)
+      .text("Sketsa berikut hanya ilustrasi berdasarkan ukuran yang dimasukkan.");
+    doc.moveDown(0.5);
+
+    function gambarPenampang(x, y, lebar, tinggi, label, ukuranLebar, ukuranTinggi) {
+      const skala = 35;
+      const w = Math.max(35, Math.min(Number(lebar || 0) * skala, 130));
+      const h = Math.max(25, Math.min(Number(tinggi || 0) * skala, 85));
+
+      doc.font("Helvetica-Bold").fontSize(9)
+        .text(label, x, y - 18, { width: 150, align: "center" });
+
+      doc.rect(x + 15, y, w, h).lineWidth(1.2).stroke();
+      doc.moveTo(x + 15, y + 5).lineTo(x + 15 + w, y + 5).stroke();
+
+      doc.font("Helvetica").fontSize(8)
+        .text("Lebar: " + (ukuranLebar ?? "-") + " " + satuan,
+          x - 5, y + h + 6, { width: w + 40, align: "center" });
+      doc.text("Kedalaman: " + (ukuranTinggi ?? "-") + " " + satuan,
+        x - 5, y + h + 18, { width: w + 40, align: "center" });
+    }
+
+    const posisiY = doc.y + 25;
+    gambarPenampang(105, posisiY, d.kondisi_lebar, d.kondisi_tinggi,
+      "KONDISI SAAT INI", d.kondisi_lebar, d.kondisi_tinggi);
+    gambarPenampang(340, posisiY, d.usulan_lebar, d.usulan_tinggi,
+      "UKURAN USULAN", d.usulan_lebar, d.usulan_tinggi);
+
+    doc.y = posisiY + 145;
+    teks("Panjang kondisi saat ini:", (d.kondisi_panjang ?? "-") + " " + satuan);
+    teks("Panjang usulan:", (d.usulan_panjang ?? "-") + " " + satuan);
+
+    judulBagian("E. SOLUSI YANG DIUSULKAN");
+    doc.font("Helvetica").fontSize(9)
+      .text(a.solusi_usulan || "-", { align: "justify", lineGap: 3 });
+
+    judulBagian("F. RENCANA ANGGARAN BIAYA (RAB)");
+
+    if (!rab.length) {
+      doc.font("Helvetica").fontSize(9)
+        .text("RAB belum disusun atau belum diverifikasi oleh pengurus RT.");
+    } else {
+      const x = [48, 75, 205, 340, 390, 465];
+      const widths = [27, 130, 135, 50, 75, 82];
+
+      function headerRAB() {
+        const y = doc.y;
+        doc.rect(48, y, 499, 24).fill("#D9EAF7");
+        doc.fillColor("#000000").font("Helvetica-Bold").fontSize(8);
+        ["No", "Item / spesifikasi", "Kegunaan", "Volume", "Harga satuan", "Jumlah"]
+          .forEach((v, i) => doc.text(v, x[i] + 2, y + 7, {
+            width: widths[i] - 4, align: "left"
+          }));
+        doc.y = y + 27;
+      }
+
+      headerRAB();
       let total = 0;
 
-      rab.forEach((it,i) => {
-        const subtotal = Number(it.total) ||
-          Number(it.volume || 0) * Number(it.harga_satuan || 0);
+      rab.forEach((item, i) => {
+        const subtotal = Number(item.total || 0);
         total += subtotal;
 
-        const vals = [
-          String(i+1),
-          it.item || "-",
-          it.spesifikasi || "-",
-          `${it.volume || 0} ${it.satuan || ""}`,
-          rupiah(it.harga_satuan),
+        const y = doc.y;
+        const baris = [
+          String(i + 1),
+          (item.item || "-") + "\n" + (item.spesifikasi || "-"),
+          item.tujuan || "-",
+          String(item.volume || 0) + " " + (item.satuan || ""),
+          rupiah(item.harga_satuan),
           rupiah(subtotal)
         ];
 
-        const heights = vals.map((v,j) =>
-          doc.heightOfString(v,{
-            width:widths[j]-6,
-            font:"Helvetica",
-            fontSize:7
-          })
+        const tinggi = Math.max(
+          30,
+          ...baris.map((v, j) => doc.heightOfString(v, {
+            width: widths[j] - 5,
+            font: "Helvetica",
+            fontSize: 7
+          }) + 10)
         );
-        const h = Math.max(28,...heights) + 8;
 
-        if (doc.y + h > 745) {
+        if (y + tinggi > 730) {
           doc.addPage();
-          drawHeader();
+          doc.y = 135;
+          headerRAB();
         }
 
-        let x = 48;
-        const y = doc.y;
-        vals.forEach((v,j) => {
-          doc.rect(x,y,widths[j],h).stroke("#B8C2CF");
+        const rowY = doc.y;
+        baris.forEach((v, j) => {
           doc.font("Helvetica").fontSize(7)
-            .text(v,x+3,y+4,{width:widths[j]-6});
-          x += widths[j];
+            .text(v, x[j] + 2, rowY + 5, {
+              width: widths[j] - 5,
+              height: tinggi - 5
+            });
         });
-        doc.y = y + h;
+        doc.rect(48, rowY, 499, tinggi).strokeColor("#BBBBBB").stroke();
+        doc.y = rowY + tinggi;
       });
 
-      doc.moveDown(.5).font("Helvetica-Bold").fontSize(11)
-        .text(`TOTAL RAB PERKIRAAN: ${rupiah(total)}`,{align:"right"});
-      doc.font("Helvetica").fontSize(8).text("Catatan kegunaan tiap item:");
-      rab.forEach((it,i) =>
-        doc.text(`${i+1}. ${it.item || "-"}: ${it.tujuan || "Belum dijelaskan"}`)
-      );
+      doc.moveDown(0.5);
+      doc.font("Helvetica-Bold").fontSize(10)
+        .text("TOTAL RAB PERKIRAAN: " + rupiah(total), { align: "right" });
     }
 
-    // RENCANA DAN PERSETUJUAN
-    section("7. RENCANA PELAKSANAAN");
-    doc.font("Helvetica").fontSize(10)
-      .text(a.rencana_kerja || "Tahapan, jadwal, penanggung jawab, dan verifikasi ditetapkan setelah survei serta persetujuan pihak terkait.",{width:500,align:"justify"});
-
-    section("8. PERMOHONAN DAN PERSETUJUAN");
+    judulBagian("G. RENCANA PELAKSANAAN DAN TINDAKAN");
     doc.font("Helvetica").fontSize(9)
-      .text("Demikian usulan ini disampaikan untuk ditinjau dan dipertimbangkan. Data teknis, volume pekerjaan, dan RAB perlu diverifikasi oleh pihak berwenang sebelum pelaksanaan.");
+      .text(a.rencana_kerja ||
+        "Tahapan, jadwal, penanggung jawab, dan metode pelaksanaan perlu ditetapkan setelah survei dan persetujuan pihak terkait.",
+        { align: "justify", lineGap: 3 });
 
-    doc.moveDown(2);
-    const yy = doc.y;
-    doc.text("Pengusul / Perwakilan Warga",60,yy,{width:190,align:"center"});
-    doc.text("Pengurus RT 004 / RW 01",330,yy,{width:190,align:"center"});
-    doc.moveDown(4);
-    doc.text("(________________________)",60,doc.y,{width:190,align:"center"});
-    doc.text("(________________________)",330,doc.y,{width:190,align:"center"});
-    doc.moveDown(2).fontSize(8)
-      .text("Status dokumen: KONSEP USULAN — belum merupakan persetujuan, pengesahan, atau pencairan dana. Foto dan angka harus sesuai kondisi nyata.");
+    judulBagian("H. CATATAN DAN VERIFIKASI");
+    doc.font("Helvetica").fontSize(9)
+      .text("Dokumen ini merupakan konsep usulan warga. Data ukuran, volume pekerjaan, harga satuan, dan kondisi lokasi harus diperiksa melalui survei lapangan. Dokumen ini bukan bukti persetujuan anggaran atau perintah pelaksanaan pekerjaan.",
+        { align: "justify", lineGap: 3 });
+
+    doc.moveDown(1.5);
+    doc.font("Helvetica").fontSize(9)
+      .text("Bekasi, __________________", { align: "right" });
+    doc.text("Pengurus RT 004 / RW 01", { align: "right" });
+    doc.moveDown(3);
+    doc.text("(____________________________)", { align: "right" });
+    doc.text("Tanda tangan setelah verifikasi dan persetujuan", { align: "right" });
 
     doc.end();
-  } catch(error) {
-    console.error("ASPIRASI PDF ERROR:",error?.message || error);
+  } catch (error) {
+    console.error("ASPIRASI PDF ERROR:", error?.message || error);
     if (!res.headersSent) {
-      res.status(500).json({ok:false,message:"Gagal membuat PDF aspirasi."});
+      res.status(500).json({
+        ok: false,
+        message: "Gagal membuat PDF aspirasi."
+      });
     }
   }
 });
+
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
