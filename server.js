@@ -7,7 +7,7 @@ const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidt
 const { normalizeStorageObjectPath } = require("./storage-path");
 const { csvCell } = require("./csv-safe");
 const { isValidNewResidentPassword } = require("./password-policy");
-const { buatTemplateRab, buatRencanaKerja, infoKategoriAspirasi } = require("./aspirasi-rab");
+const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -4710,39 +4710,8 @@ app.patch("/api/aspirasi/:id", requireAdmin, async (req, res) => {
     if (allowed.includes(b.status)) body.status = b.status;
     if (b.catatan !== undefined) body.catatan = String(b.catatan).slice(0,3000);
     if (b.rab !== undefined) {
-      if (!Array.isArray(b.rab)) {
-        return res.status(400).json({
-          ok: false,
-          message: "Format RAB tidak valid."
-        });
-      }
-
       try {
-        body.rab = b.rab.slice(0, 100).map((x) => {
-          const volume = Number(x.volume);
-          const hargaSatuan = Number(x.harga_satuan);
-
-          if (
-            !Number.isFinite(volume) || volume < 0 ||
-            !Number.isFinite(hargaSatuan) || hargaSatuan < 0
-          ) {
-            throw new Error(
-              "Volume dan harga satuan RAB harus berupa angka nol atau lebih."
-            );
-          }
-
-          return {
-            item: String(x.item || "").trim().slice(0, 200),
-            spesifikasi: String(x.spesifikasi || "").trim().slice(0, 500),
-            tujuan: String(x.tujuan || "").trim().slice(0, 500),
-            volume,
-            satuan: String(x.satuan || "").trim().slice(0, 30),
-            harga_satuan: hargaSatuan,
-            total: volume * hargaSatuan
-          };
-        }).filter((x) =>
-          x.item || x.spesifikasi || x.volume > 0 || x.harga_satuan > 0
-        );
+        body.rab = normalisasiRabAspirasi(b.rab);
       } catch (validationError) {
         return res.status(400).json({
           ok: false,
@@ -5236,21 +5205,23 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
 
       for (let i = 0; i < rab.length; i++) {
         const item = rab[i] || {};
-        const volume = Number(item.volume || 0);
-        const harga = Number(item.harga_satuan || 0);
+        const volumeDiisi = item.volume !== null && item.volume !== undefined && item.volume !== "";
         const hargaDiisi = item.harga_satuan !== null && item.harga_satuan !== undefined && item.harga_satuan !== "";
-        const subtotal = volume * harga;
-        if (!hargaDiisi) hargaBelumLengkap = true;
-        total += Number.isFinite(subtotal) ? subtotal : 0;
+        const volume = volumeDiisi ? Number(item.volume) : 0;
+        const harga = hargaDiisi ? Number(item.harga_satuan) : 0;
+        const subtotalDiisi = volumeDiisi && hargaDiisi;
+        const subtotal = subtotalDiisi ? volume * harga : null;
+        if (!subtotalDiisi) hargaBelumLengkap = true;
+        if (subtotalDiisi && Number.isFinite(subtotal)) total += subtotal;
 
         const isi = [
           String(i + 1),
           (item.item || "-") +
             (item.spesifikasi ? "\n" + item.spesifikasi : ""),
           item.tujuan || "-",
-          String(item.volume ?? "-") + " " + (item.satuan || ""),
+          (volumeDiisi ? String(item.volume) : "Belum diukur") + " " + (item.satuan || ""),
           hargaDiisi ? rupiah(harga) : "Belum diisi",
-          hargaDiisi ? rupiah(subtotal) : "Belum dihitung"
+          subtotalDiisi ? rupiah(subtotal) : "Belum dihitung"
         ];
 
         const tinggi = Math.max(

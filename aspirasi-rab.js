@@ -30,7 +30,28 @@ function buatTemplateRab(kategori,d={}){
  return items[k].map(([item,spesifikasi,tujuan,rumus,satuan])=>({item,spesifikasi,tujuan,volume:rumus==="area"?area:rumus==="beton"?vol:"",satuan,harga_satuan:"",total:""}));
 }
 function buatRencanaKerja(k){const key=kenaliKategoriAspirasi(k);const teks={hotmix:"Survei badan jalan.\\nPembersihan dan persiapan permukaan.\\nPemeriksaan pondasi dan ketebalan aspal.\\nPenyusunan volume dan harga berdasarkan survei.\\nPelaksanaan setelah persetujuan.\\nPemeriksaan mutu dan dokumentasi.",paving:"Survei dan pengukuran jalan.\\nPersiapan badan jalan.\\nPemeriksaan lapisan dasar dan paving.\\nPenyusunan RAB berdasarkan survei.\\nPemasangan dan pemadatan paving.\\nPemeriksaan hasil.",beton:"Survei kondisi jalan.\\nPemeriksaan tanah dasar dan ketebalan beton.\\nPenetapan mutu melalui pemeriksaan teknis.\\nPenyusunan volume dan harga.\\nPengecoran setelah persetujuan.\\nPerawatan dan pemeriksaan hasil.",drainase:"Survei aliran dan kondisi saluran.\\nPengukuran dimensi saluran.\\nPenetapan bentuk dan material teknis.\\nPenyusunan volume dan harga.\\nPelaksanaan setelah persetujuan.\\nPemeriksaan aliran dan dokumentasi."};return (teks[key]||"Survei kebutuhan.\\nPenetapan lingkup pekerjaan.\\nPenyusunan RAB berdasarkan survei dan harga setempat.\\nPelaksanaan setelah persetujuan.\\nPemeriksaan dan dokumentasi.").split("\\n").map((x,i)=>(i+1)+". "+x).join("\\n");}
+function normalisasiRabAspirasi(daftar){
+ if(!Array.isArray(daftar))throw new Error("Format RAB tidak valid.");
+ return daftar.slice(0,100).map((x)=>{
+  const rawVolume=x.volume===null||x.volume===undefined?"":String(x.volume).trim();
+  const rawHarga=x.harga_satuan===null||x.harga_satuan===undefined?"":String(x.harga_satuan).trim();
+  const volume=rawVolume===""?null:Number(rawVolume);
+  const harga=rawHarga===""?null:Number(rawHarga);
+  if((volume!==null&&(!Number.isFinite(volume)||volume<0))||(harga!==null&&(!Number.isFinite(harga)||harga<0))){
+   throw new Error("Volume dan harga satuan RAB harus kosong atau berupa angka nol atau lebih.");
+  }
+  return {
+   item:String(x.item||"").trim().slice(0,200),
+   spesifikasi:String(x.spesifikasi||"").trim().slice(0,500),
+   tujuan:String(x.tujuan||"").trim().slice(0,500),
+   volume,
+   satuan:String(x.satuan||"").trim().slice(0,30),
+   harga_satuan:harga,
+   total:volume!==null&&harga!==null?volume*harga:null
+  };
+ }).filter(x=>x.item||x.spesifikasi||x.tujuan||x.volume!==null||x.harga_satuan!==null);
+}
 function infoKategoriAspirasi(k){const key=kenaliKategoriAspirasi(k);return{key,label:titles[key],judul:titles[key]};}
-const api={kenaliKategoriAspirasi,buatTemplateRab,buatRencanaKerja,infoKategoriAspirasi};
+const api={kenaliKategoriAspirasi,buatTemplateRab,buatRencanaKerja,normalisasiRabAspirasi,infoKategoriAspirasi};
 if(typeof module!=="undefined"&&module.exports)module.exports=api;
 if(typeof window!=="undefined")window.AspirasiRab=api;

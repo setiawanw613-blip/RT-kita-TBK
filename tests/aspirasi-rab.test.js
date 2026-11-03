@@ -25,3 +25,18 @@ test("rencana kerja dan label kategori tersedia",()=>{
  assert.match(api.buatRencanaKerja("Drainase / Got"),/saluran/i);
  assert.equal(api.infoKategoriAspirasi("Hotmix").label,"Perbaikan Jalan Lingkungan dengan Aspal Hotmix");
 });
+
+test("normalisasi RAB mempertahankan volume dan harga yang belum diisi",()=>{
+ const rows=api.normalisasiRabAspirasi([{item:"Penghamparan hotmix",volume:"",satuan:"m2",harga_satuan:""}]);
+ assert.equal(rows[0].volume,null);
+ assert.equal(rows[0].harga_satuan,null);
+ assert.equal(rows[0].total,null);
+});
+test("normalisasi RAB menghitung subtotal hanya jika volume dan harga lengkap",()=>{
+ const rows=api.normalisasiRabAspirasi([{item:"Hotmix",volume:"60",satuan:"m2",harga_satuan:"125000"}]);
+ assert.equal(rows[0].total,7500000);
+});
+test("normalisasi RAB menolak angka negatif dan format tidak valid",()=>{
+ assert.throws(()=>api.normalisasiRabAspirasi([{item:"Material",volume:"-1",harga_satuan:"100"}]),/angka nol atau lebih/);
+ assert.throws(()=>api.normalisasiRabAspirasi("bukan daftar"),/Format RAB/);
+});
