@@ -23,6 +23,7 @@ jobs:
         run: |
           node --check server.js
           node --check midtrans-config.js
+          node --check storage-path.js
           node --check surat-form.js
           node --check tampilan-hp.js
           node --check sw.js
