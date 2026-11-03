@@ -3012,7 +3012,7 @@ function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     }
   }
   if (!capAsliTerpasang) {
-    gambarCapRT(doc, xKanan + lebarTtd / 2 - 44, yTtd + 58, 35);
+    console.warn("CAP RT RESMI BELUM TERSEDIA; PDF DIBUAT TANPA CAP.");
   }
 
   doc.font(namaRT ? FONT_TEBAL : FONT).fontSize(UKURAN).fillColor("#000000")
@@ -3023,8 +3023,8 @@ function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     });
 
   doc.font("Helvetica-Oblique").fontSize(6.5).fillColor("#444444")
-    .text("Ditandatangani & dicap secara elektronik", xKanan, yNama + 15, { width: lebarTtd, align: "center" })
-    .text("Kode verifikasi: " + kodeVerifikasiSurat(id, letter), xKanan, yNama + 23, { width: lebarTtd, align: "center" });
+    .text("Tanda tangan manual Ketua RT tetap diperlukan", xKanan, yNama + 15, { width: lebarTtd, align: "center" })
+    .text("Kode verifikasi aplikasi: " + kodeVerifikasiSurat(id, letter), xKanan, yNama + 23, { width: lebarTtd, align: "center" });
   doc.fillColor("#000000");
 
   // Kiri: Mengetahui Ketua RW
