@@ -321,12 +321,21 @@ if (settlement_time) {
   }
 }
 
-await supabaseRequest("iuran_warga", {
+const hasilUpdate = await supabaseRequest("iuran_warga", {
   method: "PATCH",
-  query: `id=eq.${encodeURIComponent(iuran.id)}`,
+  query:
+    `id=eq.${encodeURIComponent(iuran.id)}` +
+    "&status=neq.lunas",
   body: dataUpdate
 });
 
+// Hanya proses notifikasi jika callback ini yang pertama kali melunasi baris.
+const barisDiperbarui = Array.isArray(hasilUpdate)
+  ? hasilUpdate[0]
+  : hasilUpdate;
+if (!barisDiperbarui || barisDiperbarui.status !== "lunas") {
+  continue;
+}
 
       try {
         await supabaseRequest("notifikasi", {
