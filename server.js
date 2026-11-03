@@ -3132,12 +3132,13 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     const KIRI_KOP = 48;
     const KANAN_KOP = 48;
     const LEBAR_KOP = doc.page.width - KIRI_KOP - KANAN_KOP;
-    const UKURAN_LOGO_SISI = 76;
+    // Samakan ukuran kop Menu Surat dengan kop Aspirasi Warga.
+    const UKURAN_LOGO_SISI = 92;
     const X_LOGO_KANAN = doc.page.width - KANAN_KOP - UKURAN_LOGO_SISI;
     const X_TEKS_KOP = KIRI_KOP + UKURAN_LOGO_SISI + 10;
     const LEBAR_TEKS_KOP = X_LOGO_KANAN - 10 - X_TEKS_KOP;
     const URL_LAMBANG_KABUPATEN =
-      "https://commons.wikimedia.org/wiki/Special:FilePath/Logo_Kabupaten_Bekasi.jpg?width=512";
+      "https://upload.wikimedia.org/wikipedia/commons/1/12/Logo_Kabupaten_Bekasi.jpg";
 
     // Ambil lambang dari Wikimedia Commons (sumber mencantumkan Pemkab Bekasi).
     // Jika layanan gambar sedang tidak tersedia, kop surat tetap dapat dibuat.
@@ -3158,7 +3159,7 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     }
 
     if (lambangKabupatenBekasi) {
-      doc.image(lambangKabupatenBekasi, KIRI_KOP, 20, {
+      doc.image(lambangKabupatenBekasi, KIRI_KOP, 14, {
         fit: [UKURAN_LOGO_SISI, UKURAN_LOGO_SISI],
         align: "center",
         valign: "center"
@@ -3166,11 +3167,14 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     }
 
     if (pakaiLogoPerumahan) {
-      doc.image(logoKopPath, X_LOGO_KANAN, 20, {
-        fit: [UKURAN_LOGO_SISI, UKURAN_LOGO_SISI],
-        align: "center",
-        valign: "center"
-      });
+      // Pertebal logo Taman Bali Kahuripan agar setara dengan kop Aspirasi.
+      for (const [dx, dy] of [[0, 0], [-0.35, 0], [0.35, 0], [0, -0.35], [0, 0.35]]) {
+        doc.image(logoKopPath, X_LOGO_KANAN + dx, 14 + dy, {
+          fit: [UKURAN_LOGO_SISI, UKURAN_LOGO_SISI],
+          align: "center",
+          valign: "center"
+        });
+      }
     }
 
     doc.save();
@@ -4834,7 +4838,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     const logoKopPath = path.join(__dirname, "images.png");
     const pakaiLogoPerumahan = fs.existsSync(logoKopPath);
     const URL_LAMBANG_KABUPATEN =
-      "https://commons.wikimedia.org/wiki/Special:FilePath/Logo_Kabupaten_Bekasi.jpg?width=512";
+      "https://upload.wikimedia.org/wikipedia/commons/1/12/Logo_Kabupaten_Bekasi.jpg";
 
     // Gunakan sumber lambang yang sama dengan kop Menu Surat.
     let lambangKabupatenBekasi = null;
