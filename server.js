@@ -5015,12 +5015,19 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       doc.y = y + tinggiBaris;
     });
 
+    // Kembalikan titik awal paragraf ke batas kiri tabel agar tidak
+    // mewarisi posisi x dari sel tabel terakhir.
+    doc.x = KIRI;
     doc.moveDown(0.5);
+    const yCatatanUkuran = doc.y;
     doc.font("Helvetica-Oblique").fontSize(8)
       .text(
         "Catatan: Ukuran kondisi lama dan usulan harus diverifikasi melalui pengukuran lapangan. Data yang belum diisi tidak dianggap sebagai hasil pengukuran.",
-        { width: LEBAR, lineGap: 2 }
+        KIRI,
+        yCatatanUkuran,
+        { width: LEBAR, lineGap: 2, align: "left" }
       );
+    doc.x = KIRI;
 
     // ==================================================
     // HALAMAN 2 - SKETSA DAN DOKUMENTASI
@@ -5317,10 +5324,14 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       );
 
     // ==================================================
-    // HALAMAN 4 - PELAKSANAAN DAN PENGESAHAN
+    // PELAKSANAAN DAN PENGESAHAN
     // ==================================================
+    // Tidak memaksa halaman baru. Bagian ini diteruskan pada ruang
+    // tersisa setelah RAB; halaman tambahan hanya dibuat bila memang
+    // tidak cukup ruang untuk judul dan isi pokoknya.
 
-    halamanBaru();
+    doc.x = KIRI;
+    if (doc.y + 220 > BATAS) halamanBaru();
 
     doc.font("Helvetica-Bold").fontSize(13)
       .text("RENCANA PELAKSANAAN DAN PENGESAHAN", {
