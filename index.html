@@ -659,7 +659,8 @@ if(role==="warga"){
         <input id="regHp" inputmode="tel" placeholder="Masukkan nomor HP">
 
         <label>Password</label>
-        <input id="regPassword" type="password" placeholder="Buat password">
+        <input id="regPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Minimal 8 karakter">
+        <div class="muted" style="font-size:12px;margin-top:4px">Password baru minimal 8 karakter.</div>
 
         <label>Alamat</label>
         <textarea id="regAlamat" placeholder="Masukkan alamat tempat tinggal"></textarea>
@@ -688,6 +689,11 @@ if(role==="warga"){
 
  if(!nama_lengkap || !no_kk || !no_hp || !password || !alamat || !hubungan_keluarga){
   alert("Semua data wajib diisi");
+  return;
+}
+
+if(password.length < 8){
+  alert("Password minimal 8 karakter.");
   return;
 }
 
