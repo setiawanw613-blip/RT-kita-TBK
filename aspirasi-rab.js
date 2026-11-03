@@ -4,9 +4,9 @@ function kenaliKategoriAspirasi(kategori){
  if(s.includes("hotmix")||s.includes("aspal"))return "hotmix";
  if(s.includes("paving"))return "paving";
  if(s.includes("beton"))return "beton";
+ if(s.includes("penerangan")||s.includes("lampu"))return "lampu";
  if(s.includes("jalan"))return "hotmix";
  if(s.includes("drainase")||s.includes("got"))return "drainase";
- if(s.includes("penerangan")||s.includes("lampu"))return "lampu";
  if(s.includes("bersih")||s.includes("sampah"))return "kebersihan";
  if(s.includes("aman"))return "keamanan";
  if(s.includes("fasilitas"))return "fasilitas";
