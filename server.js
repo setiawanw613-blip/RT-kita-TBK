@@ -6,6 +6,7 @@ const multer = require("multer");
 const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidtransServerKeyForNewTransaction, getMidtransServerKeyForOrder, getMidtransModeInfo } = require("./midtrans-config");
 const { normalizeStorageObjectPath } = require("./storage-path");
 const { csvCell } = require("./csv-safe");
+const { isValidNewResidentPassword } = require("./password-policy");
 const app = express();
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -859,11 +860,7 @@ app.post("/api/register-warga", async (req, res) => {
   alamat,
   hubungan_keluarga
 } = req.body;
-    if (
-  typeof password !== "string" ||
-  password.length < 8 ||
-  password.length > 1024
-) {
+    if (!isValidNewResidentPassword(password)) {
   return res.status(400).json({
     ok: false,
     message: "Password minimal 8 karakter."
