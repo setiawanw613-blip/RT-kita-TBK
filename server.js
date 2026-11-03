@@ -407,6 +407,16 @@ function constantTimeStringEqual(value, expected) {
   return crypto.timingSafeEqual(valueHash, expectedHash);
 }
 
+function dataWargaAman(warga) {
+  if (!warga || typeof warga !== "object" || Array.isArray(warga)) {
+    return warga;
+  }
+
+  const salinan = { ...warga };
+  delete salinan.password;
+  return salinan;
+}
+
 function verifyPassword(password, storedPassword) {
   if (
     typeof password !== "string" ||
@@ -1370,7 +1380,7 @@ app.patch("/api/residents/:id/verify", requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       message: "Warga berhasil diverifikasi",
-      data: row
+      data: dataWargaAman(row)
     });
   } catch (error) {
     console.error("VERIFY WARGA ERROR:", error);
@@ -1398,7 +1408,7 @@ app.patch("/api/residents/:id/deactivate", requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       message: "Warga berhasil dinonaktifkan",
-      data: row
+      data: dataWargaAman(row)
     });
   } catch (error) {
     console.error("DEACTIVATE WARGA ERROR:", error);
@@ -1433,7 +1443,7 @@ app.patch("/api/residents/:id/activate", requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       message: "Warga berhasil diaktifkan kembali",
-      data: row
+      data: dataWargaAman(row)
     });
   } catch (error) {
     console.error("ACTIVATE WARGA ERROR:", error);
@@ -1519,7 +1529,7 @@ app.patch("/api/residents/:id", requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       message: "Data warga berhasil diperbarui",
-      data: row
+      data: dataWargaAman(row)
     });
   } catch (error) {
     console.error("EDIT WARGA ERROR:", error);
@@ -1644,7 +1654,7 @@ app.post("/api/residents", requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       data: {
-        ...row,
+        ...dataWargaAman(row),
         nama: row?.nama_lengkap
       }
     });
@@ -1834,7 +1844,7 @@ app.patch("/api/my-data", requireWarga, async (req, res) => {
     res.json({
       ok: true,
       message: "Data warga berhasil diperbarui",
-      data: row
+      data: dataWargaAman(row)
     });
 
   } catch (error) {
