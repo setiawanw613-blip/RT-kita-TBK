@@ -3112,6 +3112,8 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     const path = require("path");
 
     res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+    res.setHeader("Pragma", "no-cache");
     res.setHeader(
       "Content-Disposition",
       `inline; filename="surat-${id}.pdf"`
@@ -4811,6 +4813,8 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     });
 
     res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+    res.setHeader("Pragma", "no-cache");
     res.setHeader(
       "Content-Disposition",
       `attachment; filename="Proposal-Aspirasi-${a.id}.pdf"`
@@ -4826,8 +4830,8 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
 
     function pasangKop() {
       const xLogo = KIRI;
-      const yLogo = 20;
-      const ukuranLogo = 104;
+      const yLogo = 12;
+      const ukuranLogo = 128;
       const xTeks = KIRI + ukuranLogo + 12;
       const lebarTeks = LEBAR - ukuranLogo - 12;
       if (pakaiLogoKop) {
