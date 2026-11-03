@@ -5125,35 +5125,29 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     judul("F. DOKUMENTASI KONDISI LAPANGAN");
 
     async function pasangFoto(url, label) {
-      if (doc.y + 205 > BATAS) {
-        halamanBaru();
-      }
-
-      doc.font("Helvetica-Bold").fontSize(9)
-        .text(label, KIRI, doc.y, { width: LEBAR });
-      doc.moveDown(0.3);
-
+      // Foto yang tidak tersedia hanya memakai ruang kecil; jangan membuat
+      // halaman baru kosong hanya untuk mencetak keterangan foto kosong.
       if (!url) {
+        if (doc.y + 55 > BATAS) halamanBaru();
+        doc.font("Helvetica-Bold").fontSize(9)
+          .text(label, KIRI, doc.y, { width: LEBAR });
+        doc.moveDown(0.3);
         doc.font("Helvetica-Oblique").fontSize(8)
-          .text("Foto dokumentasi belum tersedia.", {
-            width: LEBAR
-          });
+          .text("Foto dokumentasi belum tersedia.", { width: LEBAR });
         doc.moveDown(0.8);
         return;
       }
 
       try {
         const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error("Foto gagal diambil");
-        }
-
+        if (!response.ok) throw new Error("Foto gagal diambil");
         const buffer = Buffer.from(await response.arrayBuffer());
 
-        if (doc.y + 175 > BATAS) {
-          halamanBaru();
-        }
-
+        // Ukur ruang sebelum menulis judul agar judul dan foto tidak terpisah.
+        if (doc.y + 205 > BATAS) halamanBaru();
+        doc.font("Helvetica-Bold").fontSize(9)
+          .text(label, KIRI, doc.y, { width: LEBAR });
+        doc.moveDown(0.3);
         const y = doc.y;
         doc.image(buffer, KIRI + 45, y, {
           fit: [LEBAR - 90, 145],
@@ -5161,6 +5155,10 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
         });
         doc.y = y + 160;
       } catch (error) {
+        if (doc.y + 55 > BATAS) halamanBaru();
+        doc.font("Helvetica-Bold").fontSize(9)
+          .text(label, KIRI, doc.y, { width: LEBAR });
+        doc.moveDown(0.3);
         doc.font("Helvetica-Oblique").fontSize(8)
           .text(
             "Foto tersimpan tetapi tidak dapat dimuat. Periksa kembali dokumentasi di aplikasi.",
@@ -5181,10 +5179,12 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     );
 
     // ==================================================
-    // HALAMAN 3 - RENCANA ANGGARAN BIAYA
+    // RENCANA ANGGARAN BIAYA - ALUR HALAMAN DINAMIS
     // ==================================================
 
-    halamanBaru();
+    // RAB memakai halaman yang sedang berjalan bila masih cukup ruang.
+    // Ini mencegah halaman kosong akibat page break beruntun dari bagian foto.
+    if (doc.y + 155 > BATAS) halamanBaru();
 
     doc.font("Helvetica-Bold").fontSize(13)
       .text("RENCANA ANGGARAN BIAYA", {
@@ -5195,7 +5195,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     doc.moveDown(0.3);
     doc.font("Helvetica").fontSize(8)
       .text(
-        "Rincian biaya berikut mengikuti data yang dimasukkan pada aplikasi dan harus diverifikasi berdasarkan survei serta harga setempat.",
+        "Rincian biaya disusun berdasarkan kebutuhan pekerjaan. Volume dan harga satuan yang belum diverifikasi ditandai sebagai data draf dan wajib dilengkapi melalui survei serta pengecekan harga setempat.",
         { width: LEBAR, align: "justify" }
       );
 
@@ -5204,17 +5204,16 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     if (!rab.length) {
       doc.font("Helvetica-Oblique").fontSize(9)
         .text(
-          "RAB belum disusun. Rincian pekerjaan, volume, dan harga satuan perlu dilengkapi setelah survei lapangan.",
+          "DRAF RAB: rincian pekerjaan, volume, dan harga satuan belum tersedia. Lengkapi setelah survei lapangan.",
           { width: LEBAR, lineGap: 3 }
         );
     } else {
-      const kolom = [24, 112, 94, 58, 100, 111];
-      const totalLebar = kolom.reduce((sum, v) => sum + v, 0);
-
+      // Susunan kolom mengikuti format RAB formal: uraian, volume,
+      // harga satuan, dan jumlah; spesifikasi disatukan dengan uraian.
+      const kolom = [25, 205, 65, 100, 104];
       const judulKolom = [
         "No",
-        "Item / spesifikasi",
-        "Kegunaan",
+        "Uraian pekerjaan / spesifikasi",
         "Volume",
         "Harga satuan",
         "Jumlah"
@@ -5223,25 +5222,22 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       function headerRAB() {
         const y = doc.y;
         let x = KIRI;
-
         judulKolom.forEach((label, i) => {
-          doc.rect(x, y, kolom[i], 34)
-            .fill("#FFFFFF");
+          doc.rect(x, y, kolom[i], 32)
+            .fillAndStroke("#EAF0F6", "#666666");
           doc.fillColor("#000000")
             .font("Helvetica-Bold")
             .fontSize(7)
-            .text(label, x + 3, y + 10, {
+            .text(label, x + 3, y + 8, {
               width: kolom[i] - 6,
               align: "center"
             });
           x += kolom[i];
         });
-
-        doc.y = y + 34;
+        doc.y = y + 32;
       }
 
       headerRAB();
-
       let total = 0;
       let hargaBelumLengkap = false;
 
@@ -5251,68 +5247,72 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
         const hargaDiisi = item.harga_satuan !== null && item.harga_satuan !== undefined && item.harga_satuan !== "";
         const volume = volumeDiisi ? Number(item.volume) : 0;
         const harga = hargaDiisi ? Number(item.harga_satuan) : 0;
-        const subtotalDiisi = volumeDiisi && hargaDiisi;
+        const subtotalDiisi = volumeDiisi && hargaDiisi &&
+          Number.isFinite(volume) && Number.isFinite(harga);
         const subtotal = subtotalDiisi ? volume * harga : null;
         if (!subtotalDiisi) hargaBelumLengkap = true;
-        if (subtotalDiisi && Number.isFinite(subtotal)) total += subtotal;
+        if (subtotalDiisi) total += subtotal;
 
+        const uraian = [item.item, item.spesifikasi].filter(Boolean).join("\n");
         const isi = [
           String(i + 1),
-          (item.item || "-") +
-            (item.spesifikasi ? "\n" + item.spesifikasi : ""),
-          item.tujuan || "-",
-          (volumeDiisi ? String(item.volume) : "Belum diukur") + " " + (item.satuan || ""),
+          uraian || "Uraian belum diisi",
+          (volumeDiisi ? String(item.volume) : "Belum diukur") +
+            (item.satuan ? " " + item.satuan : ""),
           hargaDiisi ? rupiah(harga) : "Belum diisi",
           subtotalDiisi ? rupiah(subtotal) : "Belum dihitung"
         ];
 
-        const tinggi = Math.max(
-          42,
-          ...isi.map((v, j) => {
-            doc.font("Helvetica").fontSize(7);
-            return doc.heightOfString(String(v), {
-              width: kolom[j] - 8
-            }) + 12;
-          })
-        );
+        const tinggi = Math.max(38, ...isi.map((v, j) => {
+          doc.font("Helvetica").fontSize(7);
+          return doc.heightOfString(String(v), {
+            width: kolom[j] - 10,
+            lineGap: 1
+          }) + 12;
+        }));
 
-        if (doc.y + tinggi + 5 > BATAS) {
+        if (doc.y + tinggi + 8 > BATAS) {
           halamanBaru();
           headerRAB();
         }
 
         const y = doc.y;
         let x = KIRI;
-
         isi.forEach((v, j) => {
-          garisTabel(y, tinggi, x, kolom[j]);
+          doc.rect(x, y, kolom[j], tinggi)
+            .lineWidth(0.7)
+            .strokeColor("#777777")
+            .stroke();
           doc.font("Helvetica").fontSize(7)
             .fillColor("#000000")
-            .text(String(v), x + 4, y + 6, {
-              width: kolom[j] - 8,
+            .text(String(v), x + 5, y + 6, {
+              width: kolom[j] - 10,
               height: tinggi - 10,
-              align: j === 0 || j === 3 ? "center" : "left"
+              lineGap: 1,
+              align: j === 0 || j === 2 ? "center" : "left"
             });
           x += kolom[j];
         });
-
         doc.y = y + tinggi;
       }
 
-      doc.moveDown(0.7);
-      doc.font("Helvetica-Bold").fontSize(10)
+      if (doc.y + 42 > BATAS) halamanBaru();
+      doc.moveDown(0.5);
+      doc.font("Helvetica-Bold").fontSize(9)
         .text(
-          hargaBelumLengkap ? "TOTAL RAB: BELUM DAPAT DIHITUNG — HARGA SATUAN BELUM LENGKAP" : "TOTAL RAB PERKIRAAN: " + rupiah(total),
+          hargaBelumLengkap
+            ? "TOTAL RAB: BELUM DAPAT DITETAPKAN — LENGKAPI HARGA SATUAN"
+            : "TOTAL RAB PERKIRAAN: " + rupiah(total),
           KIRI,
           doc.y,
-          { width: totalLebar, align: "right" }
+          { width: LEBAR, align: "right" }
         );
     }
 
-    doc.moveDown(1);
+    doc.moveDown(0.8);
     doc.font("Helvetica-Oblique").fontSize(8)
       .text(
-        "Catatan: RAB ini bukan penetapan anggaran. Volume dan harga harus diperiksa melalui survei lapangan serta disesuaikan dengan harga bahan dan upah setempat.",
+        "Catatan: RAB ini merupakan estimasi/draf, bukan penetapan anggaran. Volume, spesifikasi teknis, dan harga satuan harus diverifikasi melalui survei serta disesuaikan dengan harga setempat.",
         { width: LEBAR, align: "justify", lineGap: 2 }
       );
 
