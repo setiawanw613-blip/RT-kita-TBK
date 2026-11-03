@@ -3131,7 +3131,7 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     const KIRI_KOP = 48;
     const KANAN_KOP = 48;
     const LEBAR_KOP = doc.page.width - KIRI_KOP - KANAN_KOP;
-    const UKURAN_LOGO = 58;
+    const UKURAN_LOGO = 84;
     const X_TEKS_KOP = KIRI_KOP + UKURAN_LOGO + 12;
     const LEBAR_TEKS_KOP = LEBAR_KOP - UKURAN_LOGO - 12;
 
@@ -3146,27 +3146,33 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     doc.save();
     doc.fillColor("#111111")
       .font("Helvetica-Bold")
-      .fontSize(13)
+      .fontSize(15)
       .text("PERUMAHAN TAMAN BALI KAHURIPAN", X_TEKS_KOP, 25, {
         width: LEBAR_TEKS_KOP,
         align: "center"
       });
     doc.font("Helvetica-Bold")
-      .fontSize(10)
+      .fontSize(11)
       .text("RUKUN TETANGGA 004 / RUKUN WARGA 001", X_TEKS_KOP, 47, {
         width: LEBAR_TEKS_KOP,
         align: "center"
       });
-    doc.font("Helvetica")
+    doc.font("Helvetica-Bold")
       .fontSize(8.5)
       .text("Desa Sukahurip · Kecamatan Sukatani · Kabupaten Bekasi", X_TEKS_KOP, 65, {
         width: LEBAR_TEKS_KOP,
         align: "center"
       });
-    doc.moveTo(KIRI_KOP, 96)
-      .lineTo(doc.page.width - KANAN_KOP, 96)
-      .lineWidth(1.1)
-      .strokeColor("#222222")
+    doc.font("Helvetica-Bold")
+      .fontSize(8.5)
+      .text("SEKRETARIAT: PERUM. TAMAN BALI KAHURIPAN BLOK C 8 NO.30  |  DRAFT", X_TEKS_KOP, 82, {
+        width: LEBAR_TEKS_KOP,
+        align: "center"
+      });
+    doc.moveTo(KIRI_KOP, 108)
+      .lineTo(doc.page.width - KANAN_KOP, 108)
+      .lineWidth(2)
+      .strokeColor("#111111")
       .stroke();
     doc.restore();
 
@@ -4815,26 +4821,28 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     const KANAN = 48;
     const LEBAR = doc.page.width - KIRI - KANAN;
     const BATAS = doc.page.height - 55;
-    const ATAS = 118;
+    const ATAS = 136;
     const satuan = d.satuan || "meter";
 
     function pasangKop() {
       const xLogo = KIRI;
       const yLogo = 24;
-      const ukuranLogo = 58;
+      const ukuranLogo = 84;
       const xTeks = KIRI + ukuranLogo + 12;
       const lebarTeks = LEBAR - ukuranLogo - 12;
       if (pakaiLogoKop) {
         doc.image(logoKopPath, xLogo, yLogo, { fit: [ukuranLogo, ukuranLogo], align: "center", valign: "center" });
       }
       doc.save();
-      doc.fillColor("#111111").font("Helvetica-Bold").fontSize(15)
+      doc.fillColor("#111111").font("Helvetica-Bold").fontSize(17)
         .text("TAMAN BALI KAHURIPAN", xTeks, 29, { width: lebarTeks, align: "center" });
-      doc.font("Helvetica-Bold").fontSize(10)
+      doc.font("Helvetica-Bold").fontSize(11)
         .text("PENGURUS RT 004 / RW 01", xTeks, 51, { width: lebarTeks, align: "center" });
-      doc.font("Helvetica").fontSize(8.5)
+      doc.font("Helvetica-Bold").fontSize(9)
         .text("Perumahan Taman Bali Kahuripan · Desa Sukahurip · Kecamatan Sukatani · Kabupaten Bekasi", xTeks, 68, { width: lebarTeks, align: "center" });
-      doc.moveTo(KIRI, 96).lineTo(doc.page.width - KANAN, 96).lineWidth(1.1).strokeColor("#111111").stroke();
+      doc.font("Helvetica-Bold").fontSize(8.5)
+        .text("SEKRETARIAT: PERUM. TAMAN BALI KAHURIPAN BLOK C 8 NO.30  |  DRAFT", xTeks, 84, { width: lebarTeks, align: "center" });
+      doc.moveTo(KIRI, 108).lineTo(doc.page.width - KANAN, 108).lineWidth(2).strokeColor("#111111").stroke();
       doc.restore();
     }
 
@@ -4905,8 +4913,8 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
 
     function garisTabel(y, tinggi, x, lebar) {
       doc.rect(x, y, lebar, tinggi)
-        .lineWidth(0.5)
-        .strokeColor("#BBBBBB")
+        .lineWidth(0.9)
+        .strokeColor("#666666")
         .stroke();
     }
 
@@ -5050,8 +5058,8 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
 
       if (!tersedia) {
         doc.rect(x + 25, y + 25, 160, 75)
-          .lineWidth(0.8)
-          .strokeColor("#999999")
+          .lineWidth(1.5)
+          .strokeColor("#444444")
           .stroke();
         doc.font("Helvetica-Oblique").fontSize(8)
           .text("Sketsa belum dapat dibuat\nUkuran belum lengkap", x + 30, y + 52, {
@@ -5071,7 +5079,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       );
 
       doc.rect(x + 25, y + 25, w, h)
-        .lineWidth(1.2)
+        .lineWidth(1.8)
         .strokeColor("#000000")
         .stroke();
 
