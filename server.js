@@ -3119,29 +3119,58 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
 
     const doc = new PDFDocument({
       size: "A4",
-      margin: 55
+      margin: 48
     });
 
     doc.pipe(res);
 
+    // Kop surat bersih untuk cetak A4: logo kecil di kiri, identitas RT,
+    // dan garis pemisah. Tidak lagi memakai gambar latar/bingkai satu halaman.
+    const logoKopPath = path.join(__dirname, "images.png");
+    const pakaiLogoKop = fs.existsSync(logoKopPath);
+    const KIRI_KOP = 48;
+    const KANAN_KOP = 48;
+    const LEBAR_KOP = doc.page.width - KIRI_KOP - KANAN_KOP;
+    const UKURAN_LOGO = 58;
+    const X_TEKS_KOP = KIRI_KOP + UKURAN_LOGO + 12;
+    const LEBAR_TEKS_KOP = LEBAR_KOP - UKURAN_LOGO - 12;
 
-
-
-    // TEMPLATE SURAT TBK — LATAR A4 PENUH
-    const kopTemplatePath = path.join(
-      __dirname,
-      "contoh kop surat kosong tbk.png"
-    );
-
-    if (fs.existsSync(kopTemplatePath)) {
-      doc.image(kopTemplatePath, 0, 0, {
-        width: doc.page.width,
-        height: doc.page.height
+    if (pakaiLogoKop) {
+      doc.image(logoKopPath, KIRI_KOP, 24, {
+        fit: [UKURAN_LOGO, UKURAN_LOGO],
+        align: "center",
+        valign: "center"
       });
-    } else {
-      console.error("GAMBAR TEMPLATE KOP SURAT TIDAK DITEMUKAN");
     }
-    // ISI SURAT (kop surat tetap; isi, tanda tangan & cap otomatis sesuai jenis surat)
+
+    doc.save();
+    doc.fillColor("#111111")
+      .font("Helvetica-Bold")
+      .fontSize(13)
+      .text("PERUMAHAN TAMAN BALI KAHURIPAN", X_TEKS_KOP, 25, {
+        width: LEBAR_TEKS_KOP,
+        align: "center"
+      });
+    doc.font("Helvetica-Bold")
+      .fontSize(10)
+      .text("RUKUN TETANGGA 004 / RUKUN WARGA 001", X_TEKS_KOP, 47, {
+        width: LEBAR_TEKS_KOP,
+        align: "center"
+      });
+    doc.font("Helvetica")
+      .fontSize(8.5)
+      .text("Desa Sukahurip · Kecamatan Sukatani · Kabupaten Bekasi", X_TEKS_KOP, 65, {
+        width: LEBAR_TEKS_KOP,
+        align: "center"
+      });
+    doc.moveTo(KIRI_KOP, 96)
+      .lineTo(doc.page.width - KANAN_KOP, 96)
+      .lineWidth(1.1)
+      .strokeColor("#222222")
+      .stroke();
+    doc.restore();
+
+    // Isi surat tetap mengikuti jenis surat dan data pengajuan yang disetujui.
     tulisIsiSuratPdf(doc, { id, letter, warga });
 
     doc.end();
