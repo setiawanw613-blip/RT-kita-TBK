@@ -865,6 +865,7 @@ app.post("/api/register-warga", async (req, res) => {
   no_hp.length > 30 ||
   typeof password !== "string" ||
   !password ||
+  password.length < 8 ||
   password.length > 1024 ||
   typeof nama_lengkap !== "string" ||
   !nama_lengkap.trim() ||
