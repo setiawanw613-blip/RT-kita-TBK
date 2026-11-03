@@ -4597,16 +4597,45 @@ app.patch("/api/aspirasi/:id", requireAdmin, async (req, res) => {
     if (allowed.includes(b.status)) body.status = b.status;
     if (b.catatan !== undefined) body.catatan = String(b.catatan).slice(0,3000);
     if (b.rab !== undefined) {
-      if (!Array.isArray(b.rab)) return res.status(400).json({ok:false,message:"Format RAB tidak valid."});
-      body.rab = b.rab.slice(0,100).map(x => ({
-        item:String(x.item || "").slice(0,200),
-        spesifikasi:String(x.spesifikasi || "").slice(0,500),
-        tujuan:String(x.tujuan || "").slice(0,500),
-        volume:Number(x.volume) || 0,
-        satuan:String(x.satuan || "").slice(0,30),
-        harga_satuan:Number(x.harga_satuan) || 0,
-        total:(Number(x.volume)||0)*(Number(x.harga_satuan)||0)
-      }));
+      if (!Array.isArray(b.rab)) {
+        return res.status(400).json({
+          ok: false,
+          message: "Format RAB tidak valid."
+        });
+      }
+
+      try {
+        body.rab = b.rab.slice(0, 100).map((x) => {
+          const volume = Number(x.volume);
+          const hargaSatuan = Number(x.harga_satuan);
+
+          if (
+            !Number.isFinite(volume) || volume < 0 ||
+            !Number.isFinite(hargaSatuan) || hargaSatuan < 0
+          ) {
+            throw new Error(
+              "Volume dan harga satuan RAB harus berupa angka nol atau lebih."
+            );
+          }
+
+          return {
+            item: String(x.item || "").trim().slice(0, 200),
+            spesifikasi: String(x.spesifikasi || "").trim().slice(0, 500),
+            tujuan: String(x.tujuan || "").trim().slice(0, 500),
+            volume,
+            satuan: String(x.satuan || "").trim().slice(0, 30),
+            harga_satuan: hargaSatuan,
+            total: volume * hargaSatuan
+          };
+        }).filter((x) =>
+          x.item || x.spesifikasi || x.volume > 0 || x.harga_satuan > 0
+        );
+      } catch (validationError) {
+        return res.status(400).json({
+          ok: false,
+          message: validationError.message
+        });
+      }
     }
     if (b.rencana_kerja !== undefined) body.rencana_kerja = String(b.rencana_kerja).slice(0,5000);
     if (b.realisasi !== undefined) body.realisasi = b.realisasi;
@@ -4648,10 +4677,10 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     const dokumentasi = a.realisasi?.dokumentasi || {};
 
     const fotoKondisiURL = await buatUrlFotoPrivat(
-      dokumentasi.foto_kondisi
+      dokumentasi.foto_kondisi?.path || dokumentasi.foto_kondisi
     );
     const fotoPengukuranURL = await buatUrlFotoPrivat(
-      dokumentasi.foto_pengukuran
+      dokumentasi.foto_pengukuran?.path || dokumentasi.foto_pengukuran
     );
 
     const kopPath = path.join(
@@ -4700,7 +4729,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
           });
         doc.font("Helvetica").fontSize(9)
           .text(
-            "Desa Sukahurip, Kecamatan Sukatani, Kabupaten Bekasi",
+            "Kelurahan Sukahurip, Kecamatan Sukatani, Kabupaten Bekasi",
             { width: LEBAR, align: "center" }
           );
         doc.moveTo(KIRI, 105)
@@ -5108,12 +5137,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
         const item = rab[i] || {};
         const volume = Number(item.volume || 0);
         const harga = Number(item.harga_satuan || 0);
-        const subtotal =
-          item.total !== null &&
-          item.total !== undefined &&
-          item.total !== ""
-            ? Number(item.total)
-            : volume * harga;
+        const subtotal = volume * harga;
 
         total += Number.isFinite(subtotal) ? subtotal : 0;
 
