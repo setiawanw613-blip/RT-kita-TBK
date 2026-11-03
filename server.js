@@ -3172,13 +3172,12 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
       doc.lineWidth(0.9).roundedRect(
         X_LOGO_KANAN, 14, UKURAN_LOGO_SISI, UKURAN_LOGO_SISI, 7
       ).fillAndStroke("#FFFFFF", "#222222");
-      for (const [dx, dy] of [[0, 0], [-0.25, 0], [0.25, 0], [0, -0.25], [0, 0.25]]) {
-        doc.image(logoKopPath, X_LOGO_KANAN + 6 + dx, 20 + dy, {
-          fit: [UKURAN_LOGO_SISI - 12, UKURAN_LOGO_SISI - 12],
-          align: "center",
-          valign: "center"
-        });
-      }
+      // Gambar satu kali agar logo tetap tajam dan tidak tampak menebal.
+      doc.image(logoKopPath, X_LOGO_KANAN + 6, 20, {
+        fit: [UKURAN_LOGO_SISI - 12, UKURAN_LOGO_SISI - 12],
+        align: "center",
+        valign: "center"
+      });
       doc.restore();
     }
 
@@ -4896,13 +4895,12 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
         doc.lineWidth(0.9).roundedRect(
           xLogoKanan, 14, ukuranLogoSisi, ukuranLogoSisi, 7
         ).fillAndStroke("#FFFFFF", "#222222");
-        for (const [dx, dy] of [[0, 0], [-0.25, 0], [0.25, 0], [0, -0.25], [0, 0.25]]) {
-          doc.image(logoKopPath, xLogoKanan + 6 + dx, 20 + dy, {
-            fit: [ukuranLogoSisi - 12, ukuranLogoSisi - 12],
-            align: "center",
-            valign: "center"
-          });
-        }
+        // Gambar satu kali agar logo tetap tajam dan tidak tampak menebal.
+        doc.image(logoKopPath, xLogoKanan + 6, 20, {
+          fit: [ukuranLogoSisi - 12, ukuranLogoSisi - 12],
+          align: "center",
+          valign: "center"
+        });
         doc.restore();
       }
 
@@ -5259,8 +5257,22 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     // ==================================================
 
     // RAB memakai halaman yang sedang berjalan bila masih cukup ruang.
-    // Ini mencegah halaman kosong akibat page break beruntun dari bagian foto.
-    if (doc.y + 155 > BATAS) halamanBaru();
+    // Sediakan ruang tambahan untuk penanda DRAF agar tidak terpotong di bawah.
+    if (doc.y + 185 > BATAS) halamanBaru();
+
+    // Penanda status dibuat jelas, tetapi tidak mengubah isi atau nilai RAB.
+    const yPenandaDraf = doc.y;
+    doc.save();
+    doc.roundedRect(KIRI, yPenandaDraf, LEBAR, 22, 4)
+      .fillAndStroke("#FFF4D6", "#C58A22");
+    doc.fillColor("#754B00").font("Helvetica-Bold").fontSize(8)
+      .text("DRAF  •  ESTIMASI AWAL  •  BELUM MENJADI PENETAPAN ANGGARAN", KIRI + 6, yPenandaDraf + 7, {
+        width: LEBAR - 12,
+        align: "center",
+        lineBreak: false
+      });
+    doc.restore();
+    doc.y = yPenandaDraf + 29;
 
     doc.font("Helvetica-Bold").fontSize(13)
       .text("RENCANA ANGGARAN BIAYA", {
