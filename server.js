@@ -4,6 +4,19 @@ const crypto = require("crypto");
 const PDFDocument = require("pdfkit");
 const multer = require("multer");
 const app = express();
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  // API responses may contain personal, financial, or administrative data.
+  if (req.path.startsWith("/api/")) {
+    res.setHeader("Cache-Control", "no-store");
+  }
+
+  next();
+});
 app.use(express.json());
 
 /* MIDTRANS QRIS SANDBOX */
@@ -383,21 +396,56 @@ function hashPassword(password) {
   return `${salt}:${hash}`;
 }
 
-function verifyPassword(password, storedPassword) {
-  if (!storedPassword || !storedPassword.includes(":")) {
+function constantTimeStringEqual(value, expected) {
+  if (typeof value !== "string" || typeof expected !== "string") {
     return false;
   }
 
-  const [salt, storedHash] = storedPassword.split(":");
+  const valueHash = crypto.createHash("sha256").update(value).digest();
+  const expectedHash = crypto.createHash("sha256").update(expected).digest();
 
-  const hash = crypto
-    .scryptSync(password, salt, 64)
-    .toString("hex");
+  return crypto.timingSafeEqual(valueHash, expectedHash);
+}
 
-  return crypto.timingSafeEqual(
-    Buffer.from(hash, "hex"),
-    Buffer.from(storedHash, "hex")
-  );
+function dataWargaAman(warga) {
+  if (!warga || typeof warga !== "object" || Array.isArray(warga)) {
+    return warga;
+  }
+
+  const salinan = { ...warga };
+  delete salinan.password;
+  return salinan;
+}
+
+function verifyPassword(password, storedPassword) {
+  if (
+    typeof password !== "string" ||
+    password.length > 1024 ||
+    typeof storedPassword !== "string"
+  ) {
+    return false;
+  }
+
+  const parts = storedPassword.split(":");
+  if (parts.length !== 2) return false;
+
+  const [salt, storedHash] = parts;
+
+  // Hashes created by hashPassword use a 16-byte salt and a 64-byte scrypt hash.
+  // Reject malformed database values instead of letting timingSafeEqual throw.
+  if (
+    !/^[a-f0-9]{32}$/i.test(salt) ||
+    !/^[a-f0-9]{128}$/i.test(storedHash)
+  ) {
+    return false;
+  }
+
+  const expectedHash = Buffer.from(storedHash, "hex");
+  const actualHash = crypto.scryptSync(password, salt, 64);
+
+  if (actualHash.length !== expectedHash.length) return false;
+
+  return crypto.timingSafeEqual(actualHash, expectedHash);
 }
 
 const sessions = new Map();
@@ -794,12 +842,25 @@ app.post("/api/register-warga", async (req, res) => {
   hubungan_keluarga
 } = req.body;
     if (
-  !no_hp ||
+  typeof no_hp !== "string" ||
+  !no_hp.trim() ||
+  no_hp.length > 30 ||
+  typeof password !== "string" ||
   !password ||
-  !nama_lengkap ||
-  !no_kk ||
-  !alamat ||
-  !hubungan_keluarga
+  password.length > 1024 ||
+  typeof nama_lengkap !== "string" ||
+  !nama_lengkap.trim() ||
+  nama_lengkap.length > 120 ||
+  typeof no_kk !== "string" ||
+  !no_kk.trim() ||
+  no_kk.length > 32 ||
+  typeof alamat !== "string" ||
+  !alamat.trim() ||
+  alamat.length > 500 ||
+  typeof hubungan_keluarga !== "string" ||
+  !hubungan_keluarga.trim() ||
+  hubungan_keluarga.length > 50 ||
+  (nik != null && typeof nik !== "string")
 ) {
   return res.status(400).json({
     ok: false,
@@ -901,10 +962,22 @@ if (Array.isArray(keluargaExisting) && keluargaExisting.length) {
 }
     });
 
+    const wargaBaru = Array.isArray(data) ? data[0] : data;
+
+    if (!wargaBaru || typeof wargaBaru !== "object") {
+      throw new Error("Data warga baru tidak dikembalikan oleh database");
+    }
+
+    // Never return the database row: it contains the stored password hash.
     return res.json({
       ok: true,
       message: "Pendaftaran warga berhasil",
-      user: Array.isArray(data) ? data[0] : data
+      user: {
+        id: wargaBaru?.id ?? null,
+        nama_lengkap,
+        no_hp,
+        status_warga: "menunggu_verifikasi"
+      }
     });
   } catch (error) {
     console.error("REGISTER WARGA ERROR:", error);
@@ -918,7 +991,22 @@ if (Array.isArray(keluargaExisting) && keluargaExisting.length) {
 /* LOGIN */
 app.post("/api/login", async (req, res) => {
   try {
-    const { username, password, role } = req.body;
+    const { username, password, role } = req.body || {};
+
+    if (
+      typeof username !== "string" ||
+      !username.trim() ||
+      username.length > 120 ||
+      typeof password !== "string" ||
+      !password ||
+      password.length > 1024
+    ) {
+      return res.status(400).json({
+        ok: false,
+        message: "Username dan password wajib diisi dengan format yang benar"
+      });
+    }
+
 if (role === "warga") {
   if (!username || !password) {
     return res.status(400).json({
@@ -1015,7 +1103,7 @@ const token = createSessionToken({
 }
     if (
       username !== ADMIN_USER ||
-      password !== ADMIN_PASSWORD
+      !constantTimeStringEqual(password, ADMIN_PASSWORD)
     ) {
       return res.status(401).json({
         ok: false,
@@ -1292,7 +1380,7 @@ app.patch("/api/residents/:id/verify", requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       message: "Warga berhasil diverifikasi",
-      data: row
+      data: dataWargaAman(row)
     });
   } catch (error) {
     console.error("VERIFY WARGA ERROR:", error);
@@ -1320,7 +1408,7 @@ app.patch("/api/residents/:id/deactivate", requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       message: "Warga berhasil dinonaktifkan",
-      data: row
+      data: dataWargaAman(row)
     });
   } catch (error) {
     console.error("DEACTIVATE WARGA ERROR:", error);
@@ -1355,7 +1443,7 @@ app.patch("/api/residents/:id/activate", requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       message: "Warga berhasil diaktifkan kembali",
-      data: row
+      data: dataWargaAman(row)
     });
   } catch (error) {
     console.error("ACTIVATE WARGA ERROR:", error);
@@ -1441,7 +1529,7 @@ app.patch("/api/residents/:id", requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       message: "Data warga berhasil diperbarui",
-      data: row
+      data: dataWargaAman(row)
     });
   } catch (error) {
     console.error("EDIT WARGA ERROR:", error);
@@ -1566,7 +1654,7 @@ app.post("/api/residents", requireAdmin, async (req, res) => {
     res.json({
       ok: true,
       data: {
-        ...row,
+        ...dataWargaAman(row),
         nama: row?.nama_lengkap
       }
     });
@@ -1756,7 +1844,7 @@ app.patch("/api/my-data", requireWarga, async (req, res) => {
     res.json({
       ok: true,
       message: "Data warga berhasil diperbarui",
-      data: row
+      data: dataWargaAman(row)
     });
 
   } catch (error) {
@@ -2830,7 +2918,8 @@ function gambarCapRT(doc, cx, cy, r) {
 
 function kodeVerifikasiSurat(id, letter) {
   const crypto = require("crypto");
-  const kunci = process.env.SESSION_SECRET || "rt-kita-tbk";
+  const kunci = process.env.SESSION_SECRET;
+  if (!kunci) throw new Error("SESSION_SECRET belum dikonfigurasi");
   const hex = crypto
     .createHmac("sha256", kunci)
     .update(`surat:${id}:${letter.created_at || ""}:${letter.jenis_surat || ""}`)
