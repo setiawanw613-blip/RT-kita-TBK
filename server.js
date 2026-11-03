@@ -3163,6 +3163,12 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
         width: LEBAR_TEKS_KOP,
         align: "center"
       });
+    doc.font("Helvetica-Bold")
+      .fontSize(8)
+      .text("SEKRETARIAT: PERUM. TAMAN BALI KAHURIPAN BLOK", X_TEKS_KOP, 88, {
+        width: LEBAR_TEKS_KOP,
+        align: "center"
+      });
     doc.moveTo(KIRI_KOP, 122)
       .lineTo(doc.page.width - KANAN_KOP, 122)
       .lineWidth(2.2)
@@ -4834,6 +4840,8 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
         .text("PENGURUS RT 004 / RW 01", xTeks, 53, { width: lebarTeks, align: "center" });
       doc.font("Helvetica-Bold").fontSize(9)
         .text("Desa Sukahurip · Kecamatan Sukatani · Kabupaten Bekasi", xTeks, 73, { width: lebarTeks, align: "center" });
+      doc.font("Helvetica-Bold").fontSize(8)
+        .text("SEKRETARIAT: PERUM. TAMAN BALI KAHURIPAN BLOK", xTeks, 92, { width: lebarTeks, align: "center" });
       doc.moveTo(KIRI, 122).lineTo(doc.page.width - KANAN, 122).lineWidth(2.2).strokeColor("#111111").stroke();
       doc.restore();
     }
