@@ -1,28 +1,28 @@
-# Membuat RT Kita Online
+# Membuat RT Kita Online dengan Render
 
-Saya sudah menyiapkan konfigurasi Render di `render.yaml`.
+Aplikasi menggunakan Supabase untuk database dan penyimpanan file. Karena itu, aplikasi tidak membutuhkan persistent disk Render untuk menyimpan database.
 
-## Yang perlu dilakukan satu kali oleh pemilik aplikasi
+## Pengaturan satu kali
 
-1. Buat akun GitHub dan akun Render.
-2. Buat repository baru di GitHub, misalnya `rt-kita`.
-3. Upload seluruh isi folder aplikasi ini ke repository tersebut.
-4. Di Render pilih **New > Web Service** dan hubungkan repository.
-5. Render dapat membaca `render.yaml` atau masukkan:
-   - Build: `npm install`
-   - Start: `npm start`
-6. Pastikan persistent disk terpasang pada `/var/data`.
-7. Setelah deploy selesai, Render memberikan alamat `*.onrender.com`.
-8. Buka alamat tersebut dari HP dan pilih "Add to Home Screen" untuk memasangnya seperti aplikasi.
+1. Pastikan repository GitHub RT Kita terhubung ke akun Render.
+2. Di Render pilih **New > Web Service**, lalu pilih repository.
+3. Render membaca konfigurasi dari `render.yaml`.
+4. Isi variabel rahasia yang diminta di pengaturan Environment:
+   - `SUPABASE_URL`: URL proyek Supabase.
+   - `SUPABASE_SERVICE_ROLE_KEY`: service-role key Supabase.
+   - `ADMIN_PASSWORD`: password baru untuk Ketua RT.
+   - `MIDTRANS_SERVER_KEY`: server key Midtrans Sandbox jika fitur QRIS digunakan.
+5. `SESSION_SECRET` dibuat otomatis oleh konfigurasi Render. `ADMIN_USER` menggunakan nilai `admin` jika tidak diubah.
+6. Tunggu proses deploy selesai, lalu buka alamat `*.onrender.com` dari HP.
+7. Untuk memasang aplikasi, pilih **Add to Home Screen** dari menu browser.
 
-## Akun awal
-Username: admin
-Password: admin123
+## Keamanan penting
 
-Segera ganti password admin setelah login pertama.
-
-## Penting
-Database berisi data pribadi. Jangan membagikan password admin. Untuk produksi, gunakan HTTPS (Render menyediakan TLS untuk web service).
+- Tidak ada akun atau password admin bawaan. Jangan gunakan password `admin123`.
+- Jangan menaruh service-role key, password admin, atau server key Midtrans di file kode maupun repository.
+- Gunakan HTTPS. Render menyediakan HTTPS untuk alamat web service.
+- Aplikasi ini saat ini menggunakan Midtrans Sandbox; mode produksi belum diaktifkan.
 
 ## Catatan biaya
-Ketersediaan dan batas paket hosting dapat berubah. Render mendukung Node/Express dan persistent disk, tetapi disk persisten memerlukan paket berbayar menurut dokumentasi Render saat ini.
+
+Database dan file disimpan di Supabase, bukan di disk lokal Render. Dengan demikian, konfigurasi aplikasi tidak meminta persistent disk berbayar. Paket gratis hosting dapat memiliki batas penggunaan, waktu tidur layanan, atau perubahan kebijakan; periksa ketentuan Render terbaru sebelum digunakan.
