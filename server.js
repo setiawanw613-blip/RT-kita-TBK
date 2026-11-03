@@ -5,6 +5,8 @@ const PDFDocument = require("pdfkit");
 const multer = require("multer");
 const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidtransServerKeyForNewTransaction, getMidtransServerKeyForOrder, getMidtransModeInfo } = require("./midtrans-config");
 const { normalizeStorageObjectPath } = require("./storage-path");
+const { csvCell } = require("./csv-safe");
+const { isValidNewResidentPassword } = require("./password-policy");
 const app = express();
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -142,7 +144,7 @@ const {
 
     const dataIuran = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer" +
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at" +
         `&bukti_transfer=eq.${encodeURIComponent("MIDTRANS:" + order_id)}`
     });
 
@@ -247,16 +249,24 @@ for (const iuran of rows) {
         });
 
         if (!Array.isArray(ada) || !ada.length) {
-          await supabaseRequest("kas_rt", {
-            method: "POST",
-            body: {
-              tanggal: new Date().toISOString().slice(0, 10),
-              jenis: "masuk",
-              kategori: kas.kategori,
-              jumlah: kas.jumlah,
-              keterangan: kas.keterangan
+          try {
+            await supabaseRequest("kas_rt", {
+              method: "POST",
+              body: {
+                tanggal: new Date().toISOString().slice(0, 10),
+                jenis: "masuk",
+                kategori: kas.kategori,
+                jumlah: kas.jumlah,
+                keterangan: kas.keterangan
+              }
+            });
+          } catch (insertError) {
+            // A unique database index will make concurrent duplicate webhook
+            // deliveries harmless. Ignore only the expected duplicate-key error.
+            if (getSupabaseErrorCode(insertError) !== "23505") {
+              throw insertError;
             }
-          });
+          }
         }
       }
 
@@ -312,12 +322,21 @@ if (settlement_time) {
   }
 }
 
-await supabaseRequest("iuran_warga", {
+const hasilUpdate = await supabaseRequest("iuran_warga", {
   method: "PATCH",
-  query: `id=eq.${encodeURIComponent(iuran.id)}`,
+  query:
+    `id=eq.${encodeURIComponent(iuran.id)}` +
+    "&status=neq.lunas",
   body: dataUpdate
 });
 
+// Hanya proses notifikasi jika callback ini yang pertama kali melunasi baris.
+const barisDiperbarui = Array.isArray(hasilUpdate)
+  ? hasilUpdate[0]
+  : hasilUpdate;
+if (!barisDiperbarui || barisDiperbarui.status !== "lunas") {
+  continue;
+}
 
       try {
         await supabaseRequest("notifikasi", {
@@ -447,7 +466,6 @@ function verifyPassword(password, storedPassword) {
 }
 
 const sessions = new Map();
-const complaintsMemory = [];
 
 async function supabaseRequest(table, options = {}) {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
@@ -842,13 +860,17 @@ app.post("/api/register-warga", async (req, res) => {
   alamat,
   hubungan_keluarga
 } = req.body;
+    if (!isValidNewResidentPassword(password)) {
+  return res.status(400).json({
+    ok: false,
+    message: "Password minimal 8 karakter."
+  });
+}
+
     if (
   typeof no_hp !== "string" ||
   !no_hp.trim() ||
   no_hp.length > 30 ||
-  typeof password !== "string" ||
-  !password ||
-  password.length > 1024 ||
   typeof nama_lengkap !== "string" ||
   !nama_lengkap.trim() ||
   nama_lengkap.length > 120 ||
@@ -1182,6 +1204,10 @@ app.get("/api/dashboard", requireAdmin, async (req, res) => {
       query: "select=jenis,jumlah&limit=1000"
     });
 
+    const complaints = await supabaseRequest("notifikasi", {
+      query: "select=id&penerima_peran=eq.admin&jenis=eq.pengaduan&limit=1000"
+    });
+
     let balance = 0;
 
     if (Array.isArray(kas)) {
@@ -1203,7 +1229,7 @@ app.get("/api/dashboard", requireAdmin, async (req, res) => {
     res.json({
       residents: Array.isArray(warga) ? warga.length : 0,
       letters: Array.isArray(surat) ? surat.length : 0,
-      complaints: complaintsMemory.length,
+      complaints: Array.isArray(complaints) ? complaints.length : 0,
       balance
     });
   } catch (error) {
@@ -1596,7 +1622,7 @@ const csv = [
 
       .map(row =>
         row.map(value =>
-          '"' + String(value ?? "").replace(/"/g, '""') + '"'
+          csvCell(value)
         ).join(",")
       )
       .join("\r\n");
@@ -2360,7 +2386,7 @@ app.get("/api/cash/export", requireAdmin, async (req, res) => {
 
 .map(row =>
   row.map(value =>
-    '"' + String(value ?? "").replace(/"/g, '""') + '"'
+    csvCell(value)
   ).join(",")
 )
 .join("\r\n");
@@ -2970,7 +2996,7 @@ function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     }
   }
 
-  // Cap RT otomatis, menimpa sebagian area tanda tangan seperti cap basah.
+  // Gunakan hanya gambar cap RT asli jika berkas resmi tersedia.
   const fileCap = path.join(__dirname, "cap-rt.png");
   let capAsliTerpasang = false;
   if (fs.existsSync(fileCap)) {
@@ -2986,7 +3012,7 @@ function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     }
   }
   if (!capAsliTerpasang) {
-    gambarCapRT(doc, xKanan + lebarTtd / 2 - 44, yTtd + 58, 35);
+    console.warn("CAP RT RESMI BELUM TERSEDIA; PDF DIBUAT TANPA CAP.");
   }
 
   doc.font(namaRT ? FONT_TEBAL : FONT).fontSize(UKURAN).fillColor("#000000")
@@ -2997,8 +3023,8 @@ function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     });
 
   doc.font("Helvetica-Oblique").fontSize(6.5).fillColor("#444444")
-    .text("Ditandatangani & dicap secara elektronik", xKanan, yNama + 15, { width: lebarTtd, align: "center" })
-    .text("Kode verifikasi: " + kodeVerifikasiSurat(id, letter), xKanan, yNama + 23, { width: lebarTtd, align: "center" });
+    .text("Tanda tangan manual Ketua RT tetap diperlukan", xKanan, yNama + 15, { width: lebarTtd, align: "center" })
+    .text("Kode verifikasi aplikasi: " + kodeVerifikasiSurat(id, letter), xKanan, yNama + 23, { width: lebarTtd, align: "center" });
   doc.fillColor("#000000");
 
   // Kiri: Mengetahui Ketua RW
@@ -3291,10 +3317,7 @@ app.post("/api/announcements", requireAdmin, async (req, res) => {
 
 /* PENGADUAN - KETUA RT */
 app.get("/api/complaints", requireAdmin, async (req, res) => {
-  let tersimpan = [];
-
   try {
-    // Pengaduan disimpan permanen di tabel notifikasi (jenis = pengaduan).
     const data = await supabaseRequest("notifikasi", {
       query:
         "select=id,judul,pesan,referensi_id,sudah_dibaca,dibuat_pada" +
@@ -3303,29 +3326,23 @@ app.get("/api/complaints", requireAdmin, async (req, res) => {
     });
 
     const rows = Array.isArray(data) ? data : [];
-
     const ids = [...new Set(
       rows
         .map(r => String(r.referensi_id ?? "").trim())
         .filter(id => /^[0-9]+$/.test(id))
     )];
-
     const namaMap = new Map();
 
     if (ids.length) {
-      try {
-        const warga = await supabaseRequest("warga", {
-          query: `select=id,nama_lengkap&id=in.(${ids.join(",")})`
-        });
-        (Array.isArray(warga) ? warga : []).forEach(w =>
-          namaMap.set(String(w.id), w.nama_lengkap || "")
-        );
-      } catch (err) {
-        console.error("PENGADUAN NAMA ERROR:", err?.message || err);
-      }
+      const warga = await supabaseRequest("warga", {
+        query: `select=id,nama_lengkap&id=in.(${ids.join(",")})`
+      });
+      (Array.isArray(warga) ? warga : []).forEach(w =>
+        namaMap.set(String(w.id), w.nama_lengkap || "")
+      );
     }
 
-    tersimpan = rows.map(r => ({
+    return res.json(rows.map(r => ({
       id: r.id,
       warga_id: r.referensi_id,
       title: r.judul,
@@ -3333,12 +3350,14 @@ app.get("/api/complaints", requireAdmin, async (req, res) => {
       nama: namaMap.get(String(r.referensi_id)) || "",
       created_at: r.dibuat_pada,
       status: r.sudah_dibaca ? "dibaca" : "baru"
-    }));
+    })));
   } catch (error) {
     console.error("PENGADUAN GET ERROR:", error?.message || error);
+    return res.status(503).json({
+      ok: false,
+      message: "Pengaduan belum dapat dimuat dari database. Silakan coba kembali."
+    });
   }
-
-  res.json([...complaintsMemory, ...tersimpan]);
 });
 
 /* PENGADUAN - WARGA */
@@ -3373,25 +3392,11 @@ app.post("/api/complaints", requireWarga, async (req, res) => {
     });
   } catch (error) {
     console.error("PENGADUAN SIMPAN ERROR:", error?.message || error);
+    return res.status(503).json({
+      ok: false,
+      message: "Pengaduan belum dapat dipastikan tersimpan. Periksa daftar pengaduan sebelum mengirim ulang."
+    });
   }
-
-  // Cadangan bila penyimpanan database gagal.
-  const complaint = {
-    id: crypto.randomUUID(),
-    warga_id: req.session.wargaId,
-    title,
-    content,
-    nama: req.session.nama || "",
-    created_at: new Date().toISOString(),
-    status: "baru"
-  };
-
-  complaintsMemory.unshift(complaint);
-
-  res.json({
-    ok: true,
-    data: complaint
-  });
 });
 
 
@@ -5446,7 +5451,37 @@ function kirimHalamanUtama(req, res) {
 }
 
 app.get("/index.html", kirimHalamanUtama);
-app.use(express.static(__dirname, { index: false }));
+
+// Sajikan hanya aset yang memang dipakai antarmuka publik.
+// Jangan membuka seluruh direktori proyek melalui express.static.
+const PUBLIC_STATIC_FILES = new Set([
+  "images.png",
+  "manifest.webmanifest",
+  "icon-192.png",
+  "icon-512.png",
+  "sw.js",
+  "surat-form.js",
+  "tampilan-hp.js"
+]);
+
+app.get("/:asset", (req, res, next) => {
+  const asset = req.params.asset;
+
+  if (PUBLIC_STATIC_FILES.has(asset)) {
+    return res.sendFile(path.join(__dirname, asset), error => {
+      if (error && !res.headersSent) next(error);
+    });
+  }
+
+  // Berkas kode, konfigurasi, dokumentasi, dan migrasi tidak boleh
+  // dilayani sebagai berkas statis.
+  if (asset.startsWith(".") || /\.(?:js|json|md|sql|ya?ml|toml|lock|env|txt)$/i.test(asset)) {
+    return res.sendStatus(404);
+  }
+
+  return next();
+});
+
 app.get("*", kirimHalamanUtama);
 
 module.exports = app;
