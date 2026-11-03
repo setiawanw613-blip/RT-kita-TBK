@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const PDFDocument = require("pdfkit");
 const multer = require("multer");
 const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidtransServerKeyForNewTransaction, getMidtransServerKeyForOrder, getMidtransModeInfo } = require("./midtrans-config");
+const { normalizeStorageObjectPath } = require("./storage-path");
 const app = express();
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -508,22 +509,13 @@ async function buatUrlFotoPrivat(objectPath) {
 
   try {
     const bucket = "foto warga";
-    let pathValue = objectPath;
+    const normalizedPath = normalizeStorageObjectPath(objectPath, bucket);
+    if (!normalizedPath) return null;
 
-    // Data lama dapat menyimpan path sebagai string atau objek metadata.
-    if (pathValue && typeof pathValue === "object") {
-      pathValue = pathValue.path || pathValue.fullPath || pathValue.full_path || pathValue.name || null;
-    }
-    if (typeof pathValue !== "string") return null;
-
-    pathValue = pathValue.trim().replace(/^\/+/, "");
-    if (!pathValue || /^https?:\/\//i.test(pathValue)) return null;
-
-    const segments = pathValue.split("/").filter(Boolean);
-    if (segments[0] === bucket) segments.shift();
-    if (!segments.length || segments.some(segment => segment === "." || segment === "..")) return null;
-
-    const encodedPath = segments.map(encodeURIComponent).join("/");
+    const encodedPath = normalizedPath
+      .split("/")
+      .map(encodeURIComponent)
+      .join("/");
 
     const response = await fetch(
       `${SUPABASE_URL}/storage/v1/object/sign/${encodeURIComponent(bucket)}/${encodedPath}`,
