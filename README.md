@@ -29,3 +29,7 @@ Aplikasi membutuhkan koneksi Supabase dan variabel lingkungan yang disebutkan di
 - Sesi ditandatangani dengan HMAC dan cookie HttpOnly, Secure, serta SameSite=Lax.
 - Jangan membagikan `SUPABASE_SERVICE_ROLE_KEY`, `MIDTRANS_SERVER_KEY`, atau `SESSION_SECRET`.
 - Jika sebelumnya pernah membagikan kunci rahasia di tempat umum, segera rotasi kunci tersebut melalui dashboard penyedia layanan.
+
+## Pemeriksaan kode
+
+GitHub Actions memeriksa sintaks seluruh file JavaScript aplikasi dan format JSON konfigurasi setiap kali ada perubahan pada repository atau pull request.
