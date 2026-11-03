@@ -860,13 +860,20 @@ app.post("/api/register-warga", async (req, res) => {
   hubungan_keluarga
 } = req.body;
     if (
+  typeof password !== "string" ||
+  password.length < 8 ||
+  password.length > 1024
+) {
+  return res.status(400).json({
+    ok: false,
+    message: "Password minimal 8 karakter."
+  });
+}
+
+    if (
   typeof no_hp !== "string" ||
   !no_hp.trim() ||
   no_hp.length > 30 ||
-  typeof password !== "string" ||
-  !password ||
-  password.length < 8 ||
-  password.length > 1024 ||
   typeof nama_lengkap !== "string" ||
   !nama_lengkap.trim() ||
   nama_lengkap.length > 120 ||
