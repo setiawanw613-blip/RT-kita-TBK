@@ -7,6 +7,7 @@ const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidt
 const { normalizeStorageObjectPath } = require("./storage-path");
 const { csvCell } = require("./csv-safe");
 const { isValidNewResidentPassword } = require("./password-policy");
+const { buatTemplateRab, buatRencanaKerja, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -4785,7 +4786,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
 
     const warga = await namaPemilikAspirasi(a.warga_id);
     const d = a.dimensi || {};
-    const rab = Array.isArray(a.rab) ? a.rab : [];
+    const rab = Array.isArray(a.rab) && a.rab.length ? a.rab : buatTemplateRab(a.kategori, d);
     const dokumentasi = a.realisasi?.dokumentasi || {};
 
     const fotoKondisiURL = await buatUrlFotoPrivat(
@@ -4795,11 +4796,9 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       dokumentasi.foto_pengukuran?.path || dokumentasi.foto_pengukuran
     );
 
-    const kopPath = path.join(
-      __dirname,
-      "contoh kop surat kosong tbk.png"
-    );
-    const pakaiKop = fs.existsSync(kopPath);
+    // Kop proposal bersih: logo TBK di kiri atas, tanpa latar/bingkai halaman.
+    const logoKopPath = path.join(__dirname, "images.png");
+    const pakaiLogoKop = fs.existsSync(logoKopPath);
 
     const doc = new PDFDocument({
       size: "A4",
@@ -4818,38 +4817,27 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     const KANAN = 48;
     const LEBAR = doc.page.width - KIRI - KANAN;
     const BATAS = doc.page.height - 55;
-    const ATAS = 145;
+    const ATAS = 118;
     const satuan = d.satuan || "meter";
 
     function pasangKop() {
-      if (pakaiKop) {
-        doc.image(kopPath, 0, 0, {
-          width: doc.page.width,
-          height: doc.page.height
-        });
-      } else {
-        doc.save();
-        doc.font("Helvetica-Bold").fontSize(15)
-          .text("TAMAN BALI KAHURIPAN", KIRI, 35, {
-            width: LEBAR,
-            align: "center"
-          });
-        doc.fontSize(11)
-          .text("PENGURUS RT 004 / RW 01", {
-            width: LEBAR,
-            align: "center"
-          });
-        doc.font("Helvetica").fontSize(9)
-          .text(
-            "Kelurahan Sukahurip, Kecamatan Sukatani, Kabupaten Bekasi",
-            { width: LEBAR, align: "center" }
-          );
-        doc.moveTo(KIRI, 105)
-          .lineTo(doc.page.width - KANAN, 105)
-          .lineWidth(1)
-          .stroke();
-        doc.restore();
+      const xLogo = KIRI;
+      const yLogo = 24;
+      const ukuranLogo = 58;
+      const xTeks = KIRI + ukuranLogo + 12;
+      const lebarTeks = LEBAR - ukuranLogo - 12;
+      if (pakaiLogoKop) {
+        doc.image(logoKopPath, xLogo, yLogo, { fit: [ukuranLogo, ukuranLogo], align: "center", valign: "center" });
       }
+      doc.save();
+      doc.fillColor("#111111").font("Helvetica-Bold").fontSize(15)
+        .text("TAMAN BALI KAHURIPAN", xTeks, 29, { width: lebarTeks, align: "center" });
+      doc.font("Helvetica-Bold").fontSize(10)
+        .text("PENGURUS RT 004 / RW 01", xTeks, 51, { width: lebarTeks, align: "center" });
+      doc.font("Helvetica").fontSize(8.5)
+        .text("Perumahan Taman Bali Kahuripan · Desa Sukahurip · Kecamatan Sukatani · Kabupaten Bekasi", xTeks, 68, { width: lebarTeks, align: "center" });
+      doc.moveTo(KIRI, 96).lineTo(doc.page.width - KANAN, 96).lineWidth(1.1).strokeColor("#111111").stroke();
+      doc.restore();
     }
 
     function halamanBaru() {
@@ -5244,13 +5232,15 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       headerRAB();
 
       let total = 0;
+      let hargaBelumLengkap = false;
 
       for (let i = 0; i < rab.length; i++) {
         const item = rab[i] || {};
         const volume = Number(item.volume || 0);
         const harga = Number(item.harga_satuan || 0);
+        const hargaDiisi = item.harga_satuan !== null && item.harga_satuan !== undefined && item.harga_satuan !== "";
         const subtotal = volume * harga;
-
+        if (!hargaDiisi) hargaBelumLengkap = true;
         total += Number.isFinite(subtotal) ? subtotal : 0;
 
         const isi = [
@@ -5259,8 +5249,8 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
             (item.spesifikasi ? "\n" + item.spesifikasi : ""),
           item.tujuan || "-",
           String(item.volume ?? "-") + " " + (item.satuan || ""),
-          rupiah(harga),
-          rupiah(subtotal)
+          hargaDiisi ? rupiah(harga) : "Belum diisi",
+          hargaDiisi ? rupiah(subtotal) : "Belum dihitung"
         ];
 
         const tinggi = Math.max(
@@ -5299,7 +5289,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       doc.moveDown(0.7);
       doc.font("Helvetica-Bold").fontSize(10)
         .text(
-          "TOTAL RAB PERKIRAAN: " + rupiah(total),
+          hargaBelumLengkap ? "TOTAL RAB: BELUM DAPAT DIHITUNG — HARGA SATUAN BELUM LENGKAP" : "TOTAL RAB PERKIRAAN: " + rupiah(total),
           KIRI,
           doc.y,
           { width: totalLebar, align: "right" }
@@ -5327,16 +5317,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
 
     judul("H. RENCANA PELAKSANAAN DAN TINDAKAN");
 
-    const rencanaKerja = (
-      a.rencana_kerja ||
-      "1. Melakukan survei dan pengukuran kondisi lapangan.\n" +
-      "2. Memeriksa kebutuhan serta kondisi saluran.\n" +
-      "3. Menyusun gambar teknis dan spesifikasi pekerjaan.\n" +
-      "4. Menyusun RAB berdasarkan volume dan harga setempat.\n" +
-      "5. Mengajukan proposal kepada pemerintah desa/kelurahan.\n" +
-      "6. Pelaksanaan dilakukan setelah memperoleh persetujuan dan sumber anggaran.\n" +
-      "7. Melakukan pemeriksaan hasil pekerjaan dan dokumentasi."
-    ).replace(/\*\*/g, "");
+    const rencanaKerja = (a.rencana_kerja || buatRencanaKerja(a.kategori)).replace(/\*\*/g, "");
 
     doc.font("Helvetica").fontSize(9)
       .text(rencanaKerja, {
@@ -5443,7 +5424,7 @@ function kirimHalamanUtama(req, res) {
   const fs = require("fs");
   try {
     const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
-    const tambahan = '<script src="/surat-form.js?v=2"></script>';
+    const tambahan = '<script src="/aspirasi-rab.js?v=1"></script><script src="/surat-form.js?v=2"></script>';
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
     res.send(
@@ -5468,6 +5449,7 @@ const PUBLIC_STATIC_FILES = new Set([
   "icon-512.png",
   "sw.js",
   "surat-form.js",
+  "aspirasi-rab.js",
   "tampilan-hp.js"
 ]);
 
