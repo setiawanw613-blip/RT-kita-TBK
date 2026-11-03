@@ -1,0 +1,28 @@
+name: Validate RT Kita
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check server JavaScript syntax
+        run: node --check server.js
+      - name: Validate JSON configuration
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('vercel.json', 'utf8'))"
+          node -e "JSON.parse(require('fs').readFileSync('manifest.webmanifest', 'utf8'))"
