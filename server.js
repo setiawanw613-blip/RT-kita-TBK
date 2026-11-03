@@ -3137,7 +3137,7 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     const X_TEKS_KOP = KIRI_KOP + UKURAN_LOGO_SISI + 10;
     const LEBAR_TEKS_KOP = X_LOGO_KANAN - 10 - X_TEKS_KOP;
     const URL_LAMBANG_KABUPATEN =
-      "https://commons.wikimedia.org/wiki/Special:FilePath/Logo_Kabupaten_Bekasi.jpg?width=512";
+      "https://upload.wikimedia.org/wikipedia/commons/1/12/Logo_Kabupaten_Bekasi.jpg";
 
     // Ambil lambang dari Wikimedia Commons (sumber mencantumkan Pemkab Bekasi).
     // Jika layanan gambar sedang tidak tersedia, kop surat tetap dapat dibuat.
@@ -4834,7 +4834,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     const logoKopPath = path.join(__dirname, "images.png");
     const pakaiLogoPerumahan = fs.existsSync(logoKopPath);
     const URL_LAMBANG_KABUPATEN =
-      "https://commons.wikimedia.org/wiki/Special:FilePath/Logo_Kabupaten_Bekasi.jpg?width=512";
+      "https://upload.wikimedia.org/wikipedia/commons/1/12/Logo_Kabupaten_Bekasi.jpg";
 
     // Gunakan sumber lambang yang sama dengan kop Menu Surat.
     let lambangKabupatenBekasi = null;
