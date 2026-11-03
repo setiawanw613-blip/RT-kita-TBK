@@ -5453,7 +5453,7 @@ app.get("/:asset", (req, res, next) => {
 
   // Berkas kode, konfigurasi, dokumentasi, dan migrasi tidak boleh
   // dilayani sebagai berkas statis.
-  if (/\\.(?:js|json|md|sql|ya?ml|toml|lock|env|txt)$/i.test(asset)) {
+  if (asset.startsWith(".") || /\.(?:js|json|md|sql|ya?ml|toml|lock|env|txt)$/i.test(asset)) {
     return res.sendStatus(404);
   }
 
