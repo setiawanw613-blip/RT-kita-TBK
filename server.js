@@ -3188,7 +3188,7 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
         width: LEBAR_TEKS_KOP, align: "center"
       });
     doc.font("Helvetica-Bold").fontSize(12)
-      .text("PENGURUS RT 004 / RW 001", X_TEKS_KOP, 42, {
+      .text("PENGURUS RT 004 / RW 01", X_TEKS_KOP, 42, {
         width: LEBAR_TEKS_KOP, align: "center"
       });
     doc.font("Helvetica-Bold").fontSize(10)
@@ -4910,7 +4910,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       doc.fillColor("#111111").font("Helvetica-Bold").fontSize(17)
         .text("SEKRETARIAT", xTeks, 17, { width: lebarTeks, align: "center" });
       doc.font("Helvetica-Bold").fontSize(12)
-        .text("PENGURUS RT 004 / RW 001", xTeks, 42, { width: lebarTeks, align: "center" });
+        .text("PENGURUS RT 004 / RW 01", xTeks, 42, { width: lebarTeks, align: "center" });
       doc.font("Helvetica-Bold").fontSize(10)
         .text("Perumahan Taman Bali Kahuripan", xTeks, 64, { width: lebarTeks, align: "center" });
       doc.font("Helvetica-Bold").fontSize(9)
