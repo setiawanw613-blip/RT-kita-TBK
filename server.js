@@ -4830,9 +4830,28 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       dokumentasi.foto_pengukuran?.path || dokumentasi.foto_pengukuran
     );
 
-    // Kop proposal bersih: logo TBK di kiri atas, tanpa latar/bingkai halaman.
+    // Kop proposal: lambang Kabupaten Bekasi di kiri dan logo perumahan di kanan.
     const logoKopPath = path.join(__dirname, "images.png");
-    const pakaiLogoKop = fs.existsSync(logoKopPath);
+    const pakaiLogoPerumahan = fs.existsSync(logoKopPath);
+    const URL_LAMBANG_KABUPATEN =
+      "https://commons.wikimedia.org/wiki/Special:FilePath/Logo_Kabupaten_Bekasi.jpg?width=512";
+
+    // Gunakan sumber lambang yang sama dengan kop Menu Surat.
+    let lambangKabupatenBekasi = null;
+    try {
+      const responsLambang = await fetch(URL_LAMBANG_KABUPATEN);
+      if (responsLambang.ok) {
+        const tipeGambar = responsLambang.headers.get("content-type") || "";
+        if (tipeGambar.startsWith("image/")) {
+          const bytesLambang = Buffer.from(await responsLambang.arrayBuffer());
+          if (bytesLambang.length > 0 && bytesLambang.length < 3 * 1024 * 1024) {
+            lambangKabupatenBekasi = bytesLambang;
+          }
+        }
+      }
+    } catch (errorLambang) {
+      console.warn("LAMBANG KABUPATEN BEKASI TIDAK DAPAT DIMUAT UNTUK ASPIRASI:", errorLambang.message);
+    }
 
     const doc = new PDFDocument({
       size: "A4",
@@ -4857,23 +4876,36 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     const satuan = d.satuan || "meter";
 
     function pasangKop() {
-      const xLogo = KIRI;
-      const yLogo = 12;
-      const ukuranLogo = 128;
-      const xTeks = KIRI + ukuranLogo + 12;
-      const lebarTeks = LEBAR - ukuranLogo - 12;
-      if (pakaiLogoKop) {
-        doc.image(logoKopPath, xLogo, yLogo, { fit: [ukuranLogo, ukuranLogo], align: "center", valign: "center" });
+      const ukuranLogoSisi = 76;
+      const xLogoKiri = KIRI;
+      const xLogoKanan = doc.page.width - KANAN - ukuranLogoSisi;
+      const xTeks = xLogoKiri + ukuranLogoSisi + 10;
+      const lebarTeks = xLogoKanan - 10 - xTeks;
+
+      if (lambangKabupatenBekasi) {
+        doc.image(lambangKabupatenBekasi, xLogoKiri, 20, {
+          fit: [ukuranLogoSisi, ukuranLogoSisi],
+          align: "center",
+          valign: "center"
+        });
       }
+      if (pakaiLogoPerumahan) {
+        doc.image(logoKopPath, xLogoKanan, 20, {
+          fit: [ukuranLogoSisi, ukuranLogoSisi],
+          align: "center",
+          valign: "center"
+        });
+      }
+
       doc.save();
       doc.fillColor("#111111").font("Helvetica-Bold").fontSize(19)
-        .text("TAMAN BALI KAHURIPAN", xTeks, 26, { width: lebarTeks, align: "center" });
+        .text("TAMAN BALI KAHURIPAN", xTeks, 22, { width: lebarTeks, align: "center" });
       doc.font("Helvetica-Bold").fontSize(12)
-        .text("PENGURUS RT 004 / RW 01", xTeks, 52, { width: lebarTeks, align: "center" });
+        .text("PENGURUS RT 004 / RW 01", xTeks, 48, { width: lebarTeks, align: "center" });
       doc.font("Helvetica-Bold").fontSize(10)
-        .text("Desa Sukahurip · Kecamatan Sukatani · Kabupaten Bekasi", xTeks, 74, { width: lebarTeks, align: "center" });
+        .text("Desa Sukahurip · Kecamatan Sukatani · Kabupaten Bekasi", xTeks, 70, { width: lebarTeks, align: "center" });
       doc.font("Helvetica-Bold").fontSize(9)
-        .text("SEKRETARIAT: PERUM. TAMAN BALI KAHURIPAN BLOK", xTeks, 95, { width: lebarTeks, align: "center" });
+        .text("SEKRETARIAT: PERUM. TAMAN BALI KAHURIPAN BLOK", xTeks, 91, { width: lebarTeks, align: "center" });
       doc.moveTo(KIRI, 130).lineTo(doc.page.width - KANAN, 130).lineWidth(2.2).strokeColor("#111111").stroke();
       doc.restore();
     }
