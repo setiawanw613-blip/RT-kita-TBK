@@ -3,6 +3,8 @@ const path = require("path");
 const crypto = require("crypto");
 const PDFDocument = require("pdfkit");
 const multer = require("multer");
+const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidtransServerKeyForNewTransaction, getMidtransServerKeyForOrder, getMidtransModeInfo } = require("./midtrans-config");
+const { normalizeStorageObjectPath } = require("./storage-path");
 const app = express();
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -19,22 +21,18 @@ app.use((req, res, next) => {
 });
 app.use(express.json());
 
-/* MIDTRANS QRIS SANDBOX */
+/* MIDTRANS QRIS: endpoint dipilih sesuai mode dan asal order. */
 async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
-  const serverKey = process.env.MIDTRANS_SERVER_KEY;
+  const serverKey = getMidtransServerKeyForNewTransaction();
 
   if (!serverKey) {
-    throw new Error("MIDTRANS_SERVER_KEY belum diatur di Vercel.");
-  }
-
-  if (process.env.MIDTRANS_IS_PRODUCTION === "true") {
-    throw new Error("Mode ini khusus Sandbox.");
+    throw new Error("Kunci Midtrans untuk mode yang aktif belum diatur di Vercel.");
   }
 
   const auth = Buffer.from(`${serverKey}:`).toString("base64");
 
   const response = await fetch(
-    "https://api.sandbox.midtrans.com/v2/charge",
+    `${getMidtransApiBaseForNewTransaction()}/v2/charge`,
     {
       method: "POST",
       headers: {
@@ -62,7 +60,7 @@ async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
 
   if (!response.ok) {
     console.error("MIDTRANS QRIS ERROR:", hasil);
-    throw new Error("Transaksi QRIS gagal dibuat. Periksa konfigurasi Sandbox.");
+    throw new Error("Transaksi QRIS gagal dibuat. Periksa mode dan kredensial Midtrans.");
   }
 
   return hasil;
@@ -85,7 +83,7 @@ const {
 } = req.body || {};
 
 
-    const serverKey = process.env.MIDTRANS_SERVER_KEY;
+    const serverKey = getMidtransServerKeyForOrder(order_id);
 
     if (!serverKey || !order_id || !signature_key) {
       return res.status(400).json({
@@ -511,7 +509,10 @@ async function buatUrlFotoPrivat(objectPath) {
 
   try {
     const bucket = "foto warga";
-    const encodedPath = objectPath
+    const normalizedPath = normalizeStorageObjectPath(objectPath, bucket);
+    if (!normalizedPath) return null;
+
+    const encodedPath = normalizedPath
       .split("/")
       .map(encodeURIComponent)
       .join("/");
@@ -3432,14 +3433,14 @@ app.get("/api/my-iuran", requireWarga, async (req, res) => {
       ) {
         try {
           const orderId = String(row.bukti_transfer).slice("MIDTRANS:".length);
-          const serverKey = process.env.MIDTRANS_SERVER_KEY;
+          const serverKey = getMidtransServerKeyForOrder(orderId);
 
-          if (!serverKey || process.env.MIDTRANS_IS_PRODUCTION === "true") {
+          if (!serverKey) {
             continue;
           }
 
           const cek = await fetch(
-            `https://api.sandbox.midtrans.com/v2/${encodeURIComponent(orderId)}/status`,
+            `${getMidtransApiBaseForOrder(orderId)}/v2/${encodeURIComponent(orderId)}/status`,
             {
               headers: {
                 Authorization:
@@ -3620,15 +3621,23 @@ for (const bulan of dipilih) {
     }
 
     const orderLama = bukti.slice("MIDTRANS:".length);
+    const serverKey = getMidtransServerKeyForOrder(orderLama);
+
+    if (!serverKey) {
+      return res.status(409).json({
+        ok: false,
+        message: `Kunci Midtrans untuk transaksi ${bulan} belum tersedia. Hubungi Ketua RT.`
+      });
+    }
 
     const cek = await fetch(
-      `https://api.sandbox.midtrans.com/v2/${encodeURIComponent(orderLama)}/status`,
+      `${getMidtransApiBaseForOrder(orderLama)}/v2/${encodeURIComponent(orderLama)}/status`,
       {
         headers: {
           Authorization:
             "Basic " +
             Buffer.from(
-              process.env.MIDTRANS_SERVER_KEY + ":"
+              serverKey + ":"
             ).toString("base64")
         }
       }
@@ -3696,7 +3705,7 @@ if (record && !iuranKedaluwarsa.some(
 
     const total = 35000 * dipilih.length;
     orderId =
-      `RTTBK-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+      `${getMidtransModeInfo().mode === "production" ? "RTTBK-PROD-" : "RTTBK-SBX-"}${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 
     // Buat transaksi QRIS terlebih dahulu.
     const transaksi = await buatTransaksiQRIS({
@@ -3909,6 +3918,7 @@ app.get("/api/qris/history", requireAdmin, async (req, res) => {
 
     return res.json({
       ok: true,
+      mode: getMidtransModeInfo(),
       sumber: "Database iuran RT TBK",
       catatan:
         "Data transaksi berasal dari database aplikasi. Status dan waktu Midtrans ditampilkan jika telah diterima dan disimpan dari notifikasi yang valid. Konfirmasi transaksi resmi dan pencairan dana harus diperiksa secara terpisah.",
@@ -4033,6 +4043,7 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
 
     return res.json({
       ok: true,
+      mode: getMidtransModeInfo(),
       sumber: "Riwayat transaksi keluarga sendiri",
       catatan:
         "Data hanya mencakup pembayaran QRIS keluarga yang sedang login. Konfirmasi transaksi resmi dan pencairan dana harus diperiksa secara terpisah.",

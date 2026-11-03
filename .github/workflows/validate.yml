@@ -22,9 +22,14 @@ jobs:
       - name: Check JavaScript syntax
         run: |
           node --check server.js
+          node --check midtrans-config.js
+          node --check storage-path.js
           node --check surat-form.js
           node --check tampilan-hp.js
           node --check sw.js
+          node --check scripts/check-inline-js.js
+          node scripts/check-inline-js.js
+          npm test
       - name: Validate JSON configuration
         run: |
           node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8'))"
