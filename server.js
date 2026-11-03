@@ -4993,7 +4993,8 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
         align: "center"
       });
 
-    judul("D. SKETSA PENAMPANG SALURAN");
+    const kategoriProposal = infoKategoriAspirasi(a.kategori);
+    judul(kategoriProposal.key === "drainase" ? "D. SKETSA PENAMPANG SALURAN" : "D. ILUSTRASI UKURAN PEKERJAAN");
 
     doc.font("Helvetica-Oblique").fontSize(8)
       .text(
@@ -5050,7 +5051,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
           width: 210,
           align: "center"
         });
-      doc.text("Kedalaman: " + nilaiUkuran(tinggi), x, y + 130, {
+      doc.text((kategoriProposal.key === "drainase" ? "Kedalaman: " : "Tinggi / ketebalan: ") + nilaiUkuran(tinggi), x, y + 130, {
         width: 210,
         align: "center"
       });
