@@ -7,7 +7,7 @@ const app = express();
 app.disable("x-powered-by");
 app.use((req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
   // API responses may contain personal, financial, or administrative data.
@@ -394,6 +394,17 @@ function hashPassword(password) {
     .toString("hex");
 
   return `${salt}:${hash}`;
+}
+
+function constantTimeStringEqual(value, expected) {
+  if (typeof value !== "string" || typeof expected !== "string") {
+    return false;
+  }
+
+  const valueHash = crypto.createHash("sha256").update(value).digest();
+  const expectedHash = crypto.createHash("sha256").update(expected).digest();
+
+  return crypto.timingSafeEqual(valueHash, expectedHash);
 }
 
 function verifyPassword(password, storedPassword) {
@@ -943,6 +954,10 @@ if (Array.isArray(keluargaExisting) && keluargaExisting.length) {
 
     const wargaBaru = Array.isArray(data) ? data[0] : data;
 
+    if (!wargaBaru || typeof wargaBaru !== "object") {
+      throw new Error("Data warga baru tidak dikembalikan oleh database");
+    }
+
     // Never return the database row: it contains the stored password hash.
     return res.json({
       ok: true,
@@ -1078,7 +1093,7 @@ const token = createSessionToken({
 }
     if (
       username !== ADMIN_USER ||
-      password !== ADMIN_PASSWORD
+      !constantTimeStringEqual(password, ADMIN_PASSWORD)
     ) {
       return res.status(401).json({
         ok: false,
