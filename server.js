@@ -3126,20 +3126,48 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
 
     doc.pipe(res);
 
-    // Kop surat bersih untuk cetak A4: logo kecil di kiri, identitas RT,
-    // dan garis pemisah. Tidak lagi memakai gambar latar/bingkai satu halaman.
+    // Kop surat A4: lambang Kabupaten Bekasi di kiri dan logo perumahan di kanan.
     const logoKopPath = path.join(__dirname, "images.png");
-    const pakaiLogoKop = fs.existsSync(logoKopPath);
+    const pakaiLogoPerumahan = fs.existsSync(logoKopPath);
     const KIRI_KOP = 48;
     const KANAN_KOP = 48;
     const LEBAR_KOP = doc.page.width - KIRI_KOP - KANAN_KOP;
-    const UKURAN_LOGO = 104;
-    const X_TEKS_KOP = KIRI_KOP + UKURAN_LOGO + 12;
-    const LEBAR_TEKS_KOP = LEBAR_KOP - UKURAN_LOGO - 12;
+    const UKURAN_LOGO_SISI = 76;
+    const X_LOGO_KANAN = doc.page.width - KANAN_KOP - UKURAN_LOGO_SISI;
+    const X_TEKS_KOP = KIRI_KOP + UKURAN_LOGO_SISI + 10;
+    const LEBAR_TEKS_KOP = X_LOGO_KANAN - 10 - X_TEKS_KOP;
+    const URL_LAMBANG_KABUPATEN =
+      "https://commons.wikimedia.org/wiki/Special:FilePath/Logo_Kabupaten_Bekasi.jpg?width=512";
 
-    if (pakaiLogoKop) {
-      doc.image(logoKopPath, KIRI_KOP, 20, {
-        fit: [UKURAN_LOGO, UKURAN_LOGO],
+    // Ambil lambang dari Wikimedia Commons (sumber mencantumkan Pemkab Bekasi).
+    // Jika layanan gambar sedang tidak tersedia, kop surat tetap dapat dibuat.
+    let lambangKabupatenBekasi = null;
+    try {
+      const responsLambang = await fetch(URL_LAMBANG_KABUPATEN);
+      if (responsLambang.ok) {
+        const tipeGambar = responsLambang.headers.get("content-type") || "";
+        if (tipeGambar.startsWith("image/")) {
+          const bytesLambang = Buffer.from(await responsLambang.arrayBuffer());
+          if (bytesLambang.length > 0 && bytesLambang.length < 3 * 1024 * 1024) {
+            lambangKabupatenBekasi = bytesLambang;
+          }
+        }
+      }
+    } catch (errorLambang) {
+      console.warn("LAMBANG KABUPATEN BEKASI TIDAK DAPAT DIMUAT:", errorLambang.message);
+    }
+
+    if (lambangKabupatenBekasi) {
+      doc.image(lambangKabupatenBekasi, KIRI_KOP, 20, {
+        fit: [UKURAN_LOGO_SISI, UKURAN_LOGO_SISI],
+        align: "center",
+        valign: "center"
+      });
+    }
+
+    if (pakaiLogoPerumahan) {
+      doc.image(logoKopPath, X_LOGO_KANAN, 20, {
+        fit: [UKURAN_LOGO_SISI, UKURAN_LOGO_SISI],
         align: "center",
         valign: "center"
       });
