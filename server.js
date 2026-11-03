@@ -3131,7 +3131,7 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     const KIRI_KOP = 48;
     const KANAN_KOP = 48;
     const LEBAR_KOP = doc.page.width - KIRI_KOP - KANAN_KOP;
-    const UKURAN_LOGO = 72;
+    const UKURAN_LOGO = 84;
     const X_TEKS_KOP = KIRI_KOP + UKURAN_LOGO + 12;
     const LEBAR_TEKS_KOP = LEBAR_KOP - UKURAN_LOGO - 12;
 
@@ -3157,14 +3157,20 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
         width: LEBAR_TEKS_KOP,
         align: "center"
       });
-    doc.font("Helvetica")
-      .fontSize(9.5)
+    doc.font("Helvetica-Bold")
+      .fontSize(8.5)
       .text("Desa Sukahurip · Kecamatan Sukatani · Kabupaten Bekasi", X_TEKS_KOP, 65, {
         width: LEBAR_TEKS_KOP,
         align: "center"
       });
-    doc.moveTo(KIRI_KOP, 96)
-      .lineTo(doc.page.width - KANAN_KOP, 104)
+    doc.font("Helvetica-Bold")
+      .fontSize(8.5)
+      .text("SEKRETARIAT: PERUM. TAMAN BALI KAHURIPAN BLOK C 8 NO.30  |  DRAFT", X_TEKS_KOP, 82, {
+        width: LEBAR_TEKS_KOP,
+        align: "center"
+      });
+    doc.moveTo(KIRI_KOP, 108)
+      .lineTo(doc.page.width - KANAN_KOP, 108)
       .lineWidth(2)
       .strokeColor("#111111")
       .stroke();
@@ -4815,13 +4821,13 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     const KANAN = 48;
     const LEBAR = doc.page.width - KIRI - KANAN;
     const BATAS = doc.page.height - 55;
-    const ATAS = 128;
+    const ATAS = 136;
     const satuan = d.satuan || "meter";
 
     function pasangKop() {
       const xLogo = KIRI;
       const yLogo = 24;
-      const ukuranLogo = 72;
+      const ukuranLogo = 84;
       const xTeks = KIRI + ukuranLogo + 12;
       const lebarTeks = LEBAR - ukuranLogo - 12;
       if (pakaiLogoKop) {
@@ -4832,9 +4838,11 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
         .text("TAMAN BALI KAHURIPAN", xTeks, 29, { width: lebarTeks, align: "center" });
       doc.font("Helvetica-Bold").fontSize(11)
         .text("PENGURUS RT 004 / RW 01", xTeks, 51, { width: lebarTeks, align: "center" });
-      doc.font("Helvetica").fontSize(9)
+      doc.font("Helvetica-Bold").fontSize(9)
         .text("Perumahan Taman Bali Kahuripan · Desa Sukahurip · Kecamatan Sukatani · Kabupaten Bekasi", xTeks, 68, { width: lebarTeks, align: "center" });
-      doc.moveTo(KIRI, 104).lineTo(doc.page.width - KANAN, 104).lineWidth(2).strokeColor("#111111").stroke();
+      doc.font("Helvetica-Bold").fontSize(8.5)
+        .text("SEKRETARIAT: PERUM. TAMAN BALI KAHURIPAN BLOK C 8 NO.30  |  DRAFT", xTeks, 84, { width: lebarTeks, align: "center" });
+      doc.moveTo(KIRI, 108).lineTo(doc.page.width - KANAN, 108).lineWidth(2).strokeColor("#111111").stroke();
       doc.restore();
     }
 
