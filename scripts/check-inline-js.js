@@ -11,9 +11,9 @@ for (const [index, match] of scripts.entries()) {
   if (/\bsrc\s*=/.test(attributes) || !source.trim()) continue;
   const type = attributes.match(/\btype\s*=\s*["']([^"']+)["']/i)?.[1];
   if (type && !/^(text|application)\/(javascript|ecmascript)$/i.test(type) && type !== "module") continue;
-  new vm.Script(source, { filename: \`index.html:inline-script-\${index + 1}\` });
+  new vm.Script(source, { filename: "index.html:inline-script-" + (index + 1) });
   checked += 1;
 }
 
 if (!checked) throw new Error("No inline JavaScript blocks were checked.");
-console.log(\`Checked \${checked} inline JavaScript block(s).\`);
+console.log("Checked " + checked + " inline JavaScript block(s).");
