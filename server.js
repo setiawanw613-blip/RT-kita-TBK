@@ -516,8 +516,8 @@ async function buatUrlFotoPrivat(objectPath) {
     }
     if (typeof pathValue !== "string") return null;
 
-    pathValue = pathValue.trim().replace(/^\\/+/, "");
-    if (!pathValue || /^https?:\\/\\//i.test(pathValue)) return null;
+    pathValue = pathValue.trim().replace(/^\/+/, "");
+    if (!pathValue || /^https?:\/\//i.test(pathValue)) return null;
 
     const segments = pathValue.split("/").filter(Boolean);
     if (segments[0] === bucket) segments.shift();
