@@ -2996,7 +2996,7 @@ function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     }
   }
 
-  // Cap RT otomatis, menimpa sebagian area tanda tangan seperti cap basah.
+  // Gunakan hanya gambar cap RT asli jika berkas resmi tersedia.
   const fileCap = path.join(__dirname, "cap-rt.png");
   let capAsliTerpasang = false;
   if (fs.existsSync(fileCap)) {
