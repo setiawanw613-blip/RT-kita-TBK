@@ -143,7 +143,7 @@ const {
 
     const dataIuran = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer" +
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at" +
         `&bukti_transfer=eq.${encodeURIComponent("MIDTRANS:" + order_id)}`
     });
 
@@ -248,16 +248,24 @@ for (const iuran of rows) {
         });
 
         if (!Array.isArray(ada) || !ada.length) {
-          await supabaseRequest("kas_rt", {
-            method: "POST",
-            body: {
-              tanggal: new Date().toISOString().slice(0, 10),
-              jenis: "masuk",
-              kategori: kas.kategori,
-              jumlah: kas.jumlah,
-              keterangan: kas.keterangan
+          try {
+            await supabaseRequest("kas_rt", {
+              method: "POST",
+              body: {
+                tanggal: new Date().toISOString().slice(0, 10),
+                jenis: "masuk",
+                kategori: kas.kategori,
+                jumlah: kas.jumlah,
+                keterangan: kas.keterangan
+              }
+            });
+          } catch (insertError) {
+            // A unique database index will make concurrent duplicate webhook
+            // deliveries harmless. Ignore only the expected duplicate-key error.
+            if (getSupabaseErrorCode(insertError) !== "23505") {
+              throw insertError;
             }
-          });
+          }
         }
       }
 
