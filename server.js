@@ -3,7 +3,7 @@ const path = require("path");
 const crypto = require("crypto");
 const PDFDocument = require("pdfkit");
 const multer = require("multer");
-const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidtransModeInfo } = require("./midtrans-config");
+const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidtransServerKeyForNewTransaction, getMidtransServerKeyForOrder, getMidtransModeInfo } = require("./midtrans-config");
 const app = express();
 app.disable("x-powered-by");
 app.use((req, res, next) => {
@@ -22,10 +22,10 @@ app.use(express.json());
 
 /* MIDTRANS QRIS: endpoint dipilih sesuai mode dan asal order. */
 async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
-  const serverKey = process.env.MIDTRANS_SERVER_KEY;
+  const serverKey = getMidtransServerKeyForNewTransaction();
 
   if (!serverKey) {
-    throw new Error("MIDTRANS_SERVER_KEY belum diatur di Vercel.");
+    throw new Error("Kunci Midtrans untuk mode yang aktif belum diatur di Vercel.");
   }
 
   const auth = Buffer.from(`${serverKey}:`).toString("base64");
@@ -82,7 +82,7 @@ const {
 } = req.body || {};
 
 
-    const serverKey = process.env.MIDTRANS_SERVER_KEY;
+    const serverKey = getMidtransServerKeyForOrder(order_id);
 
     if (!serverKey || !order_id || !signature_key) {
       return res.status(400).json({
@@ -3441,9 +3441,9 @@ app.get("/api/my-iuran", requireWarga, async (req, res) => {
       ) {
         try {
           const orderId = String(row.bukti_transfer).slice("MIDTRANS:".length);
-          const serverKey = process.env.MIDTRANS_SERVER_KEY;
+          const serverKey = getMidtransServerKeyForOrder(orderId);
 
-          if (!serverKey || process.env.MIDTRANS_IS_PRODUCTION === "true") {
+          if (!serverKey) {
             continue;
           }
 
@@ -3629,6 +3629,14 @@ for (const bulan of dipilih) {
     }
 
     const orderLama = bukti.slice("MIDTRANS:".length);
+    const serverKey = getMidtransServerKeyForOrder(orderLama);
+
+    if (!serverKey) {
+      return res.status(409).json({
+        ok: false,
+        message: `Kunci Midtrans untuk transaksi ${bulan} belum tersedia. Hubungi Ketua RT.`
+      });
+    }
 
     const cek = await fetch(
       `${getMidtransApiBaseForOrder(orderLama)}/v2/${encodeURIComponent(orderLama)}/status`,
@@ -3637,7 +3645,7 @@ for (const bulan of dipilih) {
           Authorization:
             "Basic " +
             Buffer.from(
-              process.env.MIDTRANS_SERVER_KEY + ":"
+              serverKey + ":"
             ).toString("base64")
         }
       }
