@@ -379,7 +379,14 @@ app.use(express.urlencoded({ extended: true }));
 const uploadFoto = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 2 * 1024 * 1024
+    fileSize: 2 * 1024 * 1024,
+    files: 2,
+    fields: 10,
+    parts: 12,
+    fieldNameSize: 100,
+    fieldSize: 2048,
+    fieldNestingDepth: 1,
+    fieldArrayIndexLimit: 1
   },
   fileFilter: (req, file, cb) => {
     const tipeDiizinkan = [
