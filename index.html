@@ -1476,7 +1476,10 @@ async function simpanWargaBaru(){
 
 
 
-async function transparansiQRIS() {
+async function transparansiQRIS(tombolReload) {
+  if (tombolReload) { tombolReload.disabled = true; tombolReload.textContent = "Memuat ulang..."; }
+  let modeInfo = { mode: "sandbox", configured: false };
+  let waktuPembaruan = "";
   let isiTransaksi = `
     <div style="padding:16px;background:#f8fafc;border-radius:14px;color:#475569">
       Memuat riwayat transaksi QRIS...
@@ -1508,6 +1511,8 @@ async function transparansiQRIS() {
 
   try {
     const hasil = await api("/api/qris/history");
+    modeInfo = hasil?.mode || modeInfo;
+    waktuPembaruan = "Terakhir diperbarui: " + new Date().toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "medium", timeZone: "Asia/Jakarta" }) + " WIB";
 
     if (!hasil || hasil.ok !== true) {
       throw new Error("Riwayat transaksi belum dapat dimuat.");
@@ -1597,6 +1602,7 @@ async function transparansiQRIS() {
     catatan = esc(hasil.catatan || "");
   } catch (error) {
     console.error("Gagal memuat riwayat QRIS:", error);
+    waktuPembaruan = "Pembaruan gagal. Periksa koneksi lalu coba lagi."
 
     isiTransaksi = `
       <div style="padding:16px;background:#fff1f2;border-radius:14px;color:#9f1239">
@@ -1614,7 +1620,7 @@ async function transparansiQRIS() {
           Riwayat pembayaran iuran melalui Midtrans yang tercatat di RT TBK.
         </div>
         <div style="display:inline-block;margin-top:12px;background:#fff7ed;color:#9a3412;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700">
-          MODE SANDBOX / UJI COBA
+          ${!modeInfo.configured ? "KONFIGURASI MIDTRANS BELUM LENGKAP" : modeInfo.mode === "production" ? "MODE PRODUKSI" : "MODE SANDBOX / UJI COBA"}
         </div>
       </div>
 
@@ -1633,12 +1639,16 @@ async function transparansiQRIS() {
 
       ${isiTransaksi}
 
+      <div aria-live="polite" style="font-size:12px;color:#64748b;margin-top:10px">
+        ${esc(waktuPembaruan)}
+      </div>
+
       <div style="font-size:12px;color:#64748b;margin-top:14px">
         ${catatan}
       </div>
 
       <button type="button"
-        onclick="transparansiQRIS()"
+        onclick="transparansiQRIS(this)"
         style="width:100%;margin-top:16px;padding:12px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer">
         Muat Ulang Riwayat
       </button>
@@ -1652,7 +1662,10 @@ async function transparansiQRIS() {
   `);
 }
 
-async function transparansiQRISWarga() {
+async function transparansiQRISWarga(tombolReload) {
+  if (tombolReload) { tombolReload.disabled = true; tombolReload.textContent = "Memuat ulang..."; }
+  let modeInfo = { mode: "sandbox", configured: false };
+  let waktuPembaruan = "";
   let isiTransaksi = `
     <div style="padding:16px;background:#f8fafc;border-radius:14px;color:#475569">
       Memuat riwayat pembayaran keluarga...
@@ -1683,6 +1696,8 @@ async function transparansiQRISWarga() {
 
   try {
     const hasil = await api("/api/qris/my-history");
+    modeInfo = hasil?.mode || modeInfo;
+    waktuPembaruan = "Terakhir diperbarui: " + new Date().toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "medium", timeZone: "Asia/Jakarta" }) + " WIB";
 
     if (!hasil || hasil.ok !== true) {
       throw new Error(hasil?.message || "Riwayat pembayaran gagal dimuat.");
@@ -1754,6 +1769,7 @@ async function transparansiQRISWarga() {
     catatan = esc(hasil.catatan || "");
   } catch (error) {
     console.error("QRIS WARGA ERROR:", error);
+    waktuPembaruan = "Pembaruan gagal. Periksa koneksi lalu coba lagi."
 
     isiTransaksi = `
       <div style="padding:16px;background:#fff1f2;border-radius:14px;color:#9f1239">
@@ -1772,7 +1788,7 @@ async function transparansiQRISWarga() {
           Periksa riwayat pembayaran iuran QRIS keluarga Anda.
         </div>
         <div style="display:inline-block;margin-top:12px;background:#fff7ed;color:#9a3412;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700">
-          MODE SANDBOX / UJI COBA
+          ${!modeInfo.configured ? "KONFIGURASI MIDTRANS BELUM LENGKAP" : modeInfo.mode === "production" ? "MODE PRODUKSI" : "MODE SANDBOX / UJI COBA"}
         </div>
       </div>
 
@@ -1786,9 +1802,13 @@ async function transparansiQRISWarga() {
       <h3 style="margin:0 0 8px">Riwayat Pembayaran Keluarga</h3>
       ${isiTransaksi}
 
+      <div aria-live="polite" style="font-size:12px;color:#64748b;margin-top:10px">
+        ${esc(waktuPembaruan)}
+      </div>
+
       <div style="font-size:12px;color:#64748b;margin-top:14px">${catatan}</div>
 
-      <button type="button" onclick="transparansiQRISWarga()"
+      <button type="button" onclick="transparansiQRISWarga(this)"
         style="width:100%;margin-top:16px;padding:12px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-weight:700;cursor:pointer">
         Muat Ulang Riwayat
       </button>
