@@ -2918,7 +2918,8 @@ function gambarCapRT(doc, cx, cy, r) {
 
 function kodeVerifikasiSurat(id, letter) {
   const crypto = require("crypto");
-  const kunci = process.env.SESSION_SECRET || "rt-kita-tbk";
+  const kunci = process.env.SESSION_SECRET;
+  if (!kunci) throw new Error("SESSION_SECRET belum dikonfigurasi");
   const hex = crypto
     .createHmac("sha256", kunci)
     .update(`surat:${id}:${letter.created_at || ""}:${letter.jenis_surat || ""}`)
