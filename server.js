@@ -4876,25 +4876,30 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     const satuan = d.satuan || "meter";
 
     function pasangKop() {
-      const ukuranLogoSisi = 76;
+      // Samakan ukuran kedua lambang agar kop lebih seimbang dan mudah dibaca.
+      const ukuranLogoSisi = 92;
       const xLogoKiri = KIRI;
       const xLogoKanan = doc.page.width - KANAN - ukuranLogoSisi;
       const xTeks = xLogoKiri + ukuranLogoSisi + 10;
       const lebarTeks = xLogoKanan - 10 - xTeks;
 
       if (lambangKabupatenBekasi) {
-        doc.image(lambangKabupatenBekasi, xLogoKiri, 20, {
+        doc.image(lambangKabupatenBekasi, xLogoKiri, 14, {
           fit: [ukuranLogoSisi, ukuranLogoSisi],
           align: "center",
           valign: "center"
         });
       }
       if (pakaiLogoPerumahan) {
-        doc.image(logoKopPath, xLogoKanan, 20, {
-          fit: [ukuranLogoSisi, ukuranLogoSisi],
-          align: "center",
-          valign: "center"
-        });
+        // Cetak tipis berulang dengan sedikit pergeseran untuk mempertebal
+        // garis dan huruf logo tanpa mengubah desain atau warnanya.
+        for (const [dx, dy] of [[0, 0], [-0.35, 0], [0.35, 0], [0, -0.35], [0, 0.35]]) {
+          doc.image(logoKopPath, xLogoKanan + dx, 14 + dy, {
+            fit: [ukuranLogoSisi, ukuranLogoSisi],
+            align: "center",
+            valign: "center"
+          });
+        }
       }
 
       doc.save();
