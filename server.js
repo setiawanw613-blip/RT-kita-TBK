@@ -4866,7 +4866,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
       ["PARAMETER", "KONDISI SAAT INI", "UKURAN USULAN"]
         .forEach((label, i) => {
           doc.rect(x, y, kolomUkuran[i], tinggiHeader)
-            .fill("#D9EAF7");
+            .fill("#FFFFFF");
           doc.fillColor("#000000")
             .font("Helvetica-Bold")
             .fontSize(8)
@@ -5115,7 +5115,7 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
 
         judulKolom.forEach((label, i) => {
           doc.rect(x, y, kolom[i], 34)
-            .fill("#D9EAF7");
+            .fill("#FFFFFF");
           doc.fillColor("#000000")
             .font("Helvetica-Bold")
             .fontSize(7)
