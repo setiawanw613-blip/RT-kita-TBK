@@ -732,6 +732,14 @@ const NAMA_BULAN_ID = [
   "Juli","Agustus","September","Oktober","November","Desember"
 ];
 
+function isValidIuranMonth(value) {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-(0[1-9]|1[0-2])$/.test(value) &&
+    value >= "2026-10"
+  );
+}
+
 function labelBulanIuran(bulan) {
   const m = String(bulan || "").match(/^(\d{4})-(\d{2})/);
   if (!m) return String(bulan || "");
@@ -4086,12 +4094,12 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
-    const inputBulan = String(req.body.bulan || "").slice(0, 7);
+    const inputBulan = String(req.body?.bulan || "").slice(0, 7);
 
-    if (!/^\d{4}-\d{2}$/.test(inputBulan)) {
+    if (!isValidIuranMonth(inputBulan)) {
       return res.status(400).json({
         ok: false,
-        message: "Bulan iuran wajib diisi"
+        message: "Bulan iuran tidak valid. Pembayaran dimulai Oktober 2026."
       });
     }
 
