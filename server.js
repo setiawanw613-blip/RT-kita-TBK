@@ -3338,6 +3338,7 @@ app.patch("/api/letters/:id", requireAdmin, async (req, res) => {
     }
 
     // Kirim pemberitahuan ke akun warga dan hubungkan ke menu Surat Saya.
+    let notifikasiWargaTerkirim = false;
     try {
       const pengajuan = existing[0];
       if (pengajuan.warga_id) {
@@ -3355,6 +3356,7 @@ app.patch("/api/letters/:id", requireAdmin, async (req, res) => {
             sudah_dibaca: false
           }
         });
+        notifikasiWargaTerkirim = true;
       }
     } catch (notificationError) {
       console.error("NOTIFIKASI HASIL SURAT KE WARGA ERROR:", notificationError);
@@ -3362,9 +3364,10 @@ app.patch("/api/letters/:id", requireAdmin, async (req, res) => {
 
     res.json({
       ok: true,
+      notifikasi_warga_terkirim: notifikasiWargaTerkirim,
       message: status === "disetujui"
-        ? "Surat berhasil disetujui dan notifikasi warga dikirim"
-        : "Surat berhasil ditolak dan notifikasi warga dikirim",
+        ? (notifikasiWargaTerkirim ? "Surat disetujui dan notifikasi warga dikirim" : "Surat disetujui, tetapi notifikasi warga gagal dikirim")
+        : (notifikasiWargaTerkirim ? "Surat ditolak dan notifikasi warga dikirim" : "Surat ditolak, tetapi notifikasi warga gagal dikirim"),
       data: updated[0]
     });
   } catch (error) {
