@@ -8,6 +8,7 @@ const { normalizeStorageObjectPath } = require("./storage-path");
 const { csvCell } = require("./csv-safe");
 const { isValidNewResidentPassword } = require("./password-policy");
 const { detectImageType } = require("./image-validation");
+const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
 const { isValidSession } = require("./session-policy");
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
@@ -634,58 +635,14 @@ function getToken(req) {
 }
 
 function createSessionToken(session) {
-  if (!process.env.SESSION_SECRET) {
-    throw new Error("SESSION_SECRET belum dikonfigurasi");
-  }
-
-  const payload = Buffer.from(
-    JSON.stringify({
-      ...session,
-      createdAt: Date.now()
-    })
-  ).toString("base64url");
-
-  const signature = crypto
-    .createHmac("sha256", process.env.SESSION_SECRET)
-    .update(payload)
-    .digest("base64url");
-
-  return `${payload}.${signature}`;
+  return createSignedSessionToken(session, process.env.SESSION_SECRET);
 }
 
 function getSession(req) {
-  const token = getToken(req);
-  if (!token || !process.env.SESSION_SECRET) return null;
-
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-
-  const [payload, signature] = parts;
-
-  const expectedSignature = crypto
-    .createHmac("sha256", process.env.SESSION_SECRET)
-    .update(payload)
-    .digest("base64url");
-
-  const actualBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expectedSignature);
-
-  if (
-    actualBuffer.length !== expectedBuffer.length ||
-    !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
-  ) {
-    return null;
-  }
-
-  try {
-    const session = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8")
-    );
-
-    return isValidSession(session) ? session : null;
-  } catch {
-    return null;
-  }
+  return verifySignedSessionToken(
+    getToken(req),
+    process.env.SESSION_SECRET
+  );
 }
 
 
