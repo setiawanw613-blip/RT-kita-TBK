@@ -16,31 +16,41 @@ async function cancelPendingMidtransTransaction({
     throw new TypeError("Konfigurasi pembatalan transaksi Midtrans tidak valid.");
   }
 
-  const response = await fetchImpl(
-    `${apiBase}/v2/${encodeURIComponent(orderId)}/cancel`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: "Basic " + Buffer.from(serverKey + ":").toString("base64"),
-        Accept: "application/json",
-        "Content-Type": "application/json"
-      }
-    }
-  );
+  const url = `${apiBase}/v2/${encodeURIComponent(orderId)}`;
+  const headers = {
+    Authorization: "Basic " + Buffer.from(serverKey + ":").toString("base64"),
+    Accept: "application/json",
+    "Content-Type": "application/json"
+  };
 
-  let result = {};
+  const statusResponse = await fetchImpl(url + "/status", { method: "GET", headers });
+  if (!statusResponse.ok) {
+    return { ok: false, status: null, statusCode: statusResponse.status, reason: "status_unavailable" };
+  }
+
+  const statusBody = await statusResponse.json();
+  if (statusBody.transaction_status !== "pending") {
+    return {
+      ok: false,
+      status: typeof statusBody.transaction_status === "string" ? statusBody.transaction_status : null,
+      statusCode: statusResponse.status,
+      reason: "not_pending"
+    };
+  }
+
+  const cancelResponse = await fetchImpl(url + "/cancel", { method: "POST", headers });
+  let cancelBody = {};
   try {
-    result = await response.json();
+    cancelBody = await cancelResponse.json();
   } catch {
-    // Keep the failure result generic; callers must reconcile status separately.
+    // A missing response body is treated as an unconfirmed cancellation.
   }
 
   return {
-    ok: response.ok && result.transaction_status === "cancel",
-    status: typeof result.transaction_status === "string"
-      ? result.transaction_status
-      : null,
-    statusCode: response.status
+    ok: cancelResponse.ok && cancelBody.transaction_status === "cancel",
+    status: typeof cancelBody.transaction_status === "string" ? cancelBody.transaction_status : null,
+    statusCode: cancelResponse.status,
+    reason: cancelResponse.ok ? "cancel_response_unconfirmed" : "cancel_rejected"
   };
 }
 
