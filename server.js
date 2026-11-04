@@ -3724,61 +3724,26 @@ if (record && !iuranKedaluwarsa.some(
     });
 
 
-const rowsBaru = dipilih
-  .filter(bulan => !peta.has(bulan))
-  .map(bulan => ({
-    warga_id: String(warga.id),
-    keluarga_id: keluargaId,
-    bulan: bulan + "-01",
-    status: "menunggu_verifikasi",
-    total_amount: 35000,
-    bukti_transfer: `MIDTRANS:${orderId}`
-  }));
-
-rowsTersimpan = [];
-
-for (const rowLama of iuranKedaluwarsa) {
-  const hasilUpdate = await supabaseRequest("iuran_warga", {
-    method: "PATCH",
-    query: `id=eq.${encodeURIComponent(rowLama.id)}`,
-    body: {
-      status: "menunggu_verifikasi",
-      total_amount: 35000,
-      bukti_transfer: `MIDTRANS:${orderId}`
-    }
-  });
-
-  if (!Array.isArray(hasilUpdate) || hasilUpdate.length !== 1) {
-    throw new Error(
-      `Catatan iuran ${String(rowLama.bulan).slice(0, 7)} gagal diperbarui.`
-    );
+const idsPengganti = iuranKedaluwarsa.map(row => Number(row.id));
+const hasilReserva = await supabaseRequest("rpc/reserve_qris_iuran_batch", {
+  method: "POST",
+  body: {
+    p_warga_id: String(warga.id),
+    p_keluarga_id: keluargaId,
+    p_bulans: dipilih.map(bulan => bulan + "-01"),
+    p_replace_ids: idsPengganti,
+    p_order_id: orderId
   }
+});
 
-  rowsTersimpan.push(hasilUpdate[0]);
+rowsTersimpan = Array.isArray(hasilReserva) ? hasilReserva : [];
+if (
+  rowsTersimpan.length !== dipilih.length ||
+  rowsTersimpan.some(row => row.bukti_transfer !== `MIDTRANS:${orderId}`)
+) {
+  throw new Error("Reservasi iuran QRIS tidak lengkap atau tidak cocok dengan order.");
 }
 
-if (rowsBaru.length > 0) {
-  const hasil = await supabaseRequest("iuran_warga", {
-    method: "POST",
-    body: rowsBaru
-  });
-
-  const rowsBaruTersimpan = Array.isArray(hasil) ? hasil : [];
-
-  if (rowsBaruTersimpan.length !== rowsBaru.length) {
-    throw new Error(
-      "Jumlah catatan iuran baru yang tersimpan tidak sesuai."
-    );
-  }
-
-  rowsTersimpan.push(...rowsBaruTersimpan);
-}
-
-if (rowsTersimpan.length !== dipilih.length) {
-  throw new Error(
-    "Jumlah catatan iuran tidak sesuai dengan bulan yang dipilih."
-  );
-}
 
 
     for (const row of rowsTersimpan) {
