@@ -10,7 +10,20 @@
 
 <style>
 *{box-sizing:border-box}
-body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#f4f7fb;color:#172033}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:linear-gradient(145deg,#eef5fc 0%,#f8fbff 48%,#eaf2fb 100%);color:#172033}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  background-image:url("/images.png");
+  background-repeat:no-repeat;
+  background-position:center center;
+  background-size:min(76vw,480px) auto;
+  opacity:.10;
+}
+#app{position:relative;z-index:1}
 button,input,select,textarea{font:inherit}
 button{cursor:pointer}
 .wrap{width:100%;max-width:900px;margin:0 auto;padding:12px}
