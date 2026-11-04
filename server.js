@@ -432,15 +432,6 @@ function detectImageType(buffer) {
   return null;
 }
 
-function isAllowedImageUpload(file, allowedMimeTypes) {
-  if (!file || !Buffer.isBuffer(file.buffer)) return false;
-  const detected = detectImageType(file.buffer);
-  return Boolean(
-    detected &&
-    allowedMimeTypes.includes(detected.mime) &&
-    file.mimetype === detected.mime
-  );
-}
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
