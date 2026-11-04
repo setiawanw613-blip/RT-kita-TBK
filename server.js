@@ -2105,41 +2105,30 @@ const path = await uploadBuktiPengeluaran(
 
 
 /* LIHAT BUKTI PENGELUARAN - KETUA RT */
-app.get("/api/cash/proof/:id", requireAdmin, async (req, res) => {
+app.get("/api/cash/proof/:id", requireLogin, async (req, res) => {
   try {
     const id = String(req.params.id || "");
-
     if (!/^\d+$/.test(id)) {
-      return res.status(400).json({
-        ok: false,
-        message: "ID transaksi tidak valid"
-      });
+      return res.status(400).json({ ok: false, message: "ID transaksi tidak valid" });
     }
-
+    if (!["admin", "warga"].includes(req.session?.role)) {
+      return res.status(403).json({ ok: false, message: "Akses ditolak" });
+    }
     const data = await supabaseRequest("kas_rt", {
-      query:
-        "select=id,bukti_path" +
+      query: "select=id,jenis,bukti_path" +
         `&id=eq.${encodeURIComponent(id)}&limit=1`
     });
-
     const row = Array.isArray(data) ? data[0] : null;
-
     if (!row || !row.bukti_path) {
-      return res.status(404).json({
-        ok: false,
-        message: "Bukti pengeluaran tidak ditemukan"
-      });
+      return res.status(404).json({ ok: false, message: "Bukti pengeluaran tidak ditemukan" });
     }
-
+    if (req.session.role === "warga" && row.jenis !== "keluar") {
+      return res.status(403).json({ ok: false, message: "Bukti transaksi ini tidak tersedia untuk akun warga" });
+    }
     const path = String(row.bukti_path);
-
     if (!/^\d+-bukti\.(jpg|png|webp)$/.test(path)) {
-      return res.status(400).json({
-        ok: false,
-        message: "Lokasi bukti tidak valid"
-      });
+      return res.status(400).json({ ok: false, message: "Lokasi bukti tidak valid" });
     }
-
     const response = await fetch(
       `${SUPABASE_URL}/storage/v1/object/sign/bukti-pengeluaran/${path}`,
       {
@@ -2149,38 +2138,20 @@ app.get("/api/cash/proof/:id", requireAdmin, async (req, res) => {
           Authorization: `Bearer ${SUPABASE_KEY}`,
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          expiresIn: 300
-        })
+        body: JSON.stringify({ expiresIn: 300 })
       }
     );
-
     const result = await response.json();
-
     if (!response.ok || !result.signedURL) {
       console.error("SIGNED PROOF ERROR:", result);
-
-      return res.status(500).json({
-        ok: false,
-        message: "Gagal membuat tautan bukti"
-      });
+      return res.status(500).json({ ok: false, message: "Gagal membuat tautan bukti" });
     }
-
-    return res.json({
-      ok: true,
-      url: `${SUPABASE_URL}/storage/v1${result.signedURL}`
-    });
+    return res.json({ ok: true, url: `${SUPABASE_URL}/storage/v1${result.signedURL}` });
   } catch (error) {
     console.error("VIEW PROOF ERROR:", error);
-
-    return res.status(500).json({
-      ok: false,
-      message: "Gagal membuka bukti pengeluaran"
-    });
+    return res.status(500).json({ ok: false, message: "Gagal membuka bukti pengeluaran" });
   }
 });
-
-
 
 /* TAMBAH TRANSAKSI KAS - KETUA RT */
 app.post("/api/cash", requireAdmin, async (req, res) => {
@@ -3489,6 +3460,33 @@ app.get("/api/complaints", requireAdmin, async (req, res) => {
 });
 
 /* PENGADUAN - WARGA */
+/* RIWAYAT PENGADUAN — WARGA */
+
+app.get("/api/my-complaints", requireWarga, async (req, res) => {
+  try {
+    if (!req.session?.wargaId) {
+      return res.status(403).json({ ok: false, message: "Identitas warga tidak ditemukan" });
+    }
+    const data = await supabaseRequest("notifikasi", {
+      query:
+        "select=id,judul,pesan,sudah_dibaca,dibuat_pada" +
+        "&penerima_peran=eq.admin&jenis=eq.pengaduan" +
+        "&referensi_id=eq." + encodeURIComponent(req.session.wargaId) +
+        "&order=dibuat_pada.desc&limit=100"
+    });
+    return res.json((Array.isArray(data) ? data : []).map(row => ({
+      id: row.id,
+      title: row.judul || "",
+      content: row.pesan || "",
+      sudah_dibaca: row.sudah_dibaca === true,
+      created_at: row.dibuat_pada || null
+    })));
+  } catch (error) {
+    console.error("RIWAYAT PENGADUAN ERROR:", error?.message || error);
+    return res.status(503).json({ ok: false, message: "Riwayat pengaduan belum dapat dimuat. Silakan coba kembali." });
+  }
+});
+
 app.post("/api/complaints", requireWarga, async (req, res) => {
   const title = String(req.body?.title || "").trim();
   const content = String(req.body?.content || "").trim();
