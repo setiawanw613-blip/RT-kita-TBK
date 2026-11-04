@@ -244,74 +244,90 @@ padding:9px 10px;
 }
 
 
-/* PERBAIKAN DASHBOARD: kecilkan hanya 4 kartu statistik.
-   Menu layanan dan navigasi warga tetap besar dan terlihat. */
-.stat {
-  padding:10px 11px !important;
-  border-radius:12px !important;
-}
-.stat > span {
-  display:block;
-  font-size:12px !important;
-  line-height:1.25 !important;
-}
-.stat b {
-  margin-top:4px !important;
-  font-size:clamp(16px,4vw,20px) !important;
-  line-height:1.2 !important;
-}
+/* TATA LETAK RINGKAS: kartu dashboard, layanan, dan navigasi bawah */
 #stats.grid {
-  gap:7px !important;
+  gap:6px !important;
 }
-
-/* Pulihkan ukuran menu layanan agar tidak ikut mengecil. */
-.menu {
-  gap:10px !important;
+#stats .stat {
+  padding:8px 9px !important;
+  border-radius:11px !important;
 }
-.menu button {
-  min-height:70px !important;
-  padding:9px 10px !important;
-  gap:5px !important;
-  border-radius:16px !important;
-  font-size:14px !important;
-  line-height:1.5 !important;
-}
-.menu button span:first-child {
-  font-size:26px !important;
+#stats .stat > span {
+  display:block;
+  font-size:11px !important;
   line-height:1.2 !important;
 }
-.menu button span:not(:first-child) {
-  font-size:13px !important;
-  line-height:1.4 !important;
+#stats .stat b {
+  margin-top:3px !important;
+  font-size:clamp(15px,3.8vw,19px) !important;
+  line-height:1.15 !important;
 }
 
-/* Navigasi Beranda, Data Saya, Surat, Info tetap utuh dan mudah disentuh. */
+/* Kotak menu Layanan Administrasi dibuat kecil kembali */
+.menu {
+  gap:6px !important;
+}
+.menu > button {
+  min-height:46px !important;
+  height:auto !important;
+  padding:6px 8px !important;
+  gap:3px !important;
+  border-radius:10px !important;
+  font-size:11px !important;
+  line-height:1.2 !important;
+  box-shadow:0 2px 6px rgba(18,103,201,.05) !important;
+}
+.menu > button span:first-child {
+  font-size:18px !important;
+  line-height:1.05 !important;
+}
+.menu > button span:not(:first-child) {
+  font-size:11px !important;
+  line-height:1.2 !important;
+}
+
+/* Navigasi warga tetap ada di bagian paling bawah, dalam bentuk minimal.
+   Kredit pembuat tetap berada di atas navigasi dan tidak tertutup. */
 .bottom {
   display:flex !important;
+  position:static !important;
   width:100% !important;
-  margin:12px 0 0 !important;
-  padding:7px 4px !important;
-  gap:3px !important;
+  height:auto !important;
+  min-height:0 !important;
+  margin:10px 0 0 !important;
+  padding:3px 2px !important;
+  gap:2px !important;
   background:#fff !important;
-  border:1px solid #dce6f2 !important;
-  border-radius:12px !important;
+  border:1px solid #e1eaf5 !important;
+  border-radius:9px !important;
+  box-shadow:none !important;
 }
 .bottom button {
   flex:1 1 0 !important;
   min-width:0 !important;
-  min-height:42px !important;
-  padding:5px 2px !important;
-  font-size:11px !important;
-  line-height:1.2 !important;
+  min-height:30px !important;
+  height:auto !important;
+  padding:3px 1px !important;
+  font-size:9px !important;
+  line-height:1.1 !important;
   white-space:normal !important;
+  font-weight:600 !important;
 }
 @media(max-width:700px) {
-  #stats.grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
-  .menu { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
-  .menu button { min-height:66px !important; }
-  .bottom button { min-height:42px !important; font-size:11px !important; }
+  #stats.grid {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+  .menu {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  }
+  .menu > button {
+    min-height:44px !important;
+  }
+  .bottom button {
+    min-height:29px !important;
+    font-size:9px !important;
+  }
 }
-
 </style>
 </head>
 
