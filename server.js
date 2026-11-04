@@ -7,6 +7,14 @@ const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidt
 const { normalizeStorageObjectPath } = require("./storage-path");
 const { csvCell } = require("./csv-safe");
 const { isValidNewResidentPassword } = require("./password-policy");
+const { detectImageType } = require("./image-validation");
+const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
+const { isValidIuranMonth } = require("./iuran-validation");
+const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midtrans-webhook-security");
+const { findConflictingSettledRows } = require("./midtrans-order-reconciliation");
+const { canAccessOwnedRecord } = require("./access-control");
+const { cancelPendingMidtransTransaction } = require("./midtrans-cancel");
+
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
 app.disable("x-powered-by");
@@ -22,7 +30,7 @@ app.use((req, res, next) => {
 
   next();
 });
-app.use(express.json());
+app.use(express.json({ limit: "256kb" }));
 
 /* MIDTRANS QRIS: endpoint dipilih sesuai mode dan asal order. */
 async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
@@ -95,18 +103,13 @@ const {
       });
     }
 
-    const signatureExpected = crypto
-      .createHash("sha512")
-      .update(`${order_id}${status_code}${gross_amount}${serverKey}`)
-      .digest("hex");
-
-    const signatureBuffer = Buffer.from(signature_key, "hex");
-    const expectedBuffer = Buffer.from(signatureExpected, "hex");
-
-    if (
-      signatureBuffer.length !== expectedBuffer.length ||
-      !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
-    ) {
+    if (!isValidMidtransSignature({
+      orderId: order_id,
+      statusCode: status_code,
+      grossAmount: gross_amount,
+      signatureKey: signature_key,
+      serverKey
+    })) {
       return res.status(403).json({
         ok: false,
         message: "Tanda tangan Midtrans tidak valid."
@@ -114,9 +117,7 @@ const {
     }
 
 
-    const berhasil =
-      transaction_status === "settlement" ||
-      (transaction_status === "capture" && fraud_status === "accept");
+    const berhasil = isSuccessfulMidtransStatus(transaction_status, fraud_status);
 
     const dibatalkan =
       transaction_status === "expire" ||
@@ -145,17 +146,119 @@ const {
 
     const dataIuran = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at" +
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at,midtrans_transaction_id" +
         `&bukti_transfer=eq.${encodeURIComponent("MIDTRANS:" + order_id)}`
     });
 
-    const rows = Array.isArray(dataIuran) ? dataIuran : [];
+    let rows = Array.isArray(dataIuran) ? dataIuran : [];
 
+    // A replacement QRIS order can be reserved after Midtrans reports the
+    // previous order expired. Keep an immutable order-to-row ledger so a
+    // late settlement webhook for that previous order can still be reconciled.
     if (!rows.length) {
-      console.error("IURAN UNTUK ORDER MIDTRANS TIDAK DITEMUKAN:", order_id);
-      return res.status(500).json({
-        ok: false,
-        message: "Catatan iuran belum ditemukan. Silakan coba kembali."
+      const dataOrder = await supabaseRequest("iuran_midtrans_orders", {
+        query:
+          "select=order_id,row_ids,total_amount" +
+          `&order_id=eq.${encodeURIComponent(order_id)}` +
+          "&limit=1"
+      });
+      const orderTercatat = Array.isArray(dataOrder) ? dataOrder[0] : null;
+      const rowIds = Array.isArray(orderTercatat?.row_ids)
+        ? [...new Set(orderTercatat.row_ids.map(Number))]
+        : [];
+
+      if (
+        !orderTercatat ||
+        !rowIds.length ||
+        rowIds.some(id => !Number.isSafeInteger(id) || id <= 0) ||
+        Number(orderTercatat.total_amount) !== Number(gross_amount)
+      ) {
+        console.error("IURAN UNTUK ORDER MIDTRANS TIDAK DITEMUKAN:", order_id);
+        return res.status(500).json({
+          ok: false,
+          message: "Catatan iuran belum ditemukan. Silakan coba kembali."
+        });
+      }
+
+      const dataRiwayat = await supabaseRequest("iuran_warga", {
+        query:
+          "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at,midtrans_transaction_id" +
+          `&id=in.(${rowIds.join(",")})`
+      });
+      rows = Array.isArray(dataRiwayat) ? dataRiwayat : [];
+
+      if (
+        rows.length !== rowIds.length ||
+        rows.reduce((sum, row) => sum + Number(row.total_amount || 0), 0) !== Number(gross_amount)
+      ) {
+        console.error("REKONSILIASI ORDER LAMA TIDAK LENGKAP:", {
+          order_id,
+          expectedRows: rowIds.length,
+          actualRows: rows.length
+        });
+        return res.status(500).json({
+          ok: false,
+          message: "Rekonsiliasi pembayaran perlu pemeriksaan Ketua RT."
+        });
+      }
+
+      console.warn("MIDTRANS LATE SETTLEMENT RECONCILED FROM ORDER LEDGER:", order_id);
+    }
+
+    // A late settlement for an old order can legitimately pay rows now linked
+    // to a replacement order. If those rows were already settled by a DIFFERENT
+    // order, do not overwrite their transaction metadata or silently treat the
+    // second charge as an ordinary duplicate webhook. Flag it for manual refund
+    // reconciliation; never issue an automatic refund from a notification hook.
+    const konflikPembayaran = findConflictingSettledRows(rows, order_id, transaction_id);
+    if (konflikPembayaran.length) {
+      console.error("DUPLICATE MIDTRANS SETTLEMENT REQUIRES MANUAL REFUND REVIEW:", {
+        order_id,
+        transaction_id,
+        row_ids: konflikPembayaran.map(row => row.id),
+        existing_orders: [...new Set(konflikPembayaran.map(row => row.bukti_transfer))]
+      });
+
+      // Persist an admin-visible alert so a duplicate charge is not left only
+      // in ephemeral server logs. Deduplicate per affected iuran row on retries.
+      try {
+        for (const row of konflikPembayaran) {
+          const notifAda = await supabaseRequest("notifikasi", {
+            query:
+              "select=id" +
+              "&penerima_peran=eq.admin" +
+              "&jenis=eq.iuran" +
+              "&judul=eq.Pembayaran%20QRIS%20Ganda" +
+              `&referensi_id=eq.${encodeURIComponent(row.id)}` +
+              "&limit=1"
+          });
+
+          if (!Array.isArray(notifAda) || notifAda.length === 0) {
+            await supabaseRequest("notifikasi", {
+              method: "POST",
+              body: {
+                penerima_peran: "admin",
+                judul: "Pembayaran QRIS Ganda",
+                pesan:
+                  `Terdeteksi pembayaran QRIS kedua untuk iuran ${row.bulan || row.id}. ` +
+                  `Order: ${order_id}; transaksi: ${transaction_id || "tidak tersedia"}. ` +
+                  "Catatan iuran tidak diubah. Periksa transaksi Midtrans dan lakukan pengembalian dana manual bila terkonfirmasi.",
+                jenis: "iuran",
+                tautan: "/admin",
+                referensi_id: Number(row.id),
+                sudah_dibaca: false
+              }
+            });
+          }
+        }
+      } catch (notifError) {
+        console.error("GAGAL MENYIMPAN NOTIFIKASI PEMBAYARAN QRIS GANDA:", notifError?.message || notifError);
+      }
+
+      return res.status(200).json({
+        ok: true,
+        code: "DUPLICATE_SETTLEMENT_REQUIRES_REFUND_REVIEW",
+        message: "Pembayaran kedua terdeteksi. Catatan iuran tidak diubah; perlu pemeriksaan dan pengembalian dana manual."
       });
     }
 
@@ -376,7 +479,7 @@ if (!barisDiperbarui || barisDiperbarui.status !== "lunas") {
 });
 
 
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "256kb", parameterLimit: 200 }));
 const uploadFoto = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -403,6 +506,9 @@ const uploadFoto = multer({
     }
   }
 });
+
+
+
 
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
@@ -629,81 +735,14 @@ function getToken(req) {
 }
 
 function createSessionToken(session) {
-  if (!process.env.SESSION_SECRET) {
-    throw new Error("SESSION_SECRET belum dikonfigurasi");
-  }
-
-  const payload = Buffer.from(
-    JSON.stringify({
-      ...session,
-      createdAt: Date.now()
-    })
-  ).toString("base64url");
-
-  const signature = crypto
-    .createHmac("sha256", process.env.SESSION_SECRET)
-    .update(payload)
-    .digest("base64url");
-
-  return `${payload}.${signature}`;
+  return createSignedSessionToken(session, process.env.SESSION_SECRET);
 }
 
 function getSession(req) {
-  const token = getToken(req);
-  if (!token || !process.env.SESSION_SECRET) return null;
-
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-
-  const [payload, signature] = parts;
-
-  const expectedSignature = crypto
-    .createHmac("sha256", process.env.SESSION_SECRET)
-    .update(payload)
-    .digest("base64url");
-
-  const actualBuffer = Buffer.from(signature);
-  const expectedBuffer = Buffer.from(expectedSignature);
-
-  if (
-    actualBuffer.length !== expectedBuffer.length ||
-    !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
-  ) {
-    return null;
-  }
-
-  try {
-    const session = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8")
-    );
-
-    const SESSION_MAX_AGE = 8 * 60 * 60 * 1000;
-
-    if (
-      !session.createdAt ||
-      !Number.isFinite(session.createdAt) ||
-      Date.now() - session.createdAt < 0 ||
-      Date.now() - session.createdAt > SESSION_MAX_AGE
-    ) {
-      return null;
-    }
-
-    if (session.role === "admin" && session.id === "admin") {
-      return session;
-    }
-
-    if (
-      session.role === "warga" &&
-      session.wargaId &&
-      String(session.id) === String(session.wargaId)
-    ) {
-      return session;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
+  return verifySignedSessionToken(
+    getToken(req),
+    process.env.SESSION_SECRET
+  );
 }
 
 
@@ -1011,7 +1050,16 @@ if (Array.isArray(keluargaExisting) && keluargaExisting.length) {
       }
     });
   } catch (error) {
-    console.error("REGISTER WARGA ERROR:", error);
+    console.error("REGISTER WARGA ERROR:", error?.message || error);
+
+    // Database unique indexes are the final protection against simultaneous
+    // registrations using the same phone number, NIK, or family card number.
+    if (getSupabaseErrorCode(error) === "23505") {
+      return res.status(409).json({
+        ok: false,
+        message: "Nomor HP, NIK, atau No. KK sudah terdaftar. Periksa kembali data pendaftaran."
+      });
+    }
 
     return res.status(500).json({
       ok: false,
@@ -1024,6 +1072,13 @@ app.post("/api/login", async (req, res) => {
   try {
     const { username, password, role } = req.body || {};
 
+    if (role !== "admin" && role !== "warga") {
+      return res.status(400).json({
+        ok: false,
+        message: "Jenis akun tidak valid"
+      });
+    }
+
     if (
       typeof username !== "string" ||
       !username.trim() ||
@@ -1035,6 +1090,27 @@ app.post("/api/login", async (req, res) => {
       return res.status(400).json({
         ok: false,
         message: "Username dan password wajib diisi dengan format yang benar"
+      });
+    }
+
+    // Persistent account-based throttling shared by all Vercel instances.
+    const rateLimitKey = crypto.createHmac("sha256", process.env.SESSION_SECRET)
+      .update("login:" + role + ":" + username.trim().toLowerCase())
+      .digest("hex");
+    const rateLimitRows = await supabaseRequest("rpc/consume_login_rate_limit", {
+      method: "POST",
+      body: { p_key_hash: rateLimitKey, p_window_seconds: 900, p_max_attempts: 5 }
+    });
+    const rateLimit = Array.isArray(rateLimitRows) ? rateLimitRows[0] : rateLimitRows;
+    if (!rateLimit || typeof rateLimit.allowed !== "boolean") {
+      throw new Error("Respons pembatasan login tidak valid");
+    }
+    if (!rateLimit.allowed) {
+      const retryAfter = Math.max(1, Number(rateLimit.retry_after_seconds) || 900);
+      res.setHeader("Retry-After", String(retryAfter));
+      return res.status(429).json({
+        ok: false,
+        message: "Terlalu banyak percobaan login. Silakan coba lagi beberapa menit kemudian."
       });
     }
 
@@ -1102,6 +1178,11 @@ if (warga.status_warga !== "aktif") {
   });
 }
 
+await supabaseRequest("login_rate_limits", {
+  method: "DELETE",
+  query: "key_hash=eq." + encodeURIComponent(rateLimitKey)
+});
+
 const token = createSessionToken({
   id: warga.id,
   wargaId: warga.id,
@@ -1113,7 +1194,7 @@ const token = createSessionToken({
 
   res.setHeader(
     "Set-Cookie",
-    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax`
+    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; Max-Age=28800; SameSite=Lax`
   );
 
   return res.json({
@@ -1143,6 +1224,11 @@ const token = createSessionToken({
     }
 
 
+await supabaseRequest("login_rate_limits", {
+  method: "DELETE",
+  query: "key_hash=eq." + encodeURIComponent(rateLimitKey)
+});
+
 const token = createSessionToken({
   id: "admin",
   username,
@@ -1151,7 +1237,7 @@ const token = createSessionToken({
 
     res.setHeader(
       "Set-Cookie",
-     `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax`
+     `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; Max-Age=28800; SameSite=Lax`
     );
 
     res.json({
@@ -1163,11 +1249,11 @@ const token = createSessionToken({
       }
     });
   } catch (error) {
-    console.error("LOGIN ERROR:", error);
+    console.error("LOGIN ERROR:", error?.message || error);
 
-    res.status(500).json({
+    res.status(503).json({
       ok: false,
-      message: "Gagal masuk aplikasi"
+      message: "Layanan login sementara tidak tersedia. Silakan coba lagi."
     });
   }
 });
@@ -1719,13 +1805,14 @@ app.post(
       }
 
       const wargaId = req.session.wargaId;
-      const ekstensi = {
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp"
-      }[req.file.mimetype];
+      const jenisFoto = detectImageType(req.file.buffer);
+      const ekstensi = jenisFoto?.ext;
 
-      if (!ekstensi) {
+      if (
+        !jenisFoto ||
+        req.file.mimetype !== jenisFoto.mime ||
+        !["image/jpeg", "image/png", "image/webp"].includes(jenisFoto.mime)
+      ) {
         return res.status(400).json({
           ok: false,
           message: "Format foto tidak diizinkan."
@@ -1748,7 +1835,7 @@ app.post(
         headers: {
           apikey: SUPABASE_KEY,
           Authorization: `Bearer ${SUPABASE_KEY}`,
-          "Content-Type": req.file.mimetype,
+          "Content-Type": jenisFoto.mime,
           "x-upsert": "true"
         },
         body: req.file.buffer
@@ -1969,36 +2056,16 @@ app.post(
         });
       }
 
-      const signatures = {
-        "image/jpeg": [0xff, 0xd8, 0xff],
-        "image/png": [0x89, 0x50, 0x4e, 0x47],
-        "image/webp": [0x52, 0x49, 0x46, 0x46]
-      };
+      const jenisBukti = detectImageType(req.body);
 
-      const signature = signatures[contentType];
-
-      if (!signature.every((byte, index) => req.body[index] === byte)) {
+      if (!jenisBukti || jenisBukti.mime !== contentType) {
         return res.status(400).json({
           ok: false,
           message: "Isi file tidak sesuai dengan format gambar"
         });
       }
 
-      if (
-        contentType === "image/webp" &&
-        req.body.toString("ascii", 8, 12) !== "WEBP"
-      ) {
-        return res.status(400).json({
-          ok: false,
-          message: "File WebP tidak valid"
-        });
-      }
-
-      const extension = {
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp"
-      }[contentType];
+      const extension = jenisBukti.ext;
 
 
 const buktiHash = hashBuktiPengeluaran(req.body);
@@ -2226,54 +2293,22 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
       }
     }
 
-    // Ambil riwayat dana pada kategori yang dipilih.
-    const riwayat = await supabaseRequest("kas_rt", {
-      query:
-        "select=jenis,jumlah,kategori" +
-        `&kategori=eq.${encodeURIComponent(kategori)}`
-    });
-
-    let saldoKategori = 0;
-
-    if (Array.isArray(riwayat)) {
-      for (const row of riwayat) {
-        const nilai = Number(row.jumlah) || 0;
-        const jenisLama = String(row.jenis || "").toLowerCase();
-
-        if (jenisLama.includes("keluar")) {
-          saldoKategori -= nilai;
-        } else {
-          saldoKategori += nilai;
-        }
-      }
-    }
-
-    if (jenis === "keluar" && jumlah > saldoKategori) {
-      return res.status(400).json({
-        ok: false,
-        message:
-          `Saldo kategori ${kategori} tidak mencukupi. ` +
-          `Saldo tersedia Rp${Math.max(0, saldoKategori).toLocaleString("id-ID")}.`
-      });
-    }
-
-    const transaksi = {
-      tanggal: date,
-      jenis,
-      kategori,
-      keterangan,
-      jumlah
-    };
-
-    if (jenis === "keluar") {
-      transaksi.bukti_path = proof;
-      transaksi.bukti_hash = buktiHash;
-    }
-
-    const data = await supabaseRequest("kas_rt", {
+    // Saldo kategori dan pencatatan transaksi dilakukan dalam satu RPC
+    // atomik agar dua pengeluaran bersamaan tidak memakai saldo yang sama.
+    const hasil = await supabaseRequest("rpc/record_cash_transaction", {
       method: "POST",
-      body: transaksi
+      body: {
+        p_tanggal: date,
+        p_jenis: jenis,
+        p_kategori: kategori,
+        p_keterangan: keterangan,
+        p_jumlah: jumlah,
+        p_bukti_path: jenis === "keluar" ? proof : null,
+        p_bukti_hash: jenis === "keluar" ? buktiHash : null
+      }
     });
+
+    const data = Array.isArray(hasil) ? hasil[0] : hasil;
 
     return res.json({
       ok: true,
@@ -2287,6 +2322,16 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
   const pesanError = String(
     error?.message || error || ""
   );
+
+  if (
+    getSupabaseErrorCode(error) === "P0001" &&
+    pesanError.includes("SALDO_KATEGORI_TIDAK_CUKUP")
+  ) {
+    return res.status(400).json({
+      ok: false,
+      message: `Saldo kategori ${String(req.body?.category || "").trim()} tidak mencukupi. Transaksi tidak disimpan.`
+    });
+  }
 
   if (
     pesanError.includes("kas_rt_bukti_hash_unik") ||
@@ -3697,48 +3742,18 @@ for (const bulan of dipilih) {
       });
     }
 
-    const orderLama = bukti.slice("MIDTRANS:".length);
-    const serverKey = getMidtransServerKeyForOrder(orderLama);
-
-    if (!serverKey) {
-      return res.status(409).json({
-        ok: false,
-        message: `Kunci Midtrans untuk transaksi ${bulan} belum tersedia. Hubungi Ketua RT.`
-      });
-    }
-
-    const cek = await fetch(
-      `${getMidtransApiBaseForOrder(orderLama)}/v2/${encodeURIComponent(orderLama)}/status`,
-      {
-        headers: {
-          Authorization:
-            "Basic " +
-            Buffer.from(
-              serverKey + ":"
-            ).toString("base64")
-        }
-      }
-    );
-
-    if (!cek.ok) {
-      return res.status(409).json({
-        ok: false,
-        message: `Status transaksi ${bulan} belum bisa dipastikan.`
-      });
-    }
-
-    const transaksiLama = await cek.json();
-
-    if (!["expire", "cancel", "deny"].includes(
-      transaksiLama.transaction_status
-    )) {
-      return res.status(409).json({
-        ok: false,
-        message: `Transaksi ${bulan} belum dipastikan kedaluwarsa.`
-      });
-    }
-
-    iuranKedaluwarsa.push(row);
+    // Fail closed: jangan mengganti referensi order lama hanya berdasarkan
+    // hasil pemeriksaan status Midtrans. Status dapat berubah menjadi settlement
+    // tepat setelah pemeriksaan dan sebelum reservasi database, sehingga webhook
+    // pembayaran lama kehilangan kaitan ke catatan iuran.
+    // Pemrosesan ulang transaksi kedaluwarsa dibuka kembali setelah riwayat order
+    // Midtrans disimpan terpisah dan webhook dapat merekonsiliasi setiap order.
+    return res.status(409).json({
+      ok: false,
+      message:
+        `Iuran ${bulan} masih terhubung ke transaksi QRIS sebelumnya. ` +
+        "Hubungi Ketua RT untuk pemeriksaan transaksi sebelum mencoba membayar kembali."
+    });
   }
 }
 
@@ -3792,61 +3807,26 @@ if (record && !iuranKedaluwarsa.some(
     });
 
 
-const rowsBaru = dipilih
-  .filter(bulan => !peta.has(bulan))
-  .map(bulan => ({
-    warga_id: String(warga.id),
-    keluarga_id: keluargaId,
-    bulan: bulan + "-01",
-    status: "menunggu_verifikasi",
-    total_amount: 35000,
-    bukti_transfer: `MIDTRANS:${orderId}`
-  }));
-
-rowsTersimpan = [];
-
-for (const rowLama of iuranKedaluwarsa) {
-  const hasilUpdate = await supabaseRequest("iuran_warga", {
-    method: "PATCH",
-    query: `id=eq.${encodeURIComponent(rowLama.id)}`,
-    body: {
-      status: "menunggu_verifikasi",
-      total_amount: 35000,
-      bukti_transfer: `MIDTRANS:${orderId}`
-    }
-  });
-
-  if (!Array.isArray(hasilUpdate) || hasilUpdate.length !== 1) {
-    throw new Error(
-      `Catatan iuran ${String(rowLama.bulan).slice(0, 7)} gagal diperbarui.`
-    );
+const idsPengganti = iuranKedaluwarsa.map(row => Number(row.id));
+const hasilReserva = await supabaseRequest("rpc/reserve_qris_iuran_batch", {
+  method: "POST",
+  body: {
+    p_warga_id: String(warga.id),
+    p_keluarga_id: keluargaId,
+    p_bulans: dipilih.map(bulan => bulan + "-01"),
+    p_replace_ids: idsPengganti,
+    p_order_id: orderId
   }
+});
 
-  rowsTersimpan.push(hasilUpdate[0]);
+rowsTersimpan = Array.isArray(hasilReserva) ? hasilReserva : [];
+if (
+  rowsTersimpan.length !== dipilih.length ||
+  rowsTersimpan.some(row => row.bukti_transfer !== `MIDTRANS:${orderId}`)
+) {
+  throw new Error("Reservasi iuran QRIS tidak lengkap atau tidak cocok dengan order.");
 }
 
-if (rowsBaru.length > 0) {
-  const hasil = await supabaseRequest("iuran_warga", {
-    method: "POST",
-    body: rowsBaru
-  });
-
-  const rowsBaruTersimpan = Array.isArray(hasil) ? hasil : [];
-
-  if (rowsBaruTersimpan.length !== rowsBaru.length) {
-    throw new Error(
-      "Jumlah catatan iuran baru yang tersimpan tidak sesuai."
-    );
-  }
-
-  rowsTersimpan.push(...rowsBaruTersimpan);
-}
-
-if (rowsTersimpan.length !== dipilih.length) {
-  throw new Error(
-    "Jumlah catatan iuran tidak sesuai dengan bulan yang dipilih."
-  );
-}
 
 
     for (const row of rowsTersimpan) {
@@ -3888,6 +3868,48 @@ if (rowsTersimpan.length !== dipilih.length) {
   } catch (error) {
     console.error("BAYAR IURAN QRIS ERROR:", error?.message || error);
 
+    // If the atomic reservation did not persist any rows, reconcile the
+    // external Midtrans order. Never cancel after a successful DB reservation.
+    if (orderId && rowsTersimpan.length === 0) {
+      try {
+        // A network/response error can happen after Postgres committed.
+        // Verify the order marker before cancelling the external payment.
+        const rekonsiliasi = await supabaseRequest("iuran_warga", {
+          query:
+            "select=id" +
+            "&bukti_transfer=eq." +
+            encodeURIComponent(`MIDTRANS:${orderId}`) +
+            "&limit=1"
+        });
+        const orderSudahTersimpan =
+          Array.isArray(rekonsiliasi) && rekonsiliasi.length > 0;
+
+        if (orderSudahTersimpan) {
+          console.warn("MIDTRANS CANCEL SKIPPED: order already exists in database.");
+        } else {
+          const serverKey = getMidtransServerKeyForOrder(orderId);
+          const apiBase = getMidtransApiBaseForOrder(orderId);
+          if (serverKey) {
+            const pembatalan = await cancelPendingMidtransTransaction({
+              orderId,
+              serverKey,
+              apiBase
+            });
+            if (!pembatalan.ok) {
+              console.warn("QRIS RECONCILIATION NEEDS REVIEW:", {
+                orderId,
+                status: pembatalan.status,
+                reason: pembatalan.reason
+              });
+            }
+          }
+        }
+      } catch (cancelError) {
+        // Fail closed: if database reconciliation is unavailable, do not
+        // cancel a payment whose reservation state cannot be confirmed.
+        console.error("QRIS RECONCILIATION ERROR:", cancelError?.message || cancelError);
+      }
+    }
     return res.status(
       getSupabaseErrorCode(error) === "23505" ? 409 : 500
     ).json({
@@ -4139,12 +4161,12 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
-    const inputBulan = String(req.body.bulan || "").slice(0, 7);
+    const inputBulan = req.body?.bulan;
 
-    if (!/^\d{4}-\d{2}$/.test(inputBulan)) {
+    if (!isValidIuranMonth(inputBulan)) {
       return res.status(400).json({
         ok: false,
-        message: "Bulan iuran wajib diisi"
+        message: "Bulan iuran tidak valid. Pembayaran dimulai Oktober 2026."
       });
     }
 
@@ -4677,10 +4699,7 @@ app.post("/api/aspirasi/:id/dokumentasi", requireLogin, uploadFoto.fields([
       });
     }
 
-    if (
-      req.session.role !== "admin" &&
-      String(a.warga_id) !== String(req.session.wargaId)
-    ) {
+    if (!canAccessOwnedRecord(req.session, a.warga_id)) {
       return res.status(403).json({
         ok: false,
         message: "Tidak berhak mengubah dokumentasi aspirasi ini."
@@ -4706,14 +4725,19 @@ app.post("/api/aspirasi/:id/dokumentasi", requireLogin, uploadFoto.fields([
       const file = files[field]?.[0];
       if (!file) continue;
 
-      if (!["image/jpeg", "image/png"].includes(file.mimetype)) {
+      const jenisFoto = detectImageType(file.buffer);
+      if (
+        !jenisFoto ||
+        file.mimetype !== jenisFoto.mime ||
+        !["image/jpeg", "image/png"].includes(jenisFoto.mime)
+      ) {
         return res.status(400).json({
           ok: false,
-          message: "Gunakan foto JPG atau PNG."
+          message: "Gunakan foto JPG atau PNG yang valid."
         });
       }
 
-      const ext = file.mimetype === "image/png" ? "png" : "jpg";
+      const ext = jenisFoto.ext;
       const objectPath =
         `aspirasi/${a.id}/${field}-${Date.now()}.${ext}`;
 
@@ -4726,7 +4750,7 @@ app.post("/api/aspirasi/:id/dokumentasi", requireLogin, uploadFoto.fields([
         headers: {
           apikey: SUPABASE_KEY,
           Authorization: `Bearer ${SUPABASE_KEY}`,
-          "Content-Type": file.mimetype,
+          "Content-Type": jenisFoto.mime,
           "x-upsert": "false"
         },
         body: file.buffer
@@ -4761,7 +4785,7 @@ app.post("/api/aspirasi/:id/dokumentasi", requireLogin, uploadFoto.fields([
     console.error("ASPIRASI DOKUMENTASI ERROR:", error?.message || error);
     return res.status(500).json({
       ok: false,
-      message: error.message || "Gagal mengunggah dokumentasi."
+      message: "Gagal mengunggah dokumentasi. Silakan coba kembali."
     });
   }
 });
