@@ -1093,8 +1093,19 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
+    // Fail closed with a clear service response if deployment secrets are missing.
+    // SESSION_SECRET must be at least 32 bytes of random material.
+    const sessionSecret = process.env.SESSION_SECRET;
+    if (typeof sessionSecret !== "string" || Buffer.byteLength(sessionSecret, "utf8") < 32) {
+      console.error("LOGIN CONFIG ERROR: SESSION_SECRET is missing or too short");
+      return res.status(503).json({
+        ok: false,
+        message: "Layanan login sedang tidak siap. Silakan coba kembali nanti."
+      });
+    }
+
     // Persistent account-based throttling shared by all Vercel instances.
-    const rateLimitKey = crypto.createHmac("sha256", process.env.SESSION_SECRET)
+    const rateLimitKey = crypto.createHmac("sha256", sessionSecret)
       .update("login:" + role + ":" + username.trim().toLowerCase())
       .digest("hex");
     const rateLimitRows = await supabaseRequest("rpc/consume_login_rate_limit", {
