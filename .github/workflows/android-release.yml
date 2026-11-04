@@ -2,15 +2,24 @@ name: Android APK (release)
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm_new_signing_key:
+        description: "Konfirmasi bahwa keystore di GitHub Secrets adalah kunci BARU dan bukan kunci yang pernah dibagikan"
+        required: true
+        type: choice
+        options:
+          - "TIDAK"
+          - "YA_SAYA_PASTIKAN_KUNCI_BARU"
 
 permissions:
   contents: read
 
 jobs:
   build-release-apk:
+    if: inputs.confirm_new_signing_key == 'YA_SAYA_PASTIKAN_KUNCI_BARU'
     runs-on: ubuntu-latest
     steps:
-      - name: Verify signing secrets
+      - name: Verify signing secrets exist
         env:
           KEYSTORE_B64: ${{ secrets.RT_KITA_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.RT_KITA_KEYSTORE_PASSWORD }}
@@ -24,6 +33,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -34,13 +45,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Prepare private signing key
+      - name: Prepare and validate private signing key
         env:
           KEYSTORE_B64: ${{ secrets.RT_KITA_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RT_KITA_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RT_KITA_KEY_ALIAS }}
         run: |
+          set -euo pipefail
           mkdir -p "$RUNNER_TEMP/rt-kita-signing"
-          echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rt-kita-signing/release.jks"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rt-kita-signing/release.jks"
           chmod 600 "$RUNNER_TEMP/rt-kita-signing/release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/rt-kita-signing/release.jks" -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" >/dev/null
+          FINGERPRINT="$(keytool -exportcert -keystore "$RUNNER_TEMP/rt-kita-signing/release.jks" -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" | sha256sum | awk '{print $1}')"
+          echo "SHA-256 sertifikat penanda tangan: $FINGERPRINT" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build signed release APK
         working-directory: android
@@ -50,6 +67,10 @@ jobs:
           RT_KITA_KEY_ALIAS: ${{ secrets.RT_KITA_KEY_ALIAS }}
           RT_KITA_KEY_PASSWORD: ${{ secrets.RT_KITA_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
+
+      - name: Verify APK signature
+        run: |
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
 
       - name: Upload signed release APK
         uses: actions/upload-artifact@v4
