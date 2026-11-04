@@ -40,6 +40,17 @@ begin
     pg_catalog.hashtextextended('qris-iuran:' || p_keluarga_id, 0)
   );
 
+  -- Enforce the resident-to-household relationship inside the transaction,
+  -- rather than relying only on the preceding application-level lookup.
+  if not exists (
+    select 1
+    from public.warga
+    where id::text = p_warga_id
+      and keluarga_id::text = p_keluarga_id
+  ) then
+    raise exception 'WARGA_TIDAK_TERDAFTAR_DI_KELUARGA' using errcode = '22023';
+  end if;
+
   -- Lock current rows and reject paid rows or pending rows not explicitly
   -- confirmed expired by the application before this RPC was called.
   perform 1
