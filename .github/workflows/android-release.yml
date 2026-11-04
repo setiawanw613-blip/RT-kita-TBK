@@ -1,0 +1,60 @@
+name: Android APK (release)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-release-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify signing secrets
+        env:
+          KEYSTORE_B64: ${{ secrets.RT_KITA_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RT_KITA_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RT_KITA_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RT_KITA_KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_B64" || (echo "Missing RT_KITA_KEYSTORE_BASE64" && exit 1)
+          test -n "$KEYSTORE_PASSWORD" || (echo "Missing RT_KITA_KEYSTORE_PASSWORD" && exit 1)
+          test -n "$KEY_ALIAS" || (echo "Missing RT_KITA_KEY_ALIAS" && exit 1)
+          test -n "$KEY_PASSWORD" || (echo "Missing RT_KITA_KEY_PASSWORD" && exit 1)
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Prepare private signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.RT_KITA_KEYSTORE_BASE64 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/rt-kita-signing"
+          echo "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rt-kita-signing/release.jks"
+          chmod 600 "$RUNNER_TEMP/rt-kita-signing/release.jks"
+
+      - name: Build signed release APK
+        working-directory: android
+        env:
+          RT_KITA_KEYSTORE_PATH: ${{ runner.temp }}/rt-kita-signing/release.jks
+          RT_KITA_KEYSTORE_PASSWORD: ${{ secrets.RT_KITA_KEYSTORE_PASSWORD }}
+          RT_KITA_KEY_ALIAS: ${{ secrets.RT_KITA_KEY_ALIAS }}
+          RT_KITA_KEY_PASSWORD: ${{ secrets.RT_KITA_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleRelease
+
+      - name: Upload signed release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rt-kita-android-release
+          path: android/app/build/outputs/apk/release/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
