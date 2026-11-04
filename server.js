@@ -10,6 +10,7 @@ const { isValidNewResidentPassword } = require("./password-policy");
 const { detectImageType } = require("./image-validation");
 const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
 const { isValidIuranMonth } = require("./iuran-validation");
+const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midtrans-webhook-security");
 
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
@@ -99,18 +100,13 @@ const {
       });
     }
 
-    const signatureExpected = crypto
-      .createHash("sha512")
-      .update(`${order_id}${status_code}${gross_amount}${serverKey}`)
-      .digest("hex");
-
-    const signatureBuffer = Buffer.from(signature_key, "hex");
-    const expectedBuffer = Buffer.from(signatureExpected, "hex");
-
-    if (
-      signatureBuffer.length !== expectedBuffer.length ||
-      !crypto.timingSafeEqual(signatureBuffer, expectedBuffer)
-    ) {
+    if (!isValidMidtransSignature({
+      orderId: order_id,
+      statusCode: status_code,
+      grossAmount: gross_amount,
+      signatureKey: signature_key,
+      serverKey
+    })) {
       return res.status(403).json({
         ok: false,
         message: "Tanda tangan Midtrans tidak valid."
@@ -118,9 +114,7 @@ const {
     }
 
 
-    const berhasil =
-      transaction_status === "settlement" ||
-      (transaction_status === "capture" && fraud_status === "accept");
+    const berhasil = isSuccessfulMidtransStatus(transaction_status, fraud_status);
 
     const dibatalkan =
       transaction_status === "expire" ||
