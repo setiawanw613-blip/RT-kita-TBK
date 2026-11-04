@@ -10,7 +10,7 @@ const { isValidNewResidentPassword } = require("./password-policy");
 const { detectImageType } = require("./image-validation");
 const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
 const { isValidIuranMonth } = require("./iuran-validation");
-const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
+
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
 app.disable("x-powered-by");
