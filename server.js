@@ -22,7 +22,7 @@ app.use((req, res, next) => {
 
   next();
 });
-app.use(express.json());
+app.use(express.json({ limit: "256kb" }));
 
 /* MIDTRANS QRIS: endpoint dipilih sesuai mode dan asal order. */
 async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
@@ -376,7 +376,7 @@ if (!barisDiperbarui || barisDiperbarui.status !== "lunas") {
 });
 
 
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "256kb", parameterLimit: 200 }));
 const uploadFoto = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -404,6 +404,43 @@ const uploadFoto = multer({
   }
 });
 
+
+function detectImageType(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return null;
+
+  // JPEG
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return { mime: "image/jpeg", ext: "jpg" };
+  }
+
+  // PNG
+  if (
+    buffer.length >= 8 &&
+    buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  ) {
+    return { mime: "image/png", ext: "png" };
+  }
+
+  // WebP (RIFF container with WEBP signature)
+  if (
+    buffer.toString("ascii", 0, 4) === "RIFF" &&
+    buffer.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return { mime: "image/webp", ext: "webp" };
+  }
+
+  return null;
+}
+
+function isAllowedImageUpload(file, allowedMimeTypes) {
+  if (!file || !Buffer.isBuffer(file.buffer)) return false;
+  const detected = detectImageType(file.buffer);
+  return Boolean(
+    detected &&
+    allowedMimeTypes.includes(detected.mime) &&
+    file.mimetype === detected.mime
+  );
+}
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -1719,13 +1756,14 @@ app.post(
       }
 
       const wargaId = req.session.wargaId;
-      const ekstensi = {
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp"
-      }[req.file.mimetype];
+      const jenisFoto = detectImageType(req.file.buffer);
+      const ekstensi = jenisFoto?.ext;
 
-      if (!ekstensi) {
+      if (
+        !jenisFoto ||
+        req.file.mimetype !== jenisFoto.mime ||
+        !["image/jpeg", "image/png", "image/webp"].includes(jenisFoto.mime)
+      ) {
         return res.status(400).json({
           ok: false,
           message: "Format foto tidak diizinkan."
@@ -1748,7 +1786,7 @@ app.post(
         headers: {
           apikey: SUPABASE_KEY,
           Authorization: `Bearer ${SUPABASE_KEY}`,
-          "Content-Type": req.file.mimetype,
+          "Content-Type": jenisFoto.mime,
           "x-upsert": "true"
         },
         body: req.file.buffer
@@ -4706,14 +4744,19 @@ app.post("/api/aspirasi/:id/dokumentasi", requireLogin, uploadFoto.fields([
       const file = files[field]?.[0];
       if (!file) continue;
 
-      if (!["image/jpeg", "image/png"].includes(file.mimetype)) {
+      const jenisFoto = detectImageType(file.buffer);
+      if (
+        !jenisFoto ||
+        file.mimetype !== jenisFoto.mime ||
+        !["image/jpeg", "image/png"].includes(jenisFoto.mime)
+      ) {
         return res.status(400).json({
           ok: false,
-          message: "Gunakan foto JPG atau PNG."
+          message: "Gunakan foto JPG atau PNG yang valid."
         });
       }
 
-      const ext = file.mimetype === "image/png" ? "png" : "jpg";
+      const ext = jenisFoto.ext;
       const objectPath =
         `aspirasi/${a.id}/${field}-${Date.now()}.${ext}`;
 
@@ -4726,7 +4769,7 @@ app.post("/api/aspirasi/:id/dokumentasi", requireLogin, uploadFoto.fields([
         headers: {
           apikey: SUPABASE_KEY,
           Authorization: `Bearer ${SUPABASE_KEY}`,
-          "Content-Type": file.mimetype,
+          "Content-Type": jenisFoto.mime,
           "x-upsert": "false"
         },
         body: file.buffer
@@ -4761,7 +4804,7 @@ app.post("/api/aspirasi/:id/dokumentasi", requireLogin, uploadFoto.fields([
     console.error("ASPIRASI DOKUMENTASI ERROR:", error?.message || error);
     return res.status(500).json({
       ok: false,
-      message: error.message || "Gagal mengunggah dokumentasi."
+      message: "Gagal mengunggah dokumentasi. Silakan coba kembali."
     });
   }
 });
