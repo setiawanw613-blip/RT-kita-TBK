@@ -218,6 +218,43 @@ const {
         row_ids: konflikPembayaran.map(row => row.id),
         existing_orders: [...new Set(konflikPembayaran.map(row => row.bukti_transfer))]
       });
+
+      // Persist an admin-visible alert so a duplicate charge is not left only
+      // in ephemeral server logs. Deduplicate per affected iuran row on retries.
+      try {
+        for (const row of konflikPembayaran) {
+          const notifAda = await supabaseRequest("notifikasi", {
+            query:
+              "select=id" +
+              "&penerima_peran=eq.admin" +
+              "&jenis=eq.iuran" +
+              "&judul=eq.Pembayaran%20QRIS%20Ganda" +
+              `&referensi_id=eq.${encodeURIComponent(row.id)}` +
+              "&limit=1"
+          });
+
+          if (!Array.isArray(notifAda) || notifAda.length === 0) {
+            await supabaseRequest("notifikasi", {
+              method: "POST",
+              body: {
+                penerima_peran: "admin",
+                judul: "Pembayaran QRIS Ganda",
+                pesan:
+                  `Terdeteksi pembayaran QRIS kedua untuk iuran ${row.bulan || row.id}. ` +
+                  `Order: ${order_id}; transaksi: ${transaction_id || "tidak tersedia"}. ` +
+                  "Catatan iuran tidak diubah. Periksa transaksi Midtrans dan lakukan pengembalian dana manual bila terkonfirmasi.",
+                jenis: "iuran",
+                tautan: "/admin",
+                referensi_id: Number(row.id),
+                sudah_dibaca: false
+              }
+            });
+          }
+        }
+      } catch (notifError) {
+        console.error("GAGAL MENYIMPAN NOTIFIKASI PEMBAYARAN QRIS GANDA:", notifError?.message || notifError);
+      }
+
       return res.status(200).json({
         ok: true,
         code: "DUPLICATE_SETTLEMENT_REQUIRES_REFUND_REVIEW",
