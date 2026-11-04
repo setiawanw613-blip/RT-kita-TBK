@@ -3639,48 +3639,18 @@ for (const bulan of dipilih) {
       });
     }
 
-    const orderLama = bukti.slice("MIDTRANS:".length);
-    const serverKey = getMidtransServerKeyForOrder(orderLama);
-
-    if (!serverKey) {
-      return res.status(409).json({
-        ok: false,
-        message: `Kunci Midtrans untuk transaksi ${bulan} belum tersedia. Hubungi Ketua RT.`
-      });
-    }
-
-    const cek = await fetch(
-      `${getMidtransApiBaseForOrder(orderLama)}/v2/${encodeURIComponent(orderLama)}/status`,
-      {
-        headers: {
-          Authorization:
-            "Basic " +
-            Buffer.from(
-              serverKey + ":"
-            ).toString("base64")
-        }
-      }
-    );
-
-    if (!cek.ok) {
-      return res.status(409).json({
-        ok: false,
-        message: `Status transaksi ${bulan} belum bisa dipastikan.`
-      });
-    }
-
-    const transaksiLama = await cek.json();
-
-    if (!["expire", "cancel", "deny"].includes(
-      transaksiLama.transaction_status
-    )) {
-      return res.status(409).json({
-        ok: false,
-        message: `Transaksi ${bulan} belum dipastikan kedaluwarsa.`
-      });
-    }
-
-    iuranKedaluwarsa.push(row);
+    // Fail closed: jangan mengganti referensi order lama hanya berdasarkan
+    // hasil pemeriksaan status Midtrans. Status dapat berubah menjadi settlement
+    // tepat setelah pemeriksaan dan sebelum reservasi database, sehingga webhook
+    // pembayaran lama kehilangan kaitan ke catatan iuran.
+    // Pemrosesan ulang transaksi kedaluwarsa dibuka kembali setelah riwayat order
+    // Midtrans disimpan terpisah dan webhook dapat merekonsiliasi setiap order.
+    return res.status(409).json({
+      ok: false,
+      message:
+        `Iuran ${bulan} masih terhubung ke transaksi QRIS sebelumnya. ` +
+        "Hubungi Ketua RT untuk pemeriksaan transaksi sebelum mencoba membayar kembali."
+    });
   }
 }
 
