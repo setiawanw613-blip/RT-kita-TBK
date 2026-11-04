@@ -149,14 +149,59 @@ const {
         `&bukti_transfer=eq.${encodeURIComponent("MIDTRANS:" + order_id)}`
     });
 
-    const rows = Array.isArray(dataIuran) ? dataIuran : [];
+    let rows = Array.isArray(dataIuran) ? dataIuran : [];
 
+    // A replacement QRIS order can be reserved after Midtrans reports the
+    // previous order expired. Keep an immutable order-to-row ledger so a
+    // late settlement webhook for that previous order can still be reconciled.
     if (!rows.length) {
-      console.error("IURAN UNTUK ORDER MIDTRANS TIDAK DITEMUKAN:", order_id);
-      return res.status(500).json({
-        ok: false,
-        message: "Catatan iuran belum ditemukan. Silakan coba kembali."
+      const dataOrder = await supabaseRequest("iuran_midtrans_orders", {
+        query:
+          "select=order_id,row_ids,total_amount" +
+          `&order_id=eq.${encodeURIComponent(order_id)}` +
+          "&limit=1"
       });
+      const orderTercatat = Array.isArray(dataOrder) ? dataOrder[0] : null;
+      const rowIds = Array.isArray(orderTercatat?.row_ids)
+        ? [...new Set(orderTercatat.row_ids.map(Number))]
+        : [];
+
+      if (
+        !orderTercatat ||
+        !rowIds.length ||
+        rowIds.some(id => !Number.isSafeInteger(id) || id <= 0) ||
+        Number(orderTercatat.total_amount) !== Number(gross_amount)
+      ) {
+        console.error("IURAN UNTUK ORDER MIDTRANS TIDAK DITEMUKAN:", order_id);
+        return res.status(500).json({
+          ok: false,
+          message: "Catatan iuran belum ditemukan. Silakan coba kembali."
+        });
+      }
+
+      const dataRiwayat = await supabaseRequest("iuran_warga", {
+        query:
+          "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at" +
+          `&id=in.(${rowIds.join(",")})`
+      });
+      rows = Array.isArray(dataRiwayat) ? dataRiwayat : [];
+
+      if (
+        rows.length !== rowIds.length ||
+        rows.reduce((sum, row) => sum + Number(row.total_amount || 0), 0) !== Number(gross_amount)
+      ) {
+        console.error("REKONSILIASI ORDER LAMA TIDAK LENGKAP:", {
+          order_id,
+          expectedRows: rowIds.length,
+          actualRows: rows.length
+        });
+        return res.status(500).json({
+          ok: false,
+          message: "Rekonsiliasi pembayaran perlu pemeriksaan Ketua RT."
+        });
+      }
+
+      console.warn("MIDTRANS LATE SETTLEMENT RECONCILED FROM ORDER LEDGER:", order_id);
     }
 
     const totalCatatan = rows.reduce(
