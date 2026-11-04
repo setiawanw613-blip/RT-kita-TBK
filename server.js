@@ -3304,7 +3304,7 @@ app.patch("/api/letters/:id", requireAdmin, async (req, res) => {
     }
 
     const existing = await supabaseRequest("pengajuan_surat", {
-      query: `select=id,status&id=eq.${id}`
+      query: `select=id,status,warga_id,jenis_surat,keperluan&id=eq.${id}`
     });
 
     if (!Array.isArray(existing) || existing.length === 0) {
@@ -3337,11 +3337,34 @@ app.patch("/api/letters/:id", requireAdmin, async (req, res) => {
       });
     }
 
+    // Kirim pemberitahuan ke akun warga dan hubungkan ke menu Surat Saya.
+    try {
+      const pengajuan = existing[0];
+      if (pengajuan.warga_id) {
+        await supabaseRequest("notifikasi", {
+          method: "POST",
+          body: {
+            penerima_peran: "warga",
+            penerima_warga_id: Number(pengajuan.warga_id),
+            judul: status === "disetujui" ? "Pengajuan Surat Disetujui" : "Pengajuan Surat Ditolak",
+            pesan: `Pengajuan ${pengajuan.jenis_surat || "surat"} Anda telah ${status === "disetujui" ? "disetujui" : "ditolak"} oleh Ketua RT.` +
+              (String(catatan || "").trim() ? " Catatan: " + String(catatan).trim() : ""),
+            jenis: "surat",
+            tautan: "/",
+            referensi_id: id,
+            sudah_dibaca: false
+          }
+        });
+      }
+    } catch (notificationError) {
+      console.error("NOTIFIKASI HASIL SURAT KE WARGA ERROR:", notificationError);
+    }
+
     res.json({
       ok: true,
       message: status === "disetujui"
-        ? "Surat berhasil disetujui"
-        : "Surat berhasil ditolak",
+        ? "Surat berhasil disetujui dan notifikasi warga dikirim"
+        : "Surat berhasil ditolak dan notifikasi warga dikirim",
       data: updated[0]
     });
   } catch (error) {
