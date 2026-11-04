@@ -113,8 +113,13 @@ padding:9px 10px;
 .row{padding:13px 0;border-bottom:1px solid #e8edf3}
 .row:last-child{border-bottom:0}
 .badge{display:inline-block;padding:5px 9px;border-radius:20px;background:#e7f1ff;color:#1267c9;font-size:12px;font-weight:700}
-.bottom{position:sticky;bottom:0;background:white;border-top:1px solid #ddd;padding:9px;display:flex;justify-content:space-around;margin:20px -16px -16px}
-.bottom button{border:0;background:transparent;font-size:12px}
+.bottom{position:sticky;bottom:0;background:white;border-top:1px solid #ddd;padding:4px 6px;display:flex;justify-content:space-around;align-items:center;gap:2px;margin:14px -16px -16px}
+.bottom button{flex:1;min-width:0;min-height:36px;padding:3px 2px;border:0;background:transparent;font-size:10px;line-height:1.15;font-weight:600;white-space:nowrap}
+.bottom button br{display:block;content:"";margin:1px 0}
+@media(max-width:700px){
+  .bottom{padding:3px 5px;gap:1px;margin-top:10px}
+  .bottom button{min-height:34px;padding:2px 1px;font-size:9.5px;line-height:1.1}
+}
 .error{background:#ffebee;color:#b71c1c;padding:10px;border-radius:10px;margin-bottom:12px}
 .success{background:#e8f5e9;color:#176b20;padding:10px;border-radius:10px;margin-bottom:12px}
 @media (max-width: 700px) {
