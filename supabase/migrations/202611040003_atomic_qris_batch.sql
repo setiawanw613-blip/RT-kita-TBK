@@ -24,13 +24,13 @@ begin
      or cardinality(p_bulans) < 1
      or cardinality(p_bulans) > 12
      or cardinality(p_bulans) <> (
-       select count(distinct x) from unnest(p_bulans) as x
+       select count(distinct bulan) from unnest(p_bulans) as u(bulan)
      )
      or exists (
-       select 1 from unnest(p_bulans) as x
-       where x is null
-          or extract(day from x) <> 1
-          or x < date '2026-10-01'
+       select 1 from unnest(p_bulans) as u(bulan)
+       where bulan is null
+          or extract(day from bulan) <> 1
+          or bulan < date '2026-10-01'
      ) then
     raise exception 'BATCH_QRIS_TIDAK_VALID' using errcode = '22023';
   end if;
