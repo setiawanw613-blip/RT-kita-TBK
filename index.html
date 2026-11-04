@@ -337,6 +337,14 @@ padding:9px 10px;
 /* Navigasi ringkas khusus Dashboard Ketua RT */
 .admin-bottom{display:flex;width:100%;align-items:center;justify-content:space-around;gap:2px;margin:10px 0 0;padding:3px 2px;background:#fff;border:1px solid #e1eaf5;border-radius:9px}
 .admin-bottom button{flex:1 1 0;min-width:0;min-height:30px;padding:3px 1px;border:0;background:transparent;color:#174a82;font-size:9px;line-height:1.1;font-weight:600;white-space:normal}
+
+/* Umpan balik sentuh konsisten untuk semua kotak menu di dashboard warga dan RT. */
+.menu > button { -webkit-tap-highlight-color: transparent; }
+.menu > button:active {
+  transform: scale(.93) !important;
+  box-shadow: 0 1px 3px rgba(18,103,201,.12) !important;
+}
+.menu-notif-badge { pointer-events:none; }
 </style>
 </head>
 
@@ -1064,7 +1072,7 @@ async function adminHome(){
   <span>Riwayat Pengaduan</span>
 </button>
 
-<button onclick="aspirasiAdmin()">
+<button data-menu-notif="aspirasi" onclick="aspirasiAdmin()">
   <span style="font-size:26px">🏗️</span>
   <span>Aspirasi Warga</span>
 </button>
@@ -3120,7 +3128,7 @@ function wargaHome(){
       <h3>Layanan Warga</h3>
       <div class="menu">
         <button onclick="myData()">👤 Data Saya</button>
-        <button data-menu-notif="surat" onclick="newLetter()">📄 Ajukan Surat</button>
+        <button onclick="newLetter()">📄 Ajukan Surat</button>
         <button data-menu-notif="surat" onclick="myLetters()">📋 Surat Saya</button>
         <button onclick="newComplaint()">📢 Pengaduan</button>
         <button onclick="myComplaints()">📋 Riwayat Pengaduan</button>
