@@ -8,6 +8,7 @@ const { normalizeStorageObjectPath } = require("./storage-path");
 const { csvCell } = require("./csv-safe");
 const { isValidNewResidentPassword } = require("./password-policy");
 const { detectImageType } = require("./image-validation");
+const { isValidSession } = require("./session-policy");
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
 app.disable("x-powered-by");
@@ -681,30 +682,7 @@ function getSession(req) {
       Buffer.from(payload, "base64url").toString("utf8")
     );
 
-    const SESSION_MAX_AGE = 8 * 60 * 60 * 1000;
-
-    if (
-      !session.createdAt ||
-      !Number.isFinite(session.createdAt) ||
-      Date.now() - session.createdAt < 0 ||
-      Date.now() - session.createdAt > SESSION_MAX_AGE
-    ) {
-      return null;
-    }
-
-    if (session.role === "admin" && session.id === "admin") {
-      return session;
-    }
-
-    if (
-      session.role === "warga" &&
-      session.wargaId &&
-      String(session.id) === String(session.wargaId)
-    ) {
-      return session;
-    }
-
-    return null;
+    return isValidSession(session) ? session : null;
   } catch {
     return null;
   }
@@ -1117,7 +1095,7 @@ const token = createSessionToken({
 
   res.setHeader(
     "Set-Cookie",
-    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax`
+    `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; Max-Age=28800; SameSite=Lax`
   );
 
   return res.json({
@@ -1155,7 +1133,7 @@ const token = createSessionToken({
 
     res.setHeader(
       "Set-Cookie",
-     `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax`
+     `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; Max-Age=28800; SameSite=Lax`
     );
 
     res.json({
