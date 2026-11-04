@@ -9,6 +9,7 @@ const { csvCell } = require("./csv-safe");
 const { isValidNewResidentPassword } = require("./password-policy");
 const { detectImageType } = require("./image-validation");
 const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
+const { isValidIuranMonth } = require("./iuran-validation");
 const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
@@ -731,14 +732,6 @@ const NAMA_BULAN_ID = [
   "Januari","Februari","Maret","April","Mei","Juni",
   "Juli","Agustus","September","Oktober","November","Desember"
 ];
-
-function isValidIuranMonth(value) {
-  return (
-    typeof value === "string" &&
-    /^\d{4}-(0[1-9]|1[0-2])$/.test(value) &&
-    value >= "2026-10"
-  );
-}
 
 function labelBulanIuran(bulan) {
   const m = String(bulan || "").match(/^(\d{4})-(\d{2})/);
