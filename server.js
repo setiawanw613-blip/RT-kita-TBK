@@ -1065,6 +1065,11 @@ if (warga.status_warga !== "aktif") {
   });
 }
 
+await supabaseRequest("login_rate_limits", {
+  method: "DELETE",
+  query: "key_hash=eq." + encodeURIComponent(rateLimitKey)
+});
+
 const token = createSessionToken({
   id: warga.id,
   wargaId: warga.id,
@@ -1106,6 +1111,11 @@ const token = createSessionToken({
     }
 
 
+await supabaseRequest("login_rate_limits", {
+  method: "DELETE",
+  query: "key_hash=eq." + encodeURIComponent(rateLimitKey)
+});
+
 const token = createSessionToken({
   id: "admin",
   username,
@@ -1126,11 +1136,11 @@ const token = createSessionToken({
       }
     });
   } catch (error) {
-    console.error("LOGIN ERROR:", error);
+    console.error("LOGIN ERROR:", error?.message || error);
 
-    res.status(500).json({
+    res.status(503).json({
       ok: false,
-      message: "Gagal masuk aplikasi"
+      message: "Layanan login sementara tidak tersedia. Silakan coba lagi."
     });
   }
 });
