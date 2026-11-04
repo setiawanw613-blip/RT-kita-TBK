@@ -11,6 +11,7 @@ const { detectImageType } = require("./image-validation");
 const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
 const { isValidIuranMonth } = require("./iuran-validation");
 const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midtrans-webhook-security");
+const { canAccessOwnedRecord } = require("./access-control");
 
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
@@ -4599,10 +4600,7 @@ app.post("/api/aspirasi/:id/dokumentasi", requireLogin, uploadFoto.fields([
       });
     }
 
-    if (
-      req.session.role !== "admin" &&
-      String(a.warga_id) !== String(req.session.wargaId)
-    ) {
+    if (!canAccessOwnedRecord(req.session, a.warga_id)) {
       return res.status(403).json({
         ok: false,
         message: "Tidak berhak mengubah dokumentasi aspirasi ini."
