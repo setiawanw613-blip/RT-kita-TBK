@@ -2180,54 +2180,22 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
       }
     }
 
-    // Ambil riwayat dana pada kategori yang dipilih.
-    const riwayat = await supabaseRequest("kas_rt", {
-      query:
-        "select=jenis,jumlah,kategori" +
-        `&kategori=eq.${encodeURIComponent(kategori)}`
-    });
-
-    let saldoKategori = 0;
-
-    if (Array.isArray(riwayat)) {
-      for (const row of riwayat) {
-        const nilai = Number(row.jumlah) || 0;
-        const jenisLama = String(row.jenis || "").toLowerCase();
-
-        if (jenisLama.includes("keluar")) {
-          saldoKategori -= nilai;
-        } else {
-          saldoKategori += nilai;
-        }
-      }
-    }
-
-    if (jenis === "keluar" && jumlah > saldoKategori) {
-      return res.status(400).json({
-        ok: false,
-        message:
-          `Saldo kategori ${kategori} tidak mencukupi. ` +
-          `Saldo tersedia Rp${Math.max(0, saldoKategori).toLocaleString("id-ID")}.`
-      });
-    }
-
-    const transaksi = {
-      tanggal: date,
-      jenis,
-      kategori,
-      keterangan,
-      jumlah
-    };
-
-    if (jenis === "keluar") {
-      transaksi.bukti_path = proof;
-      transaksi.bukti_hash = buktiHash;
-    }
-
-    const data = await supabaseRequest("kas_rt", {
+    // Saldo kategori dan pencatatan transaksi dilakukan dalam satu RPC
+    // atomik agar dua pengeluaran bersamaan tidak memakai saldo yang sama.
+    const hasil = await supabaseRequest("rpc/record_cash_transaction", {
       method: "POST",
-      body: transaksi
+      body: {
+        p_tanggal: date,
+        p_jenis: jenis,
+        p_kategori: kategori,
+        p_keterangan: keterangan,
+        p_jumlah: jumlah,
+        p_bukti_path: jenis === "keluar" ? proof : null,
+        p_bukti_hash: jenis === "keluar" ? buktiHash : null
+      }
     });
+
+    const data = Array.isArray(hasil) ? hasil[0] : hasil;
 
     return res.json({
       ok: true,
@@ -2241,6 +2209,16 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
   const pesanError = String(
     error?.message || error || ""
   );
+
+  if (
+    getSupabaseErrorCode(error) === "P0001" &&
+    pesanError.includes("SALDO_KATEGORI_TIDAK_CUKUP")
+  ) {
+    return res.status(400).json({
+      ok: false,
+      message: `Saldo kategori ${String(req.body?.category || "").trim()} tidak mencukupi. Transaksi tidak disimpan.`
+    });
+  }
 
   if (
     pesanError.includes("kas_rt_bukti_hash_unik") ||
