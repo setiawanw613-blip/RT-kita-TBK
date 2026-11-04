@@ -84,7 +84,7 @@ begin
   where id = any(coalesce(p_replace_ids, array[]::integer[]))
     and keluarga_id = p_keluarga_id
     and bulan = any(p_bulans)
-  returning * into v_row;
+  ;
 
   -- Insert all months not already represented by the verified-expired rows.
   foreach v_bulan in array p_bulans loop
