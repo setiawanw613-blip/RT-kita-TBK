@@ -673,7 +673,33 @@ async function bukaNotifikasiHeader() {
       throw new Error(hasil?.message || "Gagal memuat notifikasi");
     }
 
-    const daftar = hasil.notifikasi || [];
+    let daftar = hasil.notifikasi || [];
+
+    // Membuka lonceng otomatis menandai semua notifikasi yang tampil sebagai dibaca.
+    const belumDibaca = daftar.filter(item => !item.sudah_dibaca);
+    if (belumDibaca.length) {
+      const hasilTandai = await Promise.allSettled(
+        belumDibaca.map(item => api(
+          "/api/notifikasi/" + encodeURIComponent(Number(item.id)) + "/baca",
+          { method: "PATCH" }
+        ))
+      );
+
+      const gagal = hasilTandai.some((hasilBaca, index) =>
+        hasilBaca.status !== "fulfilled" || !hasilBaca.value?.ok
+      );
+
+      // Ambil ulang status dari server agar lonceng dan badge menu akurat.
+      const terbaru = await api("/api/notifikasi");
+      if (terbaru?.ok && Array.isArray(terbaru.notifikasi)) {
+        daftar = terbaru.notifikasi;
+      }
+
+      await Promise.all([muatNotifikasiHeader(), muatBadgeMenu()]);
+      if (gagal) {
+        console.error("Sebagian notifikasi gagal ditandai sudah dibaca.");
+      }
+    }
 
     const lama = document.getElementById("panelNotifikasiHeader");
     if (lama) lama.remove();
