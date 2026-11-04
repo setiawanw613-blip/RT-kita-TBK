@@ -7,6 +7,7 @@ const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidt
 const { normalizeStorageObjectPath } = require("./storage-path");
 const { csvCell } = require("./csv-safe");
 const { isValidNewResidentPassword } = require("./password-policy");
+const { detectImageType } = require("./image-validation");
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
 app.disable("x-powered-by");
@@ -405,32 +406,7 @@ const uploadFoto = multer({
 });
 
 
-function detectImageType(buffer) {
-  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return null;
 
-  // JPEG
-  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
-    return { mime: "image/jpeg", ext: "jpg" };
-  }
-
-  // PNG
-  if (
-    buffer.length >= 8 &&
-    buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-  ) {
-    return { mime: "image/png", ext: "png" };
-  }
-
-  // WebP (RIFF container with WEBP signature)
-  if (
-    buffer.toString("ascii", 0, 4) === "RIFF" &&
-    buffer.toString("ascii", 8, 12) === "WEBP"
-  ) {
-    return { mime: "image/webp", ext: "webp" };
-  }
-
-  return null;
-}
 
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
