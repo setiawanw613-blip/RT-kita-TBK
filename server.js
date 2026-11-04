@@ -947,7 +947,16 @@ if (Array.isArray(keluargaExisting) && keluargaExisting.length) {
       }
     });
   } catch (error) {
-    console.error("REGISTER WARGA ERROR:", error);
+    console.error("REGISTER WARGA ERROR:", error?.message || error);
+
+    // Database unique indexes are the final protection against simultaneous
+    // registrations using the same phone number, NIK, or family card number.
+    if (getSupabaseErrorCode(error) === "23505") {
+      return res.status(409).json({
+        ok: false,
+        message: "Nomor HP, NIK, atau No. KK sudah terdaftar. Periksa kembali data pendaftaran."
+      });
+    }
 
     return res.status(500).json({
       ok: false,
