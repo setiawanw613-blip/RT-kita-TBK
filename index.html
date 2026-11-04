@@ -129,6 +129,41 @@ padding:9px 10px;
     box-sizing: border-box !important;
   }
 }
+
+
+/* Tampilan lebih ringkas untuk layar HP */
+@media (max-width: 700px) {
+  .wrap { padding: 8px; }
+  .card {
+    padding: 12px;
+    margin-bottom: 9px;
+    border-radius: 13px;
+  }
+  .stat {
+    padding: 13px 12px;
+    border-radius: 14px;
+  }
+  .stat b { font-size: clamp(19px, 5vw, 24px); }
+  .menu { gap: 8px !important; }
+  .menu button {
+    min-height: 62px;
+    padding: 8px 9px;
+    border-radius: 13px;
+    font-size: 13px;
+  }
+  .menu button span { font-size: 12px; }
+  #stats.grid { gap: 8px !important; }
+  .iuran-month-option {
+    padding: 9px !important;
+    gap: 8px !important;
+    margin: 0 !important;
+    border-radius: 10px !important;
+  }
+  #ringkasanPilihIuran { padding: 11px !important; }
+  .card h2 { font-size: 20px; margin-bottom: 8px; }
+  .card h3 { font-size: 17px; margin-bottom: 9px; }
+}
+
 </style>
 </head>
 
@@ -3199,7 +3234,7 @@ const pending = b.status === "menunggu_verifikasi";
 const tidakBisaDipilih =
   lunas || (pending && !b.transaksi_kedaluwarsa);
             return `
-              <label style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #dbe5f1;border-radius:12px">
+              <label class="iuran-month-option" style="display:flex;align-items:center;gap:10px;padding:12px;border:1px solid #dbe5f1;border-radius:12px">
                 <input
                   type="checkbox"
                   class="pilih-bulan-iuran"
