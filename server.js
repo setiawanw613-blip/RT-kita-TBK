@@ -12,6 +12,7 @@ const { createSignedSessionToken, verifySignedSessionToken } = require("./sessio
 const { isValidIuranMonth } = require("./iuran-validation");
 const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midtrans-webhook-security");
 const { canAccessOwnedRecord } = require("./access-control");
+const { cancelPendingMidtransTransaction } = require("./midtrans-cancel");
 
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
@@ -3784,6 +3785,31 @@ if (
     });
   } catch (error) {
     console.error("BAYAR IURAN QRIS ERROR:", error?.message || error);
+
+    // If the atomic reservation did not persist any rows, reconcile the
+    // external Midtrans order. Never cancel after a successful DB reservation.
+    if (orderId && rowsTersimpan.length === 0) {
+      try {
+        const serverKey = getMidtransServerKeyForOrder(orderId);
+        const apiBase = getMidtransApiBaseForOrder(orderId);
+        if (serverKey) {
+          const pembatalan = await cancelPendingMidtransTransaction({
+            orderId,
+            serverKey,
+            apiBase
+          });
+          if (!pembatalan.ok) {
+            console.warn("QRIS RECONCILIATION NEEDS REVIEW:", {
+              orderId,
+              status: pembatalan.status,
+              reason: pembatalan.reason
+            });
+          }
+        }
+      } catch (cancelError) {
+        console.error("QRIS RECONCILIATION ERROR:", cancelError?.message || cancelError);
+      }
+    }
 
     return res.status(
       getSupabaseErrorCode(error) === "23505" ? 409 : 500
