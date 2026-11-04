@@ -146,7 +146,7 @@ const {
 
     const dataIuran = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at" +
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at,midtrans_transaction_id" +
         `&bukti_transfer=eq.${encodeURIComponent("MIDTRANS:" + order_id)}`
     });
 
@@ -182,7 +182,7 @@ const {
 
       const dataRiwayat = await supabaseRequest("iuran_warga", {
         query:
-          "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at" +
+          "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at,midtrans_transaction_id" +
           `&id=in.(${rowIds.join(",")})`
       });
       rows = Array.isArray(dataRiwayat) ? dataRiwayat : [];
@@ -210,7 +210,7 @@ const {
     // order, do not overwrite their transaction metadata or silently treat the
     // second charge as an ordinary duplicate webhook. Flag it for manual refund
     // reconciliation; never issue an automatic refund from a notification hook.
-    const konflikPembayaran = findConflictingSettledRows(rows, order_id);
+    const konflikPembayaran = findConflictingSettledRows(rows, order_id, transaction_id);
     if (konflikPembayaran.length) {
       console.error("DUPLICATE MIDTRANS SETTLEMENT REQUIRES MANUAL REFUND REVIEW:", {
         order_id,
