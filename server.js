@@ -4087,7 +4087,7 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
-    const inputBulan = String(req.body?.bulan || "").slice(0, 7);
+    const inputBulan = req.body?.bulan;
 
     if (!isValidIuranMonth(inputBulan)) {
       return res.status(400).json({
