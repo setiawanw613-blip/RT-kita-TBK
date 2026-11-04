@@ -1,4 +1,4 @@
-const CACHE_NAME = "rt-kita-v4-20261105";
+const CACHE_NAME = "rt-kita-v5-20261105";;
 
 const FILES_TO_CACHE = [
   "/",
