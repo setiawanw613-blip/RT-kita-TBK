@@ -2027,7 +2027,7 @@ const path = await uploadBuktiPengeluaran(
 
 
 /* LIHAT BUKTI PENGELUARAN - KETUA RT */
-app.get("/api/cash/proof/:id", requireLogin, async (req, res) => {
+app.get("/api/cash/proof/:id", requireAdmin, async (req, res) => {
   try {
     const id = String(req.params.id || "");
 
