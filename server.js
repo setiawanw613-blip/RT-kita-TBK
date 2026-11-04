@@ -11,6 +11,7 @@ const { detectImageType } = require("./image-validation");
 const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
 const { isValidIuranMonth } = require("./iuran-validation");
 const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midtrans-webhook-security");
+const { findConflictingSettledRows } = require("./midtrans-order-reconciliation");
 const { canAccessOwnedRecord } = require("./access-control");
 const { cancelPendingMidtransTransaction } = require("./midtrans-cancel");
 
@@ -202,6 +203,26 @@ const {
       }
 
       console.warn("MIDTRANS LATE SETTLEMENT RECONCILED FROM ORDER LEDGER:", order_id);
+    }
+
+    // A late settlement for an old order can legitimately pay rows now linked
+    // to a replacement order. If those rows were already settled by a DIFFERENT
+    // order, do not overwrite their transaction metadata or silently treat the
+    // second charge as an ordinary duplicate webhook. Flag it for manual refund
+    // reconciliation; never issue an automatic refund from a notification hook.
+    const konflikPembayaran = findConflictingSettledRows(rows, order_id);
+    if (konflikPembayaran.length) {
+      console.error("DUPLICATE MIDTRANS SETTLEMENT REQUIRES MANUAL REFUND REVIEW:", {
+        order_id,
+        transaction_id,
+        row_ids: konflikPembayaran.map(row => row.id),
+        existing_orders: [...new Set(konflikPembayaran.map(row => row.bukti_transfer))]
+      });
+      return res.status(200).json({
+        ok: true,
+        code: "DUPLICATE_SETTLEMENT_REQUIRES_REFUND_REVIEW",
+        message: "Pembayaran kedua terdeteksi. Catatan iuran tidak diubah; perlu pemeriksaan dan pengembalian dana manual."
+      });
     }
 
     const totalCatatan = rows.reduce(
