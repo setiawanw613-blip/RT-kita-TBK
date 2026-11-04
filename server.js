@@ -980,6 +980,27 @@ app.post("/api/login", async (req, res) => {
       });
     }
 
+    // Persistent account-based throttling shared by all Vercel instances.
+    const rateLimitKey = crypto.createHmac("sha256", process.env.SESSION_SECRET)
+      .update("login:" + role + ":" + username.trim().toLowerCase())
+      .digest("hex");
+    const rateLimitRows = await supabaseRequest("rpc/consume_login_rate_limit", {
+      method: "POST",
+      body: { p_key_hash: rateLimitKey, p_window_seconds: 900, p_max_attempts: 5 }
+    });
+    const rateLimit = Array.isArray(rateLimitRows) ? rateLimitRows[0] : rateLimitRows;
+    if (!rateLimit || typeof rateLimit.allowed !== "boolean") {
+      throw new Error("Respons pembatasan login tidak valid");
+    }
+    if (!rateLimit.allowed) {
+      const retryAfter = Math.max(1, Number(rateLimit.retry_after_seconds) || 900);
+      res.setHeader("Retry-After", String(retryAfter));
+      return res.status(429).json({
+        ok: false,
+        message: "Terlalu banyak percobaan login. Silakan coba lagi beberapa menit kemudian."
+      });
+    }
+
 if (role === "warga") {
   if (!username || !password) {
     return res.status(400).json({
