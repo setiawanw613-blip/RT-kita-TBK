@@ -75,6 +75,18 @@ begin
     raise exception 'CATATAN_IURAN_PENGGANTI_TIDAK_VALID' using errcode = '22023';
   end if;
 
+  if cardinality(coalesce(p_replace_ids, array[]::integer[])) <> (
+    select count(*)
+    from public.iuran_warga
+    where id = any(coalesce(p_replace_ids, array[]::integer[]))
+      and keluarga_id = p_keluarga_id
+      and bulan = any(p_bulans)
+      and coalesce(bukti_transfer, '') like 'MIDTRANS:%'
+      and status <> 'lunas'
+  ) then
+    raise exception 'CATATAN_IURAN_PENGGANTI_TIDAK_VALID' using errcode = '22023';
+  end if;
+
   update public.iuran_warga
   set status = 'menunggu_verifikasi',
       total_amount = 35000,
@@ -83,8 +95,7 @@ begin
       midtrans_status = 'pending'
   where id = any(coalesce(p_replace_ids, array[]::integer[]))
     and keluarga_id = p_keluarga_id
-    and bulan = any(p_bulans)
-  ;
+    and bulan = any(p_bulans);
 
   -- Insert all months not already represented by the verified-expired rows.
   foreach v_bulan in array p_bulans loop
