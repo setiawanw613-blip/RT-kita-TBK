@@ -963,6 +963,13 @@ app.post("/api/login", async (req, res) => {
   try {
     const { username, password, role } = req.body || {};
 
+    if (role !== "admin" && role !== "warga") {
+      return res.status(400).json({
+        ok: false,
+        message: "Jenis akun tidak valid"
+      });
+    }
+
     if (
       typeof username !== "string" ||
       !username.trim() ||
