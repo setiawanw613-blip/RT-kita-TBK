@@ -9,7 +9,7 @@ const { csvCell } = require("./csv-safe");
 const { isValidNewResidentPassword } = require("./password-policy");
 const { detectImageType } = require("./image-validation");
 const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
-const { isValidSession } = require("./session-policy");
+const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
 app.disable("x-powered-by");
