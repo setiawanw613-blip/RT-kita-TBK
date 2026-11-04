@@ -412,6 +412,13 @@ window.onerror = function(message, source, line, column, error) {
 
 function layout(title, body, showBack = true) {
   const isWarga = currentUser?.role === "warga";
+  const footer = `
+      ${hasWargaBottom ? "" : footer}
+  `;
+  const hasWargaBottom = isWarga && body.includes('class="bottom"');
+  const bodyContent = hasWargaBottom
+    ? body.replace('<div class="bottom">', footer + '<div class="bottom">')
+    : body;
 
   document.getElementById("app").innerHTML = `
     <div class="wrap">
@@ -503,7 +510,7 @@ function layout(title, body, showBack = true) {
         ${esc(title)}
       </div>
 
-          ${body}
+          ${bodyContent}
 
            ${showBack && !/(← Kembali|>\s*Kembali\s*<\/button>)/i.test(body) ? `
         <button class="btn secondary"
