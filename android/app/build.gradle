@@ -2,6 +2,11 @@ plugins {
     id 'com.android.application'
 }
 
+def releaseStorePath = System.getenv('RT_KITA_KEYSTORE_PATH')
+def releaseStorePassword = System.getenv('RT_KITA_KEYSTORE_PASSWORD')
+def releaseKeyAlias = System.getenv('RT_KITA_KEY_ALIAS')
+def releaseKeyPassword = System.getenv('RT_KITA_KEY_PASSWORD')
+
 android {
     namespace 'com.rtkita.tbk'
     compileSdk 35
@@ -12,5 +17,28 @@ android {
         targetSdk 35
         versionCode 1
         versionName '1.0.0'
+    }
+
+    signingConfigs {
+        release {
+            if (releaseStorePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword) {
+                storeFile file(releaseStorePath)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            // Debug signing is provided automatically by Android Gradle Plugin.
+        }
+        release {
+            minifyEnabled false
+            if (releaseStorePath && releaseStorePassword && releaseKeyAlias && releaseKeyPassword) {
+                signingConfig signingConfigs.release
+            }
+        }
     }
 }
