@@ -396,7 +396,7 @@ padding:9px 10px;
 let currentUser=null;
  
 
-// Cegah permintaan tulis yang sama terkirim berkali-kali saat pengguna mengetuk tombol berulang.
+// Gabungkan permintaan identik yang masih berjalan agar ketukan berulang tidak memicu fetch berulang.
 const apiRequestsInFlight = new Map();
 
 async function api(url, options = {}) {
@@ -408,8 +408,7 @@ async function api(url, options = {}) {
       : "";
   const requestKey = method + ":" + url + ":" + bodyKey;
 
-  if (["POST", "PUT", "PATCH", "DELETE"].includes(method) &&
-      apiRequestsInFlight.has(requestKey)) {
+  if (apiRequestsInFlight.has(requestKey)) {
     return apiRequestsInFlight.get(requestKey);
   }
 
@@ -454,18 +453,14 @@ async function api(url, options = {}) {
     return data;
   })();
 
-  if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
-    apiRequestsInFlight.set(requestKey, request);
-    try {
-      return await request;
-    } finally {
-      if (apiRequestsInFlight.get(requestKey) === request) {
-        apiRequestsInFlight.delete(requestKey);
-      }
+  apiRequestsInFlight.set(requestKey, request);
+  try {
+    return await request;
+  } finally {
+    if (apiRequestsInFlight.get(requestKey) === request) {
+      apiRequestsInFlight.delete(requestKey);
     }
   }
-
-  return request;
 }
 
   function esc(value) {
