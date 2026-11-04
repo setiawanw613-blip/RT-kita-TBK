@@ -1,19 +1,22 @@
 package com.rtkita.tbk;
 
 import android.app.Activity;
+import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.webkit.CookieManager;
-import android.webkit.SafeBrowsingResponse;
+import android.webkit.DownloadListener;
+import android.webkit.URLUtil;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.webkit.WebResourceError;
 import android.widget.Toast;
 
 public class MainActivity extends Activity {
@@ -58,6 +61,35 @@ public class MainActivity extends Activity {
                     return true;
                 }
                 return true;
+            }
+        });
+
+        webView.setDownloadListener(new DownloadListener() {
+            @Override
+            public void onDownloadStart(String url, String userAgent, String contentDisposition,
+                                        String mimeType, long contentLength) {
+                Uri uri = Uri.parse(url);
+                if (!"https".equalsIgnoreCase(uri.getScheme()) || !HOST.equalsIgnoreCase(uri.getHost())) {
+                    Toast.makeText(MainActivity.this, "Unduhan dari domain luar diblokir demi keamanan", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                try {
+                    DownloadManager.Request request = new DownloadManager.Request(uri);
+                    String cookie = CookieManager.getInstance().getCookie(url);
+                    if (cookie != null) request.addRequestHeader("Cookie", cookie);
+                    if (userAgent != null) request.addRequestHeader("User-Agent", userAgent);
+                    request.setMimeType(mimeType);
+                    request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimeType));
+                    request.setDescription("Mengunduh berkas RT Kita");
+                    request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS,
+                            URLUtil.guessFileName(url, contentDisposition, mimeType));
+                    DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    manager.enqueue(request);
+                    Toast.makeText(MainActivity.this, "Unduhan dimulai. Periksa folder Download.", Toast.LENGTH_LONG).show();
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "Unduhan gagal dimulai", Toast.LENGTH_SHORT).show();
+                }
             }
         });
 
