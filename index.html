@@ -97,7 +97,7 @@ padding:9px 10px;
 }
 
 .menu button:active{
-  transform:scale(.98);
+  transform:scale(.94);
   box-shadow:0 1px 4px rgba(18,103,201,.10);
 }
 
@@ -268,13 +268,14 @@ padding:9px 10px;
   gap:6px !important;
 }
 .menu > button {
-  min-height:46px !important;
+  position:relative !important;
+  min-height:42px !important;
   height:auto !important;
   padding:6px 8px !important;
   gap:3px !important;
   border-radius:10px !important;
-  font-size:11px !important;
-  line-height:1.2 !important;
+  font-size:10px !important;
+  line-height:1.15 !important;
   box-shadow:0 2px 6px rgba(18,103,201,.05) !important;
 }
 .menu > button span:first-child {
@@ -282,8 +283,8 @@ padding:9px 10px;
   line-height:1.05 !important;
 }
 .menu > button span:not(:first-child) {
-  font-size:11px !important;
-  line-height:1.2 !important;
+  font-size:10px !important;
+  line-height:1.15 !important;
 }
 
 /* Navigasi warga tetap ada di bagian paling bawah, dalam bentuk minimal.
@@ -328,6 +329,10 @@ padding:9px 10px;
     font-size:9px !important;
   }
 }
+
+/* Lencana notifikasi per menu: jumlah hanya untuk notifikasi belum dibaca. */
+.menu > button[data-menu-notif], .bottom button[data-menu-notif], .admin-bottom button[data-menu-notif]{position:relative!important;padding-right:25px!important}
+.menu-notif-badge{position:absolute;top:4px;right:5px;min-width:17px;height:17px;padding:0 4px;border-radius:20px;background:#e11d48;color:#fff;font-size:10px!important;line-height:17px!important;font-weight:800!important;text-align:center;box-shadow:0 1px 4px #0002}
 
 /* Navigasi ringkas khusus Dashboard Ketua RT */
 .admin-bottom{display:flex;width:100%;align-items:center;justify-content:space-around;gap:2px;margin:10px 0 0;padding:3px 2px;background:#fff;border:1px solid #e1eaf5;border-radius:9px}
@@ -534,13 +539,37 @@ function layout(title, body, showBack = true) {
     </div>
   `;
 
-  if (typeof muatNotifikasiHeader === "function") {
-    muatNotifikasiHeader();
-  }
+  if (typeof muatNotifikasiHeader === "function") muatNotifikasiHeader();
+  if (typeof muatBadgeMenu === "function") muatBadgeMenu();
 }
   
 function dashboard(){
   boot();
+}
+
+async function muatBadgeMenu() {
+  try {
+    const hasil = await api("/api/notifikasi");
+    if (!hasil?.ok) return;
+    const hitung = {};
+    (hasil.notifikasi || []).filter(n => !n.sudah_dibaca).forEach(n => {
+      const jenis = String(n.jenis || "").toLowerCase();
+      hitung[jenis] = (hitung[jenis] || 0) + 1;
+    });
+    document.querySelectorAll("[data-menu-notif]").forEach(el => {
+      el.querySelector(".menu-notif-badge")?.remove();
+      const jenis = el.getAttribute("data-menu-notif");
+      const jumlah = Number(hitung[jenis] || 0);
+      if (!jumlah) return;
+      const badge = document.createElement("span");
+      badge.className = "menu-notif-badge";
+      badge.textContent = jumlah > 99 ? "99+" : String(jumlah);
+      badge.setAttribute("aria-label", jumlah + " notifikasi belum dibaca");
+      el.appendChild(badge);
+    });
+  } catch (error) {
+    console.error("Gagal memuat lencana notifikasi menu:", error);
+  }
 }
 
 async function muatNotifikasiHeader() {
@@ -638,25 +667,9 @@ async function bukaNotifikasiHeader() {
     document.body.appendChild(panel);
     tampilkanDaftar(daftar);
 
-    // Tandai notifikasi yang belum dibaca.
-    for (const item of daftar.filter(n => !n.sudah_dibaca)) {
-      const hasilBaca = await api(
-        `/api/notifikasi/${encodeURIComponent(item.id)}/baca`,
-        { method: "PATCH" }
-      );
-
-      if (!hasilBaca || !hasilBaca.ok) {
-        throw new Error(
-          hasilBaca?.message || `Gagal membaca notifikasi ${item.id}`
-        );
-      }
-
-      item.sudah_dibaca = true;
-    }
-
-    // Perbarui daftar dan angka lonceng.
+    // Membuka panel tidak otomatis menghapus status belum dibaca.
+    // Warga/RT tetap melihat lencana pada menu terkait sampai ditandai dibaca.
     tampilkanDaftar(daftar);
-    await muatNotifikasiHeader();
 
   } catch (error) {
     console.error("Gagal membuka notifikasi:", error);
@@ -1041,12 +1054,12 @@ async function adminHome(){
   <span>Kas RT</span>
 </button>
 
-<button onclick="letters()">
+<button data-menu-notif="surat" onclick="letters()">
   <span style="font-size:26px">📄</span>
   <span>Surat</span>
 </button>
 
-<button onclick="complaints()">
+<button data-menu-notif="pengaduan" onclick="complaints()">
   <span style="font-size:26px">📢</span>
   <span>Riwayat Pengaduan</span>
 </button>
@@ -1061,7 +1074,7 @@ async function adminHome(){
   <span>Pengumuman</span>
 </button>
 
-<button onclick="iuranAdmin()">
+<button data-menu-notif="iuran" onclick="iuranAdmin()">
   <span style="font-size:26px">💳</span>
   <span>Iuran Warga</span>
 </button>
@@ -1076,7 +1089,7 @@ async function adminHome(){
     <div class="admin-bottom">
       <button onclick="adminHome()">🏠<br>Beranda</button>
       <button onclick="residents()">👥<br>Data Warga</button>
-      <button onclick="letters()">📄<br>Surat</button>
+      <button data-menu-notif="surat" onclick="letters()">📄<br>Surat</button>
       <button onclick="announcements()">📣<br>Info</button>
     </div>
   `,false);
@@ -3107,13 +3120,13 @@ function wargaHome(){
       <h3>Layanan Warga</h3>
       <div class="menu">
         <button onclick="myData()">👤 Data Saya</button>
-        <button onclick="newLetter()">📄 Ajukan Surat</button>
-        <button onclick="myLetters()">📋 Surat Saya</button>
+        <button data-menu-notif="surat" onclick="newLetter()">📄 Ajukan Surat</button>
+        <button data-menu-notif="surat" onclick="myLetters()">📋 Surat Saya</button>
         <button onclick="newComplaint()">📢 Pengaduan</button>
         <button onclick="myComplaints()">📋 Riwayat Pengaduan</button>
         <button onclick="aspirasiWarga()">🏗️ Aspirasi Warga</button>
         <button onclick="announcementsWarga()">📣 Pengumuman</button>
-     <button onclick="iuranWarga()">💳 Iuran Warga</button>
+     <button data-menu-notif="iuran" onclick="iuranWarga()">💳 Iuran Warga</button>
 <button onclick="kasWarga()">💰 Kas RT</button>
 <button onclick="transparansiQRISWarga()">🔎 Transparansi Dana QRIS</button>
 
@@ -3123,7 +3136,7 @@ function wargaHome(){
     <div class="bottom">
       <button onclick="wargaHome()">🏠<br>Beranda</button>
       <button onclick="myData()">👤<br>Data Saya</button>
-      <button onclick="myLetters()">📄<br>Surat</button>
+      <button data-menu-notif="surat" onclick="myLetters()">📄<br>Surat</button>
       <button onclick="announcementsWarga()">📣<br>Info</button>
     </div>
     `,false);
