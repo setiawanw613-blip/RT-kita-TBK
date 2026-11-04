@@ -2931,6 +2931,7 @@ function wargaHome(){
         <button onclick="newLetter()">📄 Ajukan Surat</button>
         <button onclick="myLetters()">📋 Surat Saya</button>
         <button onclick="newComplaint()">📢 Pengaduan</button>
+        <button onclick="myComplaints()">📋 Riwayat Pengaduan</button>
         <button onclick="aspirasiWarga()">🏗️ Aspirasi Warga</button>
         <button onclick="announcementsWarga()">📣 Pengumuman</button>
      <button onclick="iuranWarga()">💳 Iuran Warga</button>
@@ -4239,9 +4240,40 @@ async function saveComplaint(){
     });
 
     alert("Pengaduan berhasil dikirim");
-    wargaHome();
+    await myComplaints();
   }catch(e){
     alert(e.message);
+  }
+}
+
+async function myComplaints(){
+  layout("Riwayat Pengaduan",`
+    <div class="card" id="myComplaintList">Memuat riwayat pengaduan...</div>
+    <button class="btn secondary" style="width:100%;margin-top:12px" onclick="newComplaint()">Buat Pengaduan</button>
+    <button class="btn secondary" style="width:100%;margin-top:8px" onclick="wargaHome()">Kembali</button>
+  `);
+  try{
+    const data = await api("/api/my-complaints");
+    const box = document.getElementById("myComplaintList");
+    if(!Array.isArray(data) || data.length === 0){
+      box.innerHTML = "<p class='muted'>Anda belum mengirim pengaduan.</p>";
+      return;
+    }
+    box.innerHTML = data.map(item => `
+      <div class="row" style="padding:14px 0;border-bottom:1px solid #e2e8f0">
+        <b>${esc(item.title || "Pengaduan")}</b>
+        <div style="margin-top:6px;white-space:pre-wrap">${esc(item.content || "")}</div>
+        <div class="muted" style="margin-top:8px;font-size:12px">
+          Dikirim: ${item.created_at ? esc(new Date(item.created_at).toLocaleString("id-ID")) : "-"}
+        </div>
+        <span class="badge" style="display:inline-block;margin-top:8px">
+          ${item.sudah_dibaca ? "Sudah dibaca Ketua RT" : "Menunggu dibaca Ketua RT"}
+        </span>
+      </div>
+    `).join("");
+  }catch(error){
+    const box = document.getElementById("myComplaintList");
+    if(box) box.innerHTML = `<div class="error">${esc(error.message || "Riwayat pengaduan gagal dimuat.")}</div>`;
   }
 }
 
