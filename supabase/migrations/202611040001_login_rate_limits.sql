@@ -46,7 +46,7 @@ begin
           when current.window_started_at <= v_now - make_interval(secs => p_window_seconds)
           then 1 else current.attempts + 1 end,
         updated_at = v_now
-  returning login_rate_limits.window_started_at, login_rate_limits.attempts
+  returning current.window_started_at, current.attempts
     into v_started, v_attempts;
 
   v_retry := greatest(0, ceil(extract(epoch from
