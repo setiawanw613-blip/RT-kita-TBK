@@ -1917,36 +1917,16 @@ app.post(
         });
       }
 
-      const signatures = {
-        "image/jpeg": [0xff, 0xd8, 0xff],
-        "image/png": [0x89, 0x50, 0x4e, 0x47],
-        "image/webp": [0x52, 0x49, 0x46, 0x46]
-      };
+      const jenisBukti = detectImageType(req.body);
 
-      const signature = signatures[contentType];
-
-      if (!signature.every((byte, index) => req.body[index] === byte)) {
+      if (!jenisBukti || jenisBukti.mime !== contentType) {
         return res.status(400).json({
           ok: false,
           message: "Isi file tidak sesuai dengan format gambar"
         });
       }
 
-      if (
-        contentType === "image/webp" &&
-        req.body.toString("ascii", 8, 12) !== "WEBP"
-      ) {
-        return res.status(400).json({
-          ok: false,
-          message: "File WebP tidak valid"
-        });
-      }
-
-      const extension = {
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp"
-      }[contentType];
+      const extension = jenisBukti.ext;
 
 
 const buktiHash = hashBuktiPengeluaran(req.body);
