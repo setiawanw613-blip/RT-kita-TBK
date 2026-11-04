@@ -3799,27 +3799,44 @@ if (
     // external Midtrans order. Never cancel after a successful DB reservation.
     if (orderId && rowsTersimpan.length === 0) {
       try {
-        const serverKey = getMidtransServerKeyForOrder(orderId);
-        const apiBase = getMidtransApiBaseForOrder(orderId);
-        if (serverKey) {
-          const pembatalan = await cancelPendingMidtransTransaction({
-            orderId,
-            serverKey,
-            apiBase
-          });
-          if (!pembatalan.ok) {
-            console.warn("QRIS RECONCILIATION NEEDS REVIEW:", {
+        // A network/response error can happen after Postgres committed.
+        // Verify the order marker before cancelling the external payment.
+        const rekonsiliasi = await supabaseRequest("iuran_warga", {
+          query:
+            "select=id" +
+            "&bukti_transfer=eq." +
+            encodeURIComponent(`MIDTRANS:${orderId}`) +
+            "&limit=1"
+        });
+        const orderSudahTersimpan =
+          Array.isArray(rekonsiliasi) && rekonsiliasi.length > 0;
+
+        if (orderSudahTersimpan) {
+          console.warn("MIDTRANS CANCEL SKIPPED: order already exists in database.");
+        } else {
+          const serverKey = getMidtransServerKeyForOrder(orderId);
+          const apiBase = getMidtransApiBaseForOrder(orderId);
+          if (serverKey) {
+            const pembatalan = await cancelPendingMidtransTransaction({
               orderId,
-              status: pembatalan.status,
-              reason: pembatalan.reason
+              serverKey,
+              apiBase
             });
+            if (!pembatalan.ok) {
+              console.warn("QRIS RECONCILIATION NEEDS REVIEW:", {
+                orderId,
+                status: pembatalan.status,
+                reason: pembatalan.reason
+              });
+            }
           }
         }
       } catch (cancelError) {
+        // Fail closed: if database reconciliation is unavailable, do not
+        // cancel a payment whose reservation state cannot be confirmed.
         console.error("QRIS RECONCILIATION ERROR:", cancelError?.message || cancelError);
       }
     }
-
     return res.status(
       getSupabaseErrorCode(error) === "23505" ? 409 : 500
     ).json({
