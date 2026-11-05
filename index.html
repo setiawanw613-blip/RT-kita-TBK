@@ -1131,8 +1131,8 @@ async function staffHome(){
   const title=role==="bendahara"?"Dashboard Bendahara":role==="sekretaris"?"Dashboard Sekretaris":"Dashboard Ketua Gang";
   const content=`<div class="card"><h2>Selamat datang, ${esc(currentUser?.nama||title)}</h2>
   <p class="muted">Akses dibatasi sesuai jabatan.</p>
-  ${role==="bendahara"?"<p>Pengelolaan iuran, kas, bukti transaksi, dan laporan keuangan.</p>":""}
-  ${role==="sekretaris"?"<p>Administrasi surat, pengumuman, dan pengajuan warga.</p>":""}
+  ${role==="bendahara"?"<p>Pengelolaan iuran, kas, bukti transaksi, dan laporan keuangan.</p><button class='btn' onclick='cash()'>Buka Kas RT</button><button class='btn secondary' onclick='iuranAdmin()'>Riwayat Iuran</button>":""}
+  ${role==="sekretaris"?"<p>Administrasi surat, pengumuman, dan pengajuan warga. Akses administrasi tetap dibatasi oleh server.</p>":""}
   ${role==="ketua_gang"?"<p>Wilayah tugas: <b>"+esc(currentUser?.gang||"Belum ditetapkan")+"</b></p><button class='btn' onclick='lihatWargaGang()'>Lihat warga gang</button>":""}</div>
   <button class="btn secondary" style="width:100%" onclick="logout()">Keluar</button>`;
   layout(title,content,false);
