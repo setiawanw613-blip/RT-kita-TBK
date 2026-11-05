@@ -3386,7 +3386,7 @@ async function iuranAdmin(filter = "all"){
           <div>Total: ${rupiah(item.total_amount||0)}</div>
           <div>Jalur: <b>${jalur==="ketua_gang_qris"?"QRIS melalui Ketua Gang":"Pembayaran langsung oleh warga"}</b></div>
           ${jalur==="ketua_gang_qris"?`<div>Ketua Gang penyetor: <b>${esc(item.disetorkan_oleh_nama||"-")}</b></div>`:""}
-          <div>Status: <span class="badge">${esc(item.status==="lunas"?"Lunas":item.status==="menunggu_verifikasi"?"Menunggu pembayaran":item.status||"Belum lunas")}</span></div>
+          <div>Status: <span class="badge">${esc(item.status==="lunas"?"Lunas":item.status==="menunggu_verifikasi"?(String(item.bukti_transfer||"").startsWith("MIDTRANS:")?"Menunggu pembayaran":"Menunggu verifikasi"):item.status||"Belum lunas")}</span></div>
           ${item.midtrans_settlement_at?`<div class="muted">Konfirmasi Midtrans: ${esc(new Date(item.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}
           ${item.status==="menunggu_verifikasi"&&!String(item.bukti_transfer||"").startsWith("MIDTRANS:")?`<button class="btn" onclick="verifikasiIuran('${item.id}')">Verifikasi pembayaran manual</button>`:""}
         </div>`;
