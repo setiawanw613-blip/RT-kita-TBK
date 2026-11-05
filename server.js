@@ -2550,7 +2550,7 @@ app.get("/api/cash-warga", requireWarga, async (req, res) => {
 });
 
 /* SURAT - KETUA RT */
-app.get("/api/letters", requireAdmin, async (req, res) => {
+app.get("/api/letters", requireSecretary, async (req, res) => {
   try {
     const data = await supabaseRequest("pengajuan_surat", {
       query:
@@ -3340,7 +3340,7 @@ app.get("/api/my-letters", requireWarga, async (req, res) => {
 });
 
 /* PROSES SURAT - KETUA RT */
-app.patch("/api/letters/:id", requireAdmin, async (req, res) => {
+app.patch("/api/letters/:id", requireSecretary, async (req, res) => {
   try {
     const id = Number(req.params.id);
     const { status, catatan = "" } = req.body;
@@ -3464,7 +3464,7 @@ app.get("/api/announcements", requireLogin, async (req, res) => {
 });
 
 /* TAMBAH PENGUMUMAN */
-app.post("/api/announcements", requireAdmin, async (req, res) => {
+app.post("/api/announcements", requireSecretary, async (req, res) => {
   try {
     const {
       title,
@@ -3740,6 +3740,197 @@ app.get("/api/iuran", requireFinance, async (req, res) => {
 
 
 
+/* SETORAN QRIS KETUA GANG ATAS NAMA WARGA */
+app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
+  let orderId = null;
+  let rowsTersimpan = [];
+  try {
+    const wargaId = String(req.body?.warga_id || "").trim();
+    const bulan = String(req.body?.bulan || "").trim();
+    if (!/^\d+$/.test(wargaId) || !isValidIuranMonth(bulan)) {
+      return res.status(400).json({ ok: false, message: "Pilih warga dan bulan iuran yang valid." });
+    }
+
+    const gangPetugas = String(req.session.gang || "").trim();
+    if (!gangPetugas) {
+      return res.status(403).json({ ok: false, message: "Wilayah gang akun Ketua Gang belum ditetapkan." });
+    }
+
+    const wargaRows = await supabaseRequest("warga", {
+      query: "select=id,nama_lengkap,keluarga_id,gang,status_warga&id=eq." +
+        encodeURIComponent(wargaId) + "&limit=1"
+    });
+    const warga = Array.isArray(wargaRows) ? wargaRows[0] : null;
+    if (!warga || String(warga.gang || "").trim().toLowerCase() !== gangPetugas.toLowerCase()) {
+      return res.status(403).json({ ok: false, message: "Warga tersebut bukan bagian dari gang tugas Anda." });
+    }
+    if (warga.status_warga !== "aktif" || !warga.keluarga_id) {
+      return res.status(400).json({ ok: false, message: "Warga belum aktif atau data keluarganya belum lengkap." });
+    }
+
+    const keluargaId = String(warga.keluarga_id);
+    const dataIuran = await supabaseRequest("iuran_warga", {
+      query: "select=id,bulan,status,total_amount,bukti_transfer&keluarga_id=eq." +
+        encodeURIComponent(keluargaId) + "&order=bulan.asc"
+    });
+    const catatan = Array.isArray(dataIuran) ? dataIuran : [];
+    const peta = new Map(catatan.map(row => [String(row.bulan || "").slice(0, 7), row]));
+    const akhir = new Date(Number(bulan.slice(0, 4)), Number(bulan.slice(5, 7)) - 1, 1);
+    for (let d = new Date(2026, 9, 1); d < akhir; d.setMonth(d.getMonth() + 1)) {
+      const periode = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+      if (peta.get(periode)?.status !== "lunas") {
+        return res.status(409).json({ ok: false, message: "Iuran " + periode + " harus diselesaikan lebih dahulu." });
+      }
+    }
+    const lama = peta.get(bulan);
+    if (lama) {
+      return res.status(409).json({
+        ok: false,
+        message: lama.status === "lunas"
+          ? "Iuran bulan ini sudah lunas."
+          : "Sudah ada transaksi untuk bulan ini. Minta Bendahara memeriksa statusnya sebelum membuat QRIS baru."
+      });
+    }
+
+    const total = 35000;
+    orderId = (getMidtransModeInfo().mode === "production" ? "RTTBK-PROD-" : "RTTBK-SBX-") +
+      Date.now() + "-" + crypto.randomBytes(4).toString("hex");
+    const transaksi = await buatTransaksiQRIS({ orderId, total, namaWarga: warga.nama_lengkap });
+
+    const hasilReserva = await supabaseRequest("rpc/reserve_qris_iuran_batch", {
+      method: "POST",
+      body: {
+        p_warga_id: String(warga.id),
+        p_keluarga_id: keluargaId,
+        p_bulans: [bulan + "-01"],
+        p_replace_ids: [],
+        p_order_id: orderId
+      }
+    });
+    rowsTersimpan = Array.isArray(hasilReserva) ? hasilReserva : [];
+    if (rowsTersimpan.length !== 1 || rowsTersimpan[0].bukti_transfer !== "MIDTRANS:" + orderId) {
+      throw new Error("Reservasi iuran QRIS tidak lengkap atau tidak cocok dengan order.");
+    }
+
+    const penyetorId = Number(req.session.id);
+    const penyetorNama = String(req.session.nama || req.session.username || "Ketua Gang");
+    await supabaseRequest("iuran_warga", {
+      method: "PATCH",
+      query: "id=eq." + encodeURIComponent(rowsTersimpan[0].id),
+      body: {
+        jalur_pembayaran: "ketua_gang_qris",
+        disetorkan_oleh_id: penyetorId,
+        disetorkan_oleh_nama: penyetorNama
+      }
+    });
+    await supabaseRequest("iuran_midtrans_orders", {
+      method: "PATCH",
+      query: "order_id=eq." + encodeURIComponent(orderId),
+      body: {
+        jalur_pembayaran: "ketua_gang_qris",
+        disetorkan_oleh_id: penyetorId,
+        disetorkan_oleh_nama: penyetorNama
+      }
+    });
+
+    try {
+      await supabaseRequest("notifikasi", {
+        method: "POST",
+        body: {
+          penerima_peran: "admin",
+          judul: "Setoran QRIS Ketua Gang",
+          pesan: "Ketua Gang " + penyetorNama + " membuat QRIS Rp35.000 atas nama " +
+            warga.nama_lengkap + " untuk iuran " + bulan + ". Menunggu konfirmasi Midtrans.",
+          jenis: "iuran",
+          tautan: "/admin",
+          referensi_id: rowsTersimpan[0].id,
+          sudah_dibaca: false
+        }
+      });
+    } catch (notifError) {
+      console.error("NOTIFIKASI SETORAN KETUA GANG ERROR:", notifError?.message || notifError);
+    }
+
+    const qrAction = Array.isArray(transaksi.actions)
+      ? transaksi.actions.find(action => action.name === "generate-qr-code")
+      : null;
+    return res.json({
+      ok: true,
+      order_id: orderId,
+      warga_id: warga.id,
+      nama_warga: warga.nama_lengkap,
+      bulan,
+      total,
+      status: "menunggu_pembayaran",
+      jalur_pembayaran: "ketua_gang_qris",
+      disetorkan_oleh: penyetorNama,
+      qr_url: qrAction?.url || null,
+      qr_string: transaksi.qr_string || null,
+      message: "QRIS berhasil dibuat. Iuran baru menjadi lunas setelah Midtrans mengonfirmasi pembayaran."
+    });
+  } catch (error) {
+    console.error("SETORAN QRIS KETUA GANG ERROR:", error?.message || error);
+    if (orderId && rowsTersimpan.length === 0) {
+      try {
+        const check = await supabaseRequest("iuran_warga", {
+          query: "select=id&bukti_transfer=eq." + encodeURIComponent("MIDTRANS:" + orderId) + "&limit=1"
+        });
+        const alreadyReserved = Array.isArray(check) && check.length > 0;
+        if (!alreadyReserved) {
+          const serverKey = getMidtransServerKeyForOrder(orderId);
+          if (serverKey) {
+            const canceled = await cancelPendingMidtransTransaction({
+              orderId,
+              serverKey,
+              apiBase: getMidtransApiBaseForOrder(orderId)
+            });
+            if (!canceled.ok) console.warn("SETORAN QRIS PERLU REKONSILIASI:", canceled);
+          }
+        }
+      } catch (reconcileError) {
+        console.error("SETORAN QRIS REKONSILIASI ERROR:", reconcileError?.message || reconcileError);
+      }
+    }
+    return res.status(getSupabaseErrorCode(error) === "23505" ? 409 : 500).json({
+      ok: false,
+      message: rowsTersimpan.length
+        ? "QRIS sudah dibuat dan tercatat, tetapi penyimpanan atribusi petugas perlu diperiksa Bendahara. Jangan membuat transaksi baru."
+        : "Gagal membuat setoran QRIS. Periksa riwayat iuran sebelum mencoba lagi."
+    });
+  }
+});
+
+/* RIWAYAT SETORAN QRIS KETUA GANG */
+app.get("/api/ketua-gang/riwayat-setoran", requireGangLead, async (req, res) => {
+  try {
+    const penyetorId = Number(req.session.id);
+    if (!Number.isSafeInteger(penyetorId) || penyetorId <= 0) {
+      return res.status(403).json({ ok: false, message: "Identitas akun Ketua Gang tidak valid." });
+    }
+    const rows = await supabaseRequest("iuran_warga", {
+      query: "select=id,warga_id,bulan,status,total_amount,bukti_transfer,dibayar_at,midtrans_status,midtrans_settlement_at,jalur_pembayaran,disetorkan_oleh_id,disetorkan_oleh_nama" +
+        "&jalur_pembayaran=eq.ketua_gang_qris&disetorkan_oleh_id=eq." +
+        encodeURIComponent(penyetorId) + "&order=bulan.desc&limit=500"
+    });
+    const data = Array.isArray(rows) ? rows : [];
+    const ids = [...new Set(data.map(row => String(row.warga_id || "")).filter(id => /^\d+$/.test(id)))];
+    const names = new Map();
+    if (ids.length) {
+      const wargaRows = await supabaseRequest("warga", {
+        query: "select=id,nama_lengkap&id=in.(" + ids.map(encodeURIComponent).join(",") + ")"
+      });
+      (Array.isArray(wargaRows) ? wargaRows : []).forEach(row => names.set(String(row.id), row.nama_lengkap || ""));
+    }
+    return res.json(data.map(row => ({
+      ...row,
+      nama_warga: names.get(String(row.warga_id)) || "Warga tidak ditemukan"
+    })));
+  } catch (error) {
+    console.error("RIWAYAT SETORAN KETUA GANG ERROR:", error?.message || error);
+    return res.status(500).json({ ok: false, message: "Gagal memuat riwayat setoran QRIS." });
+  }
+});
+
 /* BAYAR IURAN BEBERAPA BULAN SEKALIGUS - QRIS */
 app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
   let orderId = null;
@@ -4014,7 +4205,7 @@ if (
 
 
 /* RIWAYAT TRANSAKSI QRIS - KHUSUS ADMIN */
-app.get("/api/qris/history", requireAdmin, async (req, res) => {
+app.get("/api/qris/history", requireFinance, async (req, res) => {
   try {
     const data = await supabaseRequest("iuran_warga", {
       query:
@@ -4537,7 +4728,7 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
 });
 
 /* VERIFIKASI IURAN - KETUA RT */
-app.post("/api/iuran/verifikasi", requireAdmin, async (req, res) => {
+app.post("/api/iuran/verifikasi", requireFinance, async (req, res) => {
   try {
     const id = req.body.id;
 
