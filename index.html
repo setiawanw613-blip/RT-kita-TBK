@@ -888,6 +888,9 @@ box-shadow:0 18px 45px rgba(0,35,80,.22);
             font-size:16px;
           ">
           <option value="admin">Ketua RT / Admin</option>
+          <option value="bendahara">Bendahara</option>
+          <option value="sekretaris">Sekretaris</option>
+          <option value="ketua_gang">Ketua Gang</option>
           <option value="warga">Warga</option>
         </select>
 
@@ -951,7 +954,7 @@ if(role==="warga"){
   }else{
     box.innerHTML=`
       <label>Username</label>
-      <input id="username" value="admin" autocomplete="username">
+      <input id="username" value="${role==="admin"?"admin":""}" autocomplete="username" placeholder="Username">
 
       <label>Password</label>
       <input id="password" type="password" placeholder="Password">
@@ -1092,11 +1095,7 @@ async function doLogin(){
 
     currentUser=data.user;
 
-    if(currentUser.role==="warga"){
-      wargaHome();
-    }else{
-      adminHome();
-    }
+    renderHomeByRole();
   }catch(e){
     loginPage(e.message);
     document.getElementById("role").value=role;
@@ -1109,8 +1108,7 @@ async function boot(){
     const data=await api("/api/me");
     currentUser=data.user;
 
-    if(currentUser.role==="warga") wargaHome();
-    else adminHome();
+    renderHomeByRole();
   }catch{
     loginPage();
   }
@@ -1122,6 +1120,45 @@ async function logout(){
   loginPage();
 }
 
+function renderHomeByRole(){
+  if(currentUser?.role==="warga")return wargaHome();
+  if(currentUser?.role==="admin")return adminHome();
+  if(["bendahara","sekretaris","ketua_gang"].includes(currentUser?.role))return staffHome();
+  loginPage("Jenis akun tidak dikenali");
+}
+async function staffHome(){
+  const role=currentUser?.role;
+  const title=role==="bendahara"?"Dashboard Bendahara":role==="sekretaris"?"Dashboard Sekretaris":"Dashboard Ketua Gang";
+  const content=`<div class="card"><h2>Selamat datang, ${esc(currentUser?.nama||title)}</h2>
+  <p class="muted">Akses dibatasi sesuai jabatan.</p>
+  ${role==="bendahara"?"<p>Pengelolaan iuran, kas, bukti transaksi, dan laporan keuangan.</p>":""}
+  ${role==="sekretaris"?"<p>Administrasi surat, pengumuman, dan pengajuan warga.</p>":""}
+  ${role==="ketua_gang"?"<p>Wilayah tugas: <b>"+esc(currentUser?.gang||"Belum ditetapkan")+"</b></p><button class='btn' onclick='lihatWargaGang()'>Lihat warga gang</button>":""}</div>
+  <button class="btn secondary" style="width:100%" onclick="logout()">Keluar</button>`;
+  layout(title,content,false);
+}
+async function lihatWargaGang(){
+  try{
+    const rows=await api("/api/ketua-gang/warga");
+    const html=rows.length?rows.map(w=>`<div class="card"><b>${esc(w.nama_lengkap||"-")}</b><div class="muted">${esc(w.alamat||"")}</div><div class="muted">Status: ${esc(w.status_warga||"-")}</div></div>`).join(""):"<div class='card'>Belum ada warga pada gang ini.</div>";
+    layout("Warga Wilayah Gang",html+'<button class="btn secondary" onclick="staffHome()">Kembali</button>');
+  }catch(e){alert(e.message);}
+}
+async function kelolaPetugas(){
+ try{
+  const rows=await api("/api/petugas");
+  const items=rows.map(p=>`<div class="card"><b>${esc(p.nama_lengkap)}</b><div class="muted">${esc(p.username)} · ${esc(p.role)} ${p.gang?"· "+esc(p.gang):""}</div><div>Status: ${esc(p.status)}</div><button class="btn secondary" onclick="ubahStatusPetugas(${Number(p.id)},'${p.status==="aktif"?"nonaktif":"aktif"}')">${p.status==="aktif"?"Nonaktifkan":"Aktifkan"}</button></div>`).join("");
+  layout("Akun Petugas",`<div class="card"><h3>Tambah Akun Petugas</h3><label>Nama lengkap</label><input id="staffNama"><label>Username</label><input id="staffUsername"><label>Password (minimal 10 karakter)</label><input id="staffPassword" type="password"><label>Jabatan</label><select id="staffRole" onchange="document.getElementById('staffGangWrap').style.display=this.value==='ketua_gang'?'block':'none'"><option value="bendahara">Bendahara</option><option value="sekretaris">Sekretaris</option><option value="ketua_gang">Ketua Gang</option></select><div id="staffGangWrap" style="display:none"><label>Nama gang</label><input id="staffGang"></div><button class="btn" onclick="simpanPetugas()">Simpan Akun</button></div>${items||"<div class='card'>Belum ada akun petugas.</div>"}<button class="btn secondary" onclick="adminHome()">Kembali</button>`);
+ }catch(e){alert(e.message);}
+}
+async function simpanPetugas(){
+ try{await api("/api/petugas",{method:"POST",body:JSON.stringify({nama_lengkap:document.getElementById("staffNama").value,username:document.getElementById("staffUsername").value,password:document.getElementById("staffPassword").value,role:document.getElementById("staffRole").value,gang:document.getElementById("staffGang")?.value||""})});alert("Akun berhasil dibuat.");kelolaPetugas();}
+ catch(e){alert(e.message);}
+}
+async function ubahStatusPetugas(id,status){
+ if(!confirm("Ubah status akun petugas?"))return;
+ try{await api("/api/petugas/"+id+"/status",{method:"PATCH",body:JSON.stringify({status})});kelolaPetugas();}catch(e){alert(e.message);}
+}
 async function adminHome(){
   layout("Dashboard Ketua RT",`
     <div style="
@@ -1158,7 +1195,7 @@ async function adminHome(){
       <p class="muted" style="font-size:13px;margin-top:0">
         Pilih layanan yang ingin dikelola.
       </p>
-<div class="menu">
+<div class="menu"><button onclick="kelolaPetugas()"><span style="font-size:26px">🛡️</span><span>Akun Petugas RT</span></button>
       <button onclick="residents()">
   <span style="font-size:26px">👥</span>
   <span>Data Warga</span>
