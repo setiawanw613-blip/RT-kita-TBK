@@ -2048,7 +2048,7 @@ app.patch("/api/my-data", requireWarga, async (req, res) => {
 
 
 /* KAS - KETUA RT */
-app.get("/api/cash", requireAdmin, async (req, res) => {
+app.get("/api/cash", requireFinance, async (req, res) => {
   try {
     const data = await supabaseRequest("kas_rt", {
       query:
@@ -2091,7 +2091,7 @@ app.get("/api/cash", requireAdmin, async (req, res) => {
 /* UPLOAD BUKTI PENGELUARAN - KETUA RT */
 app.post(
   "/api/cash/proof",
-  requireAdmin,
+  requireFinance,
   express.raw({
     type: ["image/jpeg", "image/png", "image/webp"],
     limit: "5mb"
@@ -2210,7 +2210,7 @@ app.get("/api/cash/proof/:id", requireLogin, async (req, res) => {
 });
 
 /* TAMBAH TRANSAKSI KAS - KETUA RT */
-app.post("/api/cash", requireAdmin, async (req, res) => {
+app.post("/api/cash", requireFinance, async (req, res) => {
   try {
     const {
       type,
@@ -2392,7 +2392,7 @@ app.post("/api/cash", requireAdmin, async (req, res) => {
 
 
 /* EXPORT KAS RT */
-app.get("/api/cash/export", requireAdmin, async (req, res) => {
+app.get("/api/cash/export", requireFinance, async (req, res) => {
   try {
     const data = await supabaseRequest("kas_rt", {
       query:
@@ -3692,7 +3692,7 @@ app.get("/api/my-iuran", requireWarga, async (req, res) => {
 });
 
 
-app.get("/api/iuran", requireAdmin, async (req, res) => {
+app.get("/api/iuran", requireFinance, async (req, res) => {
   try {
     const data = await supabaseRequest("iuran_warga", {
       query: "select=*&order=bulan.desc"
