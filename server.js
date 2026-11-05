@@ -36,7 +36,7 @@ app.use((req, res, next) => {
 app.use(express.json({ limit: "256kb" }));
 
 /* MIDTRANS QRIS: endpoint dipilih sesuai mode dan asal order. */
-async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
+async function buatTransaksiQRIS({ orderId, total, namaWarga, namaPembayar }) {
   const serverKey = getMidtransServerKeyForNewTransaction();
 
   if (!serverKey) {
@@ -62,7 +62,7 @@ async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
           gross_amount: total
         },
         customer_details: {
-          first_name: namaWarga || "Warga RT TBK"
+          first_name: namaPembayar || namaWarga || "Warga RT TBK"
         },
         qris: {
           acquirer: "gopay"
@@ -3819,7 +3819,8 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     const total = 35000;
     orderId = (getMidtransModeInfo().mode === "production" ? "RTTBK-PROD-" : "RTTBK-SBX-") +
       Date.now() + "-" + crypto.randomBytes(4).toString("hex");
-    const transaksi = await buatTransaksiQRIS({ orderId, total, namaWarga: warga.nama_lengkap });
+    const penyetorNama = String(req.session.nama || req.session.username || "Ketua Gang");
+    const transaksi = await buatTransaksiQRIS({ orderId, total, namaWarga: warga.nama_lengkap, namaPembayar: penyetorNama });
 
     const hasilReserva = await supabaseRequest("rpc/reserve_qris_iuran_batch", {
       method: "POST",
@@ -3837,7 +3838,6 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     }
 
     const penyetorId = Number(req.session.id);
-    const penyetorNama = String(req.session.nama || req.session.username || "Ketua Gang");
     await supabaseRequest("iuran_warga", {
       method: "PATCH",
       query: "id=eq." + encodeURIComponent(rowsTersimpan[0].id),
@@ -4233,7 +4233,7 @@ app.get("/api/qris/history", requireFinance, async (req, res) => {
   try {
     const data = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh,midtrans_transaction_id,midtrans_status,midtrans_settlement_at,midtrans_notifikasi_at" +
+        "select=id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh,midtrans_transaction_id,midtrans_status,midtrans_settlement_at,midtrans_notifikasi_at,jalur_pembayaran,disetorkan_oleh_nama" +
         "&bukti_transfer=like." +
         encodeURIComponent("MIDTRANS:%") +
         "&order=bulan.desc&limit=1000"
@@ -4252,6 +4252,8 @@ app.get("/api/qris/history", requireFinance, async (req, res) => {
       if (!transaksi.has(orderId)) {
         transaksi.set(orderId, {
           order_id: orderId,
+          jalur_pembayaran: row.jalur_pembayaran || "warga_qris",
+          disetorkan_oleh_nama: row.disetorkan_oleh_nama || null,
           transaction_id: row.midtrans_transaction_id || null,
           status_midtrans: row.midtrans_status || null,
           waktu_settlement: row.midtrans_settlement_at || null,
@@ -4296,7 +4298,9 @@ app.get("/api/qris/history", requireFinance, async (req, res) => {
         status: String(row.status || "belum diketahui"),
         waktu_pembayaran: row.dibayar_at || null,
         waktu_verifikasi: row.diverifikasi_at || null,
-        diverifikasi_oleh: row.diverifikasi_oleh || null
+        diverifikasi_oleh: row.diverifikasi_oleh || null,
+        jalur_pembayaran: row.jalur_pembayaran || "warga_qris",
+        disetorkan_oleh_nama: row.disetorkan_oleh_nama || null
       });
 
       if (row.status !== "lunas") {
