@@ -3234,7 +3234,7 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     res.setHeader("Pragma", "no-cache");
     res.setHeader(
       "Content-Disposition",
-      `inline; filename="surat-${id}.pdf"`
+      `attachment; filename="surat-${id}.pdf"`
     );
 
     const doc = new PDFDocument({
