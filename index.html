@@ -660,6 +660,19 @@ async function muatNotifikasiHeader() {
   }
 }
 
+// Perbarui lonceng dan badge ketika pengguna kembali ke aplikasi di HP/browser.
+if (!window.__rtTbkNotifRefreshBound) {
+  window.__rtTbkNotifRefreshBound = true;
+  const segarkanNotifikasi = () => {
+    if (!currentUser) return;
+    Promise.all([muatNotifikasiHeader(), muatBadgeMenu()]);
+  };
+  window.addEventListener("focus", segarkanNotifikasi);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") segarkanNotifikasi();
+  });
+}
+
   
 
 async function tandaiNotifikasiDibaca(id) {
@@ -3231,7 +3244,7 @@ function wargaHome(){
         <button data-menu-notif="surat" onclick="myLetters()">📋 Surat Saya</button>
         <button onclick="newComplaint()">📢 Pengaduan</button>
         <button onclick="myComplaints()">📋 Riwayat Pengaduan</button>
-        <button onclick="aspirasiWarga()">🏗️ Aspirasi Warga</button>
+        <button data-menu-notif="aspirasi" onclick="aspirasiWarga()">🏗️ Aspirasi Warga</button>
         <button onclick="announcementsWarga()">📣 Pengumuman</button>
      <button data-menu-notif="iuran" onclick="iuranWarga()">💳 Iuran Warga</button>
 <button onclick="kasWarga()">💰 Kas RT</button>
