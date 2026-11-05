@@ -49,7 +49,8 @@ async function buatTransaksiQRIS({ orderId, total, namaWarga }) {
       headers: {
         "Authorization": `Basic ${auth}`,
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "X-Override-Notification": "https://rt-kita-tbk.vercel.app/api/midtrans/webhook"
       },
       body: JSON.stringify({
         payment_type: "qris",
