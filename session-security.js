@@ -3,21 +3,37 @@
 const crypto = require("node:crypto");
 const SESSION_MAX_AGE_MS = 8 * 60 * 60 * 1000;
 const MAX_TOKEN_LENGTH = 8192;
+const STAFF_ROLES = new Set(["bendahara", "sekretaris", "ketua_gang"]);
 
 function isValidSessionShape(session) {
   if (!session || typeof session !== "object" || Array.isArray(session)) return false;
   if (!Number.isSafeInteger(session.createdAt) || typeof session.username !== "string" || !session.username.trim()) return false;
+
   if (session.role === "admin") return session.id === "admin";
+
   if (session.role === "warga") {
     return session.id !== undefined && session.id !== null &&
       session.wargaId !== undefined && session.wargaId !== null &&
       String(session.id) === String(session.wargaId);
   }
+
+  // Staff accounts use the numeric primary key from petugas_rt. Keep the
+  // accepted roles explicit so a signed token cannot introduce arbitrary roles.
+  if (STAFF_ROLES.has(session.role)) {
+    const id = session.id;
+    const validNumericId =
+      (Number.isSafeInteger(id) && id > 0) ||
+      (typeof id === "string" && /^[1-9]\\d*$/.test(id) && Number.isSafeInteger(Number(id)));
+    return validNumericId;
+  }
+
   return false;
 }
 
 function createSignedSessionToken(session, secret, now = Date.now()) {
-  if (typeof secret !== "string" || !secret) throw new Error("SESSION_SECRET belum dikonfigurasi");
+  if (typeof secret !== "string" || Buffer.byteLength(secret, "utf8") < 32) {
+    throw new Error("SESSION_SECRET belum dikonfigurasi atau terlalu pendek");
+  }
   const payloadObject = { ...session, createdAt: now };
   if (!isValidSessionShape(payloadObject)) throw new Error("Data sesi tidak valid");
   const payload = Buffer.from(JSON.stringify(payloadObject)).toString("base64url");
@@ -27,7 +43,7 @@ function createSignedSessionToken(session, secret, now = Date.now()) {
 
 function verifySignedSessionToken(token, secret, now = Date.now()) {
   if (typeof token !== "string" || !token || token.length > MAX_TOKEN_LENGTH ||
-      typeof secret !== "string" || !secret) return null;
+      typeof secret !== "string" || Buffer.byteLength(secret, "utf8") < 32) return null;
   const parts = token.split(".");
   if (parts.length !== 2 ||
       !/^[A-Za-z0-9_-]{1,8000}$/.test(parts[0]) ||
@@ -49,4 +65,4 @@ function verifySignedSessionToken(token, secret, now = Date.now()) {
   }
 }
 
-module.exports = { SESSION_MAX_AGE_MS, createSignedSessionToken, verifySignedSessionToken };
+module.exports = { SESSION_MAX_AGE_MS, STAFF_ROLES, isValidSessionShape, createSignedSessionToken, verifySignedSessionToken };
