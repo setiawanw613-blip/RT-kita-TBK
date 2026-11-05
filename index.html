@@ -2326,25 +2326,25 @@ async function cash(){
 
    
 document.getElementById("cashSummary").innerHTML = `
-  <div style="background:linear-gradient(135deg,#1267c9,#073b83);color:white;padding:20px;border-radius:16px;margin-bottom:14px">
-    <div style="font-size:13px;opacity:.85">💰 Total Saldo Kas RT</div>
-<div style="font-size:clamp(25px,4vw,34px);font-weight:800;margin-top:6px;overflow-wrap:anywhere">
+  <div style="background:linear-gradient(135deg,#1267c9,#073b83);color:white;padding:12px;border-radius:12px;margin-bottom:10px">
+    <div style="font-size:11px;opacity:.9">💰 Total Saldo Kas RT</div>
+<div style="font-size:clamp(21px,3.5vw,28px);font-weight:800;margin-top:4px;overflow-wrap:anywhere">
   ${rupiah(saldo)}
 </div>
-<div style="font-size:12px;opacity:.8;margin-top:5px">Seluruh pemasukan dikurangi seluruh pengeluaran (semua kategori)</div>
+<div style="font-size:10px;opacity:.85;margin-top:4px">Seluruh pemasukan dikurangi seluruh pengeluaran (semua kategori)</div>
 </div>
 
-  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
-    <div style="background:#ecfdf5;border:1px solid #bbf7d0;padding:14px;border-radius:12px;min-width:0">
-      <div style="font-size:12px;color:#166534">💵 Total Pemasukan</div>
-      <div style="font-size:clamp(16px,2.5vw,21px);font-weight:800;color:#166534;margin-top:6px;overflow-wrap:anywhere">
+  <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+    <div style="background:#ecfdf5;border:1px solid #bbf7d0;padding:10px;border-radius:10px;min-width:0">
+      <div style="font-size:11px;color:#166534">💵 Total Pemasukan</div>
+      <div style="font-size:clamp(14px,2.2vw,18px);font-weight:800;color:#166534;margin-top:4px;overflow-wrap:anywhere">
         ${rupiah(masuk)}
       </div>
     </div>
 
-    <div style="background:#fff1f2;border:1px solid #fecdd3;padding:14px;border-radius:12px;min-width:0">
-      <div style="font-size:12px;color:#9f1239">💸 Total Pengeluaran</div>
-      <div style="font-size:clamp(16px,2.5vw,21px);font-weight:800;color:#9f1239;margin-top:6px;overflow-wrap:anywhere">
+    <div style="background:#fff1f2;border:1px solid #fecdd3;padding:10px;border-radius:10px;min-width:0">
+      <div style="font-size:11px;color:#9f1239">💸 Total Pengeluaran</div>
+      <div style="font-size:clamp(14px,2.2vw,18px);font-weight:800;color:#9f1239;margin-top:4px;overflow-wrap:anywhere">
         ${rupiah(keluar)}
       </div>
     </div>
@@ -2393,30 +2393,30 @@ document.getElementById("cashSummary").innerHTML = `
 
     
 document.getElementById("cashCategorySummary").innerHTML = `
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr));gap:12px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:8px">
 
-    <div style="padding:16px;background:#eaf8ef;border:1px solid #bbf7d0;border-radius:14px">
-      <div style="font-size:14px;color:#166534">🛡️ Dana Keamanan</div>
-      <div style="font-size:clamp(20px,3vw,26px);font-weight:800;color:#166534;margin-top:8px;overflow-wrap:anywhere">
+    <div style="padding:10px;background:#eaf8ef;border:1px solid #bbf7d0;border-radius:10px;min-width:0">
+      <div style="font-size:12px;color:#166534">🛡️ Dana Keamanan</div>
+      <div style="font-size:clamp(16px,2.5vw,21px);font-weight:800;color:#166534;margin-top:5px;overflow-wrap:anywhere">
         ${rupiah(kategoriJumlah["Keamanan"])}
       </div>
-      <div style="font-size:12px;color:#166534;margin-top:6px">Saldo tersedia</div>
+      <div style="font-size:10px;color:#166534;margin-top:4px">Saldo tersedia</div>
     </div>
 
-    <div style="padding:16px;background:#fff5e6;border:1px solid #fed7aa;border-radius:14px">
-      <div style="font-size:14px;color:#9a3412">🗑️ Dana Sampah</div>
-      <div style="font-size:clamp(20px,3vw,26px);font-weight:800;color:#9a3412;margin-top:8px;overflow-wrap:anywhere">
+    <div style="padding:10px;background:#fff5e6;border:1px solid #fed7aa;border-radius:10px;min-width:0">
+      <div style="font-size:12px;color:#9a3412">🗑️ Dana Sampah</div>
+      <div style="font-size:clamp(16px,2.5vw,21px);font-weight:800;color:#9a3412;margin-top:5px;overflow-wrap:anywhere">
         ${rupiah(kategoriJumlah["Sampah"])}
       </div>
-      <div style="font-size:12px;color:#9a3412;margin-top:6px">Saldo tersedia</div>
+      <div style="font-size:10px;color:#9a3412;margin-top:4px">Saldo tersedia</div>
     </div>
 
-    <div style="padding:16px;background:#eaf2ff;border:1px solid #bfdbfe;border-radius:14px">
-      <div style="font-size:14px;color:#1e40af">🏘️ Saldo Kas RT</div>
-      <div style="font-size:clamp(20px,3vw,26px);font-weight:800;color:#1e40af;margin-top:8px;overflow-wrap:anywhere">
+    <div style="padding:10px;background:#eaf2ff;border:1px solid #bfdbfe;border-radius:10px;min-width:0">
+      <div style="font-size:12px;color:#1e40af">🏘️ Saldo Kas RT</div>
+      <div style="font-size:clamp(16px,2.5vw,21px);font-weight:800;color:#1e40af;margin-top:5px;overflow-wrap:anywhere">
         ${rupiah(kategoriJumlah["Kas RT"])}
       </div>
-      <div style="font-size:12px;color:#1e40af;margin-top:6px">Saldo tersedia</div>
+      <div style="font-size:10px;color:#1e40af;margin-top:4px">Saldo tersedia</div>
     </div>
 
   </div>
