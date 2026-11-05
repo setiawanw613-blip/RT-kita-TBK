@@ -2199,7 +2199,7 @@ const path = await uploadBuktiPengeluaran(
 app.get("/api/cash/proof/:id", requireLogin, async (req, res) => {
   try {
     const id = String(req.params.id || "");
-    if (!/^\\d+$/.test(id)) {
+    if (!/^\d+$/.test(id)) {
       return res.status(400).json({ ok: false, message: "ID transaksi tidak valid" });
     }
     if (!["admin", "warga", "bendahara"].includes(req.session?.role)) {
@@ -2219,7 +2219,7 @@ app.get("/api/cash/proof/:id", requireLogin, async (req, res) => {
     }
 
     const filePath = String(row.bukti_path);
-    if (!/^\\d+-bukti\\.(jpg|png|webp)$/.test(filePath)) {
+    if (!/^\d+-bukti\.(jpg|png|webp)$/.test(filePath)) {
       return res.status(400).json({ ok: false, message: "Lokasi bukti tidak valid" });
     }
 
