@@ -1133,10 +1133,61 @@ async function staffHome(){
   <p class="muted">Akses dibatasi sesuai jabatan.</p>
   ${role==="bendahara"?"<p>Pengelolaan iuran, kas, bukti transaksi, dan laporan keuangan.</p><button class='btn' onclick='cash()'>Buka Kas RT</button><button class='btn secondary' onclick='iuranAdmin()'>Riwayat Iuran</button>":""}
   ${role==="sekretaris"?"<p>Administrasi surat, pengumuman, dan pengajuan warga. Akses administrasi tetap dibatasi oleh server.</p>":""}
-  ${role==="ketua_gang"?"<p>Wilayah tugas: <b>"+esc(currentUser?.gang||"Belum ditetapkan")+"</b></p><button class='btn' onclick='lihatWargaGang()'>Lihat warga gang</button>":""}</div>
+  ${role==="ketua_gang"?"<p>Wilayah tugas: <b>"+esc(currentUser?.gang||"Belum ditetapkan")+"</b></p><button class='btn' onclick='lihatWargaGang()'>Lihat warga gang</button><button class='btn' onclick='buatSetoranGang()'>Buat QRIS Setoran Iuran Warga</button><button class='btn secondary' onclick='riwayatSetoranGang()'>Riwayat Setoran Saya</button>":""}
+  ${role==="sekretaris"?"<button class='btn' onclick='letters()'>Kelola Pengajuan Surat</button><button class='btn secondary' onclick='announcements()'>Kelola Pengumuman</button>":""}</div>
   <button class="btn secondary" style="width:100%" onclick="logout()">Keluar</button>`;
   layout(title,content,false);
 }
+async function buatSetoranGang(){
+  try{
+    const warga=await api("/api/ketua-gang/warga");
+    const pilihan=Array.isArray(warga)?warga:[];
+    const options=pilihan.map(w=>`<option value="${Number(w.id)}">${esc(w.nama_lengkap)} · ${esc(w.alamat||"")}</option>`).join("");
+    const now=new Date();
+    const month=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
+    layout("Setoran QRIS Iuran Warga",`
+      <div class="card">
+        <p>Ketua Gang menerima uang dari warga, lalu membuat QRIS untuk menyetorkan iuran ke kas RT. Pilih nama warga dan bulan iurannya.</p>
+        <label>Nama warga</label>
+        <select id="gangWarga" required>${options||"<option value=''>Belum ada warga aktif di gang ini</option>"}</select>
+        <label>Bulan iuran</label>
+        <input id="gangBulan" type="month" min="2026-10" value="${month}">
+        <div class="card" style="background:#f4f8ff">
+          <b>Total setoran QRIS</b>
+          <div style="font-size:26px;font-weight:800;color:#1267c9">Rp35.000</div>
+          <small class="muted">Sampah Rp15.000 · Keamanan Rp15.000 · Kas RT Rp5.000</small>
+        </div>
+        <button class="btn" id="gangCreateQris" onclick="kirimSetoranGang()">Buat QRIS</button>
+        <button class="btn secondary" onclick="staffHome()">Kembali</button>
+      </div>
+      <div id="gangQrisResult"></div>
+    `);
+    const select=document.getElementById("gangWarga");
+    if(select&&!pilihan.length)select.disabled=true;
+  }catch(e){alert(e.message||"Gagal memuat warga gang.");}
+}
+async function kirimSetoranGang(){
+  const button=document.getElementById("gangCreateQris");
+  const wargaId=document.getElementById("gangWarga")?.value;
+  const bulan=document.getElementById("gangBulan")?.value;
+  if(!wargaId||!bulan){alert("Pilih nama warga dan bulan iuran.");return;}
+  if(!confirm("Buat QRIS Rp35.000 untuk "+document.getElementById("gangWarga").selectedOptions[0].text+" periode "+bulan+"?"))return;
+  if(button){button.disabled=true;button.textContent="Membuat QRIS...";}
+  try{
+    const result=await api("/api/ketua-gang/setor-qris",{method:"POST",body:JSON.stringify({warga_id:wargaId,bulan})});
+    const box=document.getElementById("gangQrisResult");
+    if(box)box.innerHTML=`<div class="card"><h3>QRIS Setoran Berhasil Dibuat</h3><b>${esc(result.nama_warga)}</b><div>Bulan: ${esc(result.bulan)}</div><div>Total: ${rupiah(result.total)}</div><div>Disetorkan oleh: ${esc(result.disetorkan_oleh)}</div><div>Status: Menunggu pembayaran</div>${result.qr_url?`<div style="text-align:center;margin:16px 0"><img src="${esc(result.qr_url)}" alt="QRIS pembayaran" style="max-width:260px;width:100%;height:auto"></div><a class="btn" href="${esc(result.qr_url)}" target="_blank" rel="noopener">Buka QRIS</a>`:"<p>QRIS image belum tersedia dari Midtrans. Periksa detail transaksi.</p>"}<small class="muted">Jangan tandai lunas secara manual. Status akan berubah setelah Midtrans mengonfirmasi pembayaran.</small><button class="btn secondary" onclick="riwayatSetoranGang()">Lihat riwayat setoran</button></div>`;
+  }catch(e){alert(e.message||"Gagal membuat QRIS.");}
+  finally{if(button){button.disabled=false;button.textContent="Buat QRIS";}}
+}
+async function riwayatSetoranGang(){
+  try{
+    const rows=await api("/api/ketua-gang/riwayat-setoran");
+    const items=(Array.isArray(rows)?rows:[]).map(row=>`<div class="card"><b>${esc(row.nama_warga||"Warga")}</b><div>Bulan iuran: ${esc(row.bulan||"-")}</div><div>Nominal: ${rupiah(row.total_amount||0)}</div><div>Status: <span class="badge">${row.status==="lunas"?"Lunas":"Menunggu pembayaran"}</span></div><div>Petugas penyetor: ${esc(row.disetorkan_oleh_nama||"-")}</div><div class="muted">Order: ${esc(String(row.bukti_transfer||"").replace("MIDTRANS:",""))}</div>${row.midtrans_settlement_at?`<div class="muted">Dibayar: ${esc(new Date(row.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}</div>`).join("");
+    layout("Riwayat Setoran QRIS Saya",(items||"<div class='card'>Belum ada riwayat setoran QRIS.</div>")+'<button class="btn secondary" onclick="staffHome()">Kembali</button>');
+  }catch(e){alert(e.message||"Gagal memuat riwayat setoran.");}
+}
+
 async function lihatWargaGang(){
   try{
     const rows=await api("/api/ketua-gang/warga");
@@ -3298,68 +3349,45 @@ function wargaHome(){
     </div>
     `,false);
 }
-async function iuranAdmin(){
+async function iuranAdmin(filter = "all"){
   try{
     const data=await api("/api/iuran");
-
+    const rows=Array.isArray(data)?data:[];
+    const filtered=rows.filter(item=>{
+      const jalur=item.jalur_pembayaran||"warga_qris";
+      if(filter==="ketua_gang")return jalur==="ketua_gang_qris";
+      if(filter==="warga")return jalur!=="ketua_gang_qris";
+      return true;
+    });
     let html=`
       <div class="card">
-        <h2>💳 Iuran Warga</h2>
-        <p class="muted">Data iuran warga Taman Bali Kahuripan</p>
-      </div>
-    `;
-
-    if(!Array.isArray(data) || data.length===0){
-      html+=`
-        <div class="card">
-          <p>Belum ada data iuran warga.</p>
+        <h2>💳 Riwayat Iuran Warga</h2>
+        <p class="muted">Pilih sumber pembayaran untuk memisahkan pembayaran langsung warga dan setoran QRIS Ketua Gang.</p>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button class="btn ${filter==="all"?"":"secondary"}" onclick="iuranAdmin('all')">Semua</button>
+          <button class="btn ${filter==="warga"?"":"secondary"}" onclick="iuranAdmin('warga')">QRIS Warga</button>
+          <button class="btn ${filter==="ketua_gang"?"":"secondary"}" onclick="iuranAdmin('ketua_gang')">QRIS Ketua Gang</button>
         </div>
-      `;
+      </div>`;
+    if(!filtered.length){
+      html+=`<div class="card"><p>Belum ada riwayat pada kategori ini.</p></div>`;
     }else{
-      html+=`<div class="card">`;
-
-      data.forEach(item=>{
-        html+=`
-          <div class="row">
-            <b>${esc(item.nama_warga || ("Warga ID: " + (item.warga_id || "-")))}</b>
-            <div>Bulan: ${item.bulan
-              ? esc(new Date(String(item.bulan).slice(0,10) + "T00:00:00").toLocaleDateString("id-ID",{month:"long",year:"numeric"}))
-              : "-"}</div>
-            <div>Total: ${rupiah(item.total_amount || 0)}</div>
-            <div>Status: <span class="badge">${esc(
-              item.status === "lunas" ? "Lunas"
-              : item.status === "menunggu_verifikasi" ? "Menunggu verifikasi"
-              : (item.status || "Belum lunas")
-            )}</span></div>
-            ${
-  item.status === "menunggu_verifikasi"
-  ? `
-    <button
-      class="btn"
-      onclick="verifikasiIuran('${item.id}')"
-      style="margin-top:10px"
-    >
-      ✅ Verifikasi Pembayaran
-    </button>
-  `
-  : ""
-}
-          </div>
-        `;
+      filtered.forEach(item=>{
+        const jalur=item.jalur_pembayaran||"warga_qris";
+        html+=`<div class="card">
+          <b>${esc(item.nama_warga||("Warga ID: "+(item.warga_id||"-")))}</b>
+          <div>Bulan: ${item.bulan?esc(new Date(String(item.bulan).slice(0,10)+"T00:00:00").toLocaleDateString("id-ID",{month:"long",year:"numeric"})):"-"}</div>
+          <div>Total: ${rupiah(item.total_amount||0)}</div>
+          <div>Jalur: <b>${jalur==="ketua_gang_qris"?"QRIS melalui Ketua Gang":"QRIS langsung / pembayaran warga"}</b></div>
+          ${jalur==="ketua_gang_qris"?`<div>Ketua Gang penyetor: <b>${esc(item.disetorkan_oleh_nama||"-")}</b></div>`:""}
+          <div>Status: <span class="badge">${esc(item.status==="lunas"?"Lunas":item.status==="menunggu_verifikasi"?"Menunggu pembayaran":item.status||"Belum lunas")}</span></div>
+          ${item.midtrans_settlement_at?`<div class="muted">Konfirmasi Midtrans: ${esc(new Date(item.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}
+          ${item.status==="menunggu_verifikasi"&&!String(item.bukti_transfer||"").startsWith("MIDTRANS:")?`<button class="btn" onclick="verifikasiIuran('${item.id}')">Verifikasi pembayaran manual</button>`:""}
+        </div>`;
       });
-
-      html+=`</div>`;
     }
-
-    html+=`
-      
-    `;
-
     layout("Iuran Warga",html);
-
-  }catch(e){
-    alert(e.message || "Gagal mengambil data iuran");
-  }
+  }catch(e){alert(e.message||"Gagal mengambil data iuran");}
 }
   async function verifikasiIuran(id){
   if(!id) return;
