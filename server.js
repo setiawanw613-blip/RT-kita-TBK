@@ -3829,40 +3829,25 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     const penyetorNama = String(req.session.nama || req.session.username || "Ketua Gang");
     const transaksi = await buatTransaksiQRIS({ orderId, total, namaWarga: warga.nama_lengkap, namaPembayar: penyetorNama });
 
-    const hasilReserva = await supabaseRequest("rpc/reserve_qris_iuran_batch", {
+    const penyetorId = Number(req.session.id);
+    const hasilReserva = await supabaseRequest("rpc/reserve_qris_iuran_batch_with_attribution", {
       method: "POST",
       body: {
         p_warga_id: String(warga.id),
         p_keluarga_id: keluargaId,
         p_bulans: [bulan + "-01"],
         p_replace_ids: [],
-        p_order_id: orderId
+        p_order_id: orderId,
+        p_disetorkan_oleh_id: penyetorId,
+        p_disetorkan_oleh_nama: penyetorNama
       }
     });
     rowsTersimpan = Array.isArray(hasilReserva) ? hasilReserva : [];
-    if (rowsTersimpan.length !== 1 || rowsTersimpan[0].bukti_transfer !== "MIDTRANS:" + orderId) {
-      throw new Error("Reservasi iuran QRIS tidak lengkap atau tidak cocok dengan order.");
+    if (rowsTersimpan.length !== 1 || rowsTersimpan[0].bukti_transfer !== "MIDTRANS:" + orderId ||
+        rowsTersimpan[0].jalur_pembayaran !== "ketua_gang_qris" ||
+        Number(rowsTersimpan[0].disetorkan_oleh_id) !== penyetorId) {
+      throw new Error("Reservasi iuran QRIS dan atribusi penyetor tidak lengkap atau tidak cocok dengan order.");
     }
-
-    const penyetorId = Number(req.session.id);
-    await supabaseRequest("iuran_warga", {
-      method: "PATCH",
-      query: "id=eq." + encodeURIComponent(rowsTersimpan[0].id),
-      body: {
-        jalur_pembayaran: "ketua_gang_qris",
-        disetorkan_oleh_id: penyetorId,
-        disetorkan_oleh_nama: penyetorNama
-      }
-    });
-    await supabaseRequest("iuran_midtrans_orders", {
-      method: "PATCH",
-      query: "order_id=eq." + encodeURIComponent(orderId),
-      body: {
-        jalur_pembayaran: "ketua_gang_qris",
-        disetorkan_oleh_id: penyetorId,
-        disetorkan_oleh_nama: penyetorNama
-      }
-    });
 
     try {
       await supabaseRequest("notifikasi", {
