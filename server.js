@@ -4709,7 +4709,7 @@ app.post("/api/aspirasi", requireWarga, async (req, res) => {
       await supabaseRequest("notifikasi", { method:"POST", body:{
         penerima_peran:"admin", judul:"Aspirasi Warga Baru",
         pesan:`${req.session.nama || "Warga"} mengajukan aspirasi: ${judul}`,
-        jenis:"aspirasi", tautan:"/admin", referensi_id:Number(req.session.wargaId), sudah_dibaca:false
+        jenis:"aspirasi", tautan:"/admin", referensi_id:row?.id ? Number(row.id) : null, sudah_dibaca:false
       }});
     } catch(e) { console.error("NOTIF ASPIRASI ERROR:", e?.message || e); }
     return res.json({ok:true, data:row});
@@ -4849,13 +4849,50 @@ app.patch("/api/aspirasi/:id", requireAdmin, async (req, res) => {
     if (b.rencana_kerja !== undefined) body.rencana_kerja = String(b.rencana_kerja).slice(0,5000);
     if (b.realisasi !== undefined) body.realisasi = b.realisasi;
     if (!Object.keys(body).length) return res.status(400).json({ok:false,message:"Tidak ada perubahan."});
+
+    const existingRows = await supabaseRequest("aspirasi_warga", {
+      query: "select=id,warga_id,judul,status,catatan&id=eq." +
+        encodeURIComponent(req.params.id) + "&limit=1"
+    });
+    const existing = Array.isArray(existingRows) ? existingRows[0] : null;
+    if (!existing) {
+      return res.status(404).json({ok:false,message:"Aspirasi tidak ditemukan."});
+    }
+
     body.updated_at = new Date().toISOString();
     const data = await supabaseRequest("aspirasi_warga", {
       method:"PATCH",
       query:"id=eq." + encodeURIComponent(req.params.id),
       body
     });
-    return res.json({ok:true,data:Array.isArray(data)?data[0]:data});
+    const updated = Array.isArray(data) ? data[0] : data;
+
+    const statusBerubah = body.status !== undefined && body.status !== existing.status;
+    const catatanBerubah = body.catatan !== undefined && body.catatan !== (existing.catatan || "");
+    if (statusBerubah || catatanBerubah) {
+      const rincian = [];
+      if (statusBerubah) rincian.push("Status: " + body.status + ".");
+      if (catatanBerubah && body.catatan) rincian.push("Catatan Ketua RT: " + body.catatan);
+      try {
+        await supabaseRequest("notifikasi", {
+          method:"POST",
+          body:{
+            penerima_peran:"warga",
+            penerima_warga_id:existing.warga_id,
+            judul:"Pembaruan Aspirasi Warga",
+            pesan:"Aspirasi "" + String(existing.judul || "Aspirasi Anda") + "" telah diperbarui. " + rincian.join(" "),
+            jenis:"aspirasi",
+            tautan:"/",
+            referensi_id:Number(existing.id),
+            sudah_dibaca:false
+          }
+        });
+      } catch (notifError) {
+        console.error("NOTIFIKASI PEMBARUAN ASPIRASI ERROR:", notifError?.message || notifError);
+      }
+    }
+
+    return res.json({ok:true,data:updated});
   } catch(error) {
     console.error("ASPIRASI UPDATE ERROR:", error?.message || error);
     return res.status(500).json({ok:false,message:"Gagal memperbarui aspirasi."});
