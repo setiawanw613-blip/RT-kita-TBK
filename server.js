@@ -23,9 +23,12 @@ app.use((req, res, next) => {
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
 
-  // API responses may contain personal, financial, or administrative data.
-  if (req.path.startsWith("/api/")) {
-    res.setHeader("Cache-Control", "no-store");
+  // Jangan biarkan browser/PWA menahan HTML dashboard versi lama.
+  if (req.path === "/" || req.path === "/index.html" || req.path.startsWith("/api/")) {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
   }
 
   next();
