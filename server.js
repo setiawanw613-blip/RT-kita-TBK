@@ -782,13 +782,17 @@ function requireStaff(roles = []) {
           return res.status(403).json({ ok: false, message: "Identitas akun petugas tidak valid" });
         }
         const rows = await supabaseRequest("petugas_rt", {
-          query: "select=id,role,status,gang,nama_lengkap&id=eq." + encodeURIComponent(id) + "&limit=1"
+          query: "select=id,role,status,gang,nama_lengkap,warga_id&id=eq." + encodeURIComponent(id) + "&limit=1"
         });
         const staff = Array.isArray(rows) ? rows[0] : null;
         if (!staff || staff.status !== "aktif" || staff.role !== session.role) {
           return res.status(403).json({ ok: false, message: "Akun petugas sudah dinonaktifkan atau hak aksesnya berubah. Silakan login kembali." });
         }
+        if (session.role === "sekretaris" && !staff.warga_id) {
+          return res.status(403).json({ ok: false, message: "Akun Sekretaris belum terhubung ke data warga yang sah." });
+        }
         session.gang = staff.gang || "";
+        session.wargaId = staff.warga_id || null;
         session.nama = staff.nama_lengkap || session.nama || "";
       } catch (error) {
         console.error("STAFF AUTH CHECK ERROR:", error?.message || error);
@@ -1368,7 +1372,7 @@ app.get("/api/ketua-gang/warga", requireGangLead, async(req,res)=>{
   try{
     const gang=String(req.session.gang||"").trim();
     if(!gang)return res.status(403).json({ok:false,message:"Wilayah gang belum ditetapkan"});
-    const rows=await supabaseRequest("warga",{query:"select=id,nama_lengkap,alamat,no_hp,status_warga,gang&gang=eq."+encodeURIComponent(gang)+"&order=nama_lengkap.asc"});
+    const rows=await supabaseRequest("warga",{query:"select=id,nama_lengkap,alamat,status_warga,gang&gang=eq."+encodeURIComponent(gang)+"&order=nama_lengkap.asc"});
     res.json(Array.isArray(rows)?rows:[]);
   }catch(error){console.error("KETUA GANG WARGA ERROR:",error);res.status(500).json({ok:false,message:"Gagal memuat data warga gang"});}
 });
