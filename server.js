@@ -766,17 +766,19 @@ function requireLogin(req, res, next) {
 
 function requireAdmin(req, res, next) {
   const session = getSession(req);
-
-  if (!session || session.role !== "admin") {
-    return res.status(403).json({
-      ok: false,
-      message: "Akses khusus Ketua RT"
-    });
-  }
-
-  req.session = session;
-  next();
+  if (!session || session.role !== "admin") return res.status(403).json({ ok: false, message: "Akses khusus Ketua RT" });
+  req.session = session; next();
 }
+function requireStaff(roles = []) {
+  return (req, res, next) => {
+    const session = getSession(req);
+    if (!session || !roles.includes(session.role)) return res.status(403).json({ ok: false, message: "Akses tidak diizinkan untuk jabatan ini" });
+    req.session = session; next();
+  };
+}
+const requireFinance = requireStaff(["admin", "bendahara"]);
+const requireSecretary = requireStaff(["admin", "sekretaris"]);
+const requireGangLead = requireStaff(["admin", "ketua_gang"]);
 
 
 
@@ -1076,7 +1078,7 @@ app.post("/api/login", async (req, res) => {
   try {
     const { username, password, role } = req.body || {};
 
-    if (role !== "admin" && role !== "warga") {
+    if (!["admin", "warga", "bendahara", "sekretaris", "ketua_gang"].includes(role)) {
       return res.status(400).json({
         ok: false,
         message: "Jenis akun tidak valid"
@@ -1222,6 +1224,21 @@ const token = createSessionToken({
     }
   });
 }
+   if (["bendahara", "sekretaris", "ketua_gang"].includes(role)) {
+      const staffRows = await supabaseRequest("petugas_rt", {
+        query: "select=id,username,nama_lengkap,password,role,gang,status&username=eq." +
+          encodeURIComponent(username.trim()) + "&role=eq." + encodeURIComponent(role) + "&limit=1"
+      });
+      const staff = Array.isArray(staffRows) ? staffRows[0] : null;
+      if (!staff || staff.status !== "aktif" || !staff.password || !verifyPassword(password, staff.password)) {
+        return res.status(401).json({ ok: false, message: "Username atau password salah" });
+      }
+      await supabaseRequest("login_rate_limits", { method: "DELETE", query: "key_hash=eq." + encodeURIComponent(rateLimitKey) });
+      const token = createSessionToken({ id: staff.id, username: staff.username, nama: staff.nama_lengkap, role: staff.role, gang: staff.gang || "" });
+      res.setHeader("Set-Cookie", `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; Max-Age=28800; SameSite=Lax`);
+      return res.json({ ok: true, user: { id: staff.id, username: staff.username, nama: staff.nama_lengkap, role: staff.role, gang: staff.gang || "" } });
+    }
+
    if (!ADMIN_PASSWORD) {
   return res.status(500).json({
     ok: false,
@@ -1293,9 +1310,44 @@ app.get("/api/me", requireLogin, (req, res) => {
       id: req.session.id,
       username: req.session.username,
       nama: req.session.nama || "",
-      role: req.session.role
+      role: req.session.role,
+      gang: req.session.gang || ""
     }
   });
+});
+
+/* MANAJEMEN AKUN PETUGAS - KHUSUS KETUA RT */
+app.get("/api/petugas", requireAdmin, async (req, res) => {
+  try {
+    const rows = await supabaseRequest("petugas_rt", { query: "select=id,username,nama_lengkap,role,gang,status,created_at&order=created_at.desc" });
+    res.json(Array.isArray(rows) ? rows : []);
+  } catch (error) { console.error("PETUGAS LIST ERROR:", error); res.status(500).json({ ok:false, message:"Gagal memuat akun petugas" }); }
+});
+app.post("/api/petugas", requireAdmin, async (req, res) => {
+  try {
+    const username=String(req.body?.username||"").trim().toLowerCase(), nama=String(req.body?.nama_lengkap||"").trim();
+    const password=req.body?.password, role=String(req.body?.role||""), gang=String(req.body?.gang||"").trim();
+    if(!/^[a-z0-9._-]{4,40}$/.test(username)||nama.length<3||typeof password!=="string"||password.length<10||password.length>128||!["bendahara","sekretaris","ketua_gang"].includes(role)||(role==="ketua_gang"&&!gang))
+      return res.status(400).json({ok:false,message:"Data tidak valid. Password minimal 10 karakter; Ketua Gang wajib memiliki nama gang."});
+    const created=await supabaseRequest("petugas_rt",{method:"POST",query:"select=id,username,nama_lengkap,role,gang,status,created_at",headers:{Prefer:"return=representation"},body:{username,nama_lengkap:nama,password:hashPassword(password),role,gang:role==="ketua_gang"?gang:null,status:"aktif"}});
+    res.status(201).json({ok:true,user:Array.isArray(created)?created[0]:created});
+  } catch(error){console.error("PETUGAS CREATE ERROR:",error);res.status(500).json({ok:false,message:"Gagal membuat akun. Pastikan username belum digunakan."});}
+});
+app.patch("/api/petugas/:id/status", requireAdmin, async (req,res)=>{
+  try{
+    const id=String(req.params.id||""),status=String(req.body?.status||"");
+    if(!/^\\d+$/.test(id)||!["aktif","nonaktif"].includes(status))return res.status(400).json({ok:false,message:"Data status tidak valid"});
+    await supabaseRequest("petugas_rt",{method:"PATCH",query:"id=eq."+encodeURIComponent(id),body:{status,updated_at:new Date().toISOString()}});
+    res.json({ok:true});
+  }catch(error){console.error("PETUGAS STATUS ERROR:",error);res.status(500).json({ok:false,message:"Gagal mengubah status akun"});}
+});
+app.get("/api/ketua-gang/warga", requireGangLead, async(req,res)=>{
+  try{
+    const gang=String(req.session.gang||"").trim();
+    if(!gang)return res.status(403).json({ok:false,message:"Wilayah gang belum ditetapkan"});
+    const rows=await supabaseRequest("warga",{query:"select=id,nama_lengkap,alamat,no_hp,status_warga,gang&gang=eq."+encodeURIComponent(gang)+"&order=nama_lengkap.asc"});
+    res.json(Array.isArray(rows)?rows:[]);
+  }catch(error){console.error("KETUA GANG WARGA ERROR:",error);res.status(500).json({ok:false,message:"Gagal memuat data warga gang"});}
 });
 
 /* DASHBOARD KETUA RT */
