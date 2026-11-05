@@ -2007,6 +2007,8 @@ async function transparansiQRIS(tombolReload) {
                 ${esc(item.order_id || "-")}
               </div>
 
+              ${barisBukti("Jalur pembayaran", item.jalur_pembayaran==="ketua_gang_qris"?"Setoran QRIS oleh Ketua Gang":"Pembayaran langsung warga")}
+              ${item.disetorkan_oleh_nama?barisBukti("Ketua Gang penyetor",item.disetorkan_oleh_nama):""}
               ${barisBukti("Transaction ID Midtrans", item.transaction_id)}
               ${barisBukti("Status transaksi Midtrans", item.status_midtrans)}
               ${barisBukti("Waktu settlement Midtrans", formatWaktu(item.waktu_settlement))}
@@ -2156,6 +2158,8 @@ async function transparansiQRISWarga(tombolReload) {
               </div>
 
               ${barisBukti("Order ID Midtrans", item.order_id)}
+              ${barisBukti("Jalur pembayaran", item.jalur_pembayaran==="ketua_gang_qris"?"Setoran QRIS oleh Ketua Gang":"Pembayaran langsung warga")}
+              ${item.disetorkan_oleh_nama?barisBukti("Ketua Gang penyetor",item.disetorkan_oleh_nama):""}
               ${barisBukti("Transaction ID Midtrans", item.transaction_id)}
               ${barisBukti("Status transaksi Midtrans", item.status_midtrans)}
               ${barisBukti("Waktu settlement", formatWaktu(item.waktu_settlement))}
@@ -3367,7 +3371,7 @@ async function iuranAdmin(filter = "all"){
         <p class="muted">Pilih sumber pembayaran untuk memisahkan pembayaran langsung warga dan setoran QRIS Ketua Gang.</p>
         <div style="display:flex;gap:7px;flex-wrap:wrap">
           <button class="btn ${filter==="all"?"":"secondary"}" onclick="iuranAdmin('all')">Semua</button>
-          <button class="btn ${filter==="warga"?"":"secondary"}" onclick="iuranAdmin('warga')">QRIS Warga</button>
+          <button class="btn ${filter==="warga"?"":"secondary"}" onclick="iuranAdmin('warga')">Pembayaran Warga</button>
           <button class="btn ${filter==="ketua_gang"?"":"secondary"}" onclick="iuranAdmin('ketua_gang')">QRIS Ketua Gang</button>
         </div>
       </div>`;
@@ -3380,7 +3384,7 @@ async function iuranAdmin(filter = "all"){
           <b>${esc(item.nama_warga||("Warga ID: "+(item.warga_id||"-")))}</b>
           <div>Bulan: ${item.bulan?esc(new Date(String(item.bulan).slice(0,10)+"T00:00:00").toLocaleDateString("id-ID",{month:"long",year:"numeric"})):"-"}</div>
           <div>Total: ${rupiah(item.total_amount||0)}</div>
-          <div>Jalur: <b>${jalur==="ketua_gang_qris"?"QRIS melalui Ketua Gang":"QRIS langsung / pembayaran warga"}</b></div>
+          <div>Jalur: <b>${jalur==="ketua_gang_qris"?"QRIS melalui Ketua Gang":"Pembayaran langsung oleh warga"}</b></div>
           ${jalur==="ketua_gang_qris"?`<div>Ketua Gang penyetor: <b>${esc(item.disetorkan_oleh_nama||"-")}</b></div>`:""}
           <div>Status: <span class="badge">${esc(item.status==="lunas"?"Lunas":item.status==="menunggu_verifikasi"?"Menunggu pembayaran":item.status||"Belum lunas")}</span></div>
           ${item.midtrans_settlement_at?`<div class="muted">Konfirmasi Midtrans: ${esc(new Date(item.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}
