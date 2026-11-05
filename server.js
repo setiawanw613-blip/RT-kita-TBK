@@ -4365,7 +4365,7 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
 
     const data = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,keluarga_id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh,midtrans_transaction_id,midtrans_status,midtrans_settlement_at,midtrans_notifikasi_at" +
+        "select=id,keluarga_id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh,midtrans_transaction_id,midtrans_status,midtrans_settlement_at,midtrans_notifikasi_at,jalur_pembayaran,disetorkan_oleh_nama" +
         `&keluarga_id=eq.${encodeURIComponent(String(warga.keluarga_id))}` +
         "&bukti_transfer=like." +
         encodeURIComponent("MIDTRANS:%") +
@@ -4385,6 +4385,8 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
       if (!transaksi.has(orderId)) {
         transaksi.set(orderId, {
           order_id: orderId,
+          jalur_pembayaran: row.jalur_pembayaran || "warga_qris",
+          disetorkan_oleh_nama: row.disetorkan_oleh_nama || null,
           transaction_id: row.midtrans_transaction_id || null,
           status_midtrans: row.midtrans_status || null,
           waktu_settlement: row.midtrans_settlement_at || null,
@@ -4425,7 +4427,9 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
         status: String(row.status || "belum diketahui"),
         waktu_pembayaran: row.dibayar_at || null,
         waktu_verifikasi: row.diverifikasi_at || null,
-        diverifikasi_oleh: row.diverifikasi_oleh || null
+        diverifikasi_oleh: row.diverifikasi_oleh || null,
+        jalur_pembayaran: row.jalur_pembayaran || "warga_qris",
+        disetorkan_oleh_nama: row.disetorkan_oleh_nama || null
       });
 
       if (row.status !== "lunas") {
