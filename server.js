@@ -1350,7 +1350,7 @@ app.post("/api/petugas", requireAdmin, async (req, res) => {
   try {
     const username=String(req.body?.username||"").trim().toLowerCase(), nama=String(req.body?.nama_lengkap||"").trim();
     const password=req.body?.password, role=String(req.body?.role||""), gang=String(req.body?.gang||"").trim();
-    if(!/^[a-z0-9._-]{4,40}$/.test(username)||nama.length<3||typeof password!=="string"||password.length<10||password.length>128||!["bendahara","sekretaris","ketua_gang"].includes(role)||(role==="ketua_gang"&&!gang))
+    if(!/^[a-z0-9._-]{4,40}$/.test(username)||nama.length<3||nama.length>120||typeof password!=="string"||password.length<10||password.length>128||!["bendahara","sekretaris","ketua_gang"].includes(role)||(role==="ketua_gang"&&(!gang||gang.length>80)))
       return res.status(400).json({ok:false,message:"Data tidak valid. Password minimal 10 karakter; Ketua Gang wajib memiliki nama gang."});
     const created=await supabaseRequest("petugas_rt",{method:"POST",query:"select=id,username,nama_lengkap,role,gang,status,created_at",headers:{Prefer:"return=representation"},body:{username,nama_lengkap:nama,password:hashPassword(password),role,gang:role==="ketua_gang"?gang:null,status:"aktif"}});
     res.status(201).json({ok:true,user:Array.isArray(created)?created[0]:created});
@@ -1721,6 +1721,13 @@ app.patch("/api/residents/:id", requireAdmin, async (req, res) => {
 
     if (body.no_kk !== undefined) {
       body.no_kk = String(body.no_kk).trim();
+    }
+
+    if (body.gang !== undefined) {
+      body.gang = String(body.gang || "").trim();
+      if (body.gang.length > 80) {
+        return res.status(400).json({ ok: false, message: "Nama gang maksimal 80 karakter." });
+      }
     }
 
     const data = await supabaseRequest("warga", {
