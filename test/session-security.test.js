@@ -2,7 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { SESSION_MAX_AGE_MS, createSignedSessionToken, verifySignedSessionToken } = require("../session-security");
-const SECRET = "test-only-session-secret";
+const SECRET = "test-only-session-secret-for-automated-tests";
 const NOW = 1_800_000_000_000;
 
 test("menerbitkan dan memverifikasi sesi admin", () => {
