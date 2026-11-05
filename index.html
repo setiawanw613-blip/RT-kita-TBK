@@ -2845,42 +2845,17 @@ function renderCashAdmin(rows){
 }
 
   
-async function lihatBuktiCash(id){
-  let tab = null;
-
-  try{
-    if(!id || !Number.isInteger(Number(id))){
-      alert("ID transaksi tidak valid.");
-      return;
-    }
-
-    tab = window.open("about:blank", "_blank");
-
-    const hasil = await api(
-      `/api/cash/proof/${encodeURIComponent(id)}`
-    );
-
-    if(!hasil || !hasil.ok || !hasil.url){
-      throw new Error(
-        hasil?.message || "Bukti pengeluaran tidak ditemukan."
-      );
-    }
-
-    if(tab){
-      tab.location.href = hasil.url;
-    }else{
-      window.location.href = hasil.url;
-    }
-
-  }catch(e){
-    if(tab){
-      tab.close();
-    }
-
-    alert(
-      e.message || "Gagal membuka bukti pengeluaran."
-    );
+function lihatBuktiCash(id){
+  const nomor = Number(id);
+  if(!Number.isInteger(nomor) || nomor <= 0){
+    alert("ID transaksi tidak valid.");
+    return;
   }
+
+  // Gambar bukti diproksikan melalui domain aplikasi agar Android WebView
+  // tidak perlu membuka URL Supabase Storage dari domain eksternal.
+  window.location.href =
+    "/api/cash/proof/" + encodeURIComponent(nomor);
 }
 
 
