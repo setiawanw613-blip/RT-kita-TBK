@@ -770,10 +770,33 @@ function requireAdmin(req, res, next) {
   req.session = session; next();
 }
 function requireStaff(roles = []) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     const session = getSession(req);
-    if (!session || !roles.includes(session.role)) return res.status(403).json({ ok: false, message: "Akses tidak diizinkan untuk jabatan ini" });
-    req.session = session; next();
+    if (!session || !roles.includes(session.role)) {
+      return res.status(403).json({ ok: false, message: "Akses tidak diizinkan untuk jabatan ini" });
+    }
+    if (session.role !== "admin") {
+      try {
+        const id = String(session.id || "");
+        if (!/^\d+$/.test(id)) {
+          return res.status(403).json({ ok: false, message: "Identitas akun petugas tidak valid" });
+        }
+        const rows = await supabaseRequest("petugas_rt", {
+          query: "select=id,role,status,gang,nama_lengkap&id=eq." + encodeURIComponent(id) + "&limit=1"
+        });
+        const staff = Array.isArray(rows) ? rows[0] : null;
+        if (!staff || staff.status !== "aktif" || staff.role !== session.role) {
+          return res.status(403).json({ ok: false, message: "Akun petugas sudah dinonaktifkan atau hak aksesnya berubah. Silakan login kembali." });
+        }
+        session.gang = staff.gang || "";
+        session.nama = staff.nama_lengkap || session.nama || "";
+      } catch (error) {
+        console.error("STAFF AUTH CHECK ERROR:", error?.message || error);
+        return res.status(503).json({ ok: false, message: "Pemeriksaan akses petugas sementara tidak tersedia." });
+      }
+    }
+    req.session = session;
+    next();
   };
 }
 const requireFinance = requireStaff(["admin", "bendahara"]);
@@ -1336,7 +1359,7 @@ app.post("/api/petugas", requireAdmin, async (req, res) => {
 app.patch("/api/petugas/:id/status", requireAdmin, async (req,res)=>{
   try{
     const id=String(req.params.id||""),status=String(req.body?.status||"");
-    if(!/^\\d+$/.test(id)||!["aktif","nonaktif"].includes(status))return res.status(400).json({ok:false,message:"Data status tidak valid"});
+    if(!/^\d+$/.test(id)||!["aktif","nonaktif"].includes(status))return res.status(400).json({ok:false,message:"Data status tidak valid"});
     await supabaseRequest("petugas_rt",{method:"PATCH",query:"id=eq."+encodeURIComponent(id),body:{status,updated_at:new Date().toISOString()}});
     res.json({ok:true});
   }catch(error){console.error("PETUGAS STATUS ERROR:",error);res.status(500).json({ok:false,message:"Gagal mengubah status akun"});}
@@ -2168,7 +2191,7 @@ app.get("/api/cash/proof/:id", requireLogin, async (req, res) => {
     if (!/^\d+$/.test(id)) {
       return res.status(400).json({ ok: false, message: "ID transaksi tidak valid" });
     }
-    if (!["admin", "warga"].includes(req.session?.role)) {
+    if (!["admin", "warga", "bendahara"].includes(req.session?.role)) {
       return res.status(403).json({ ok: false, message: "Akses ditolak" });
     }
     const data = await supabaseRequest("kas_rt", {
