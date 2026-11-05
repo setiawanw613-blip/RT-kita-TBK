@@ -2195,16 +2195,17 @@ const path = await uploadBuktiPengeluaran(
 );
 
 
-/* LIHAT BUKTI PENGELUARAN - KETUA RT */
+/* LIHAT BUKTI PENGELUARAN - DOMAIN APLIKASI */
 app.get("/api/cash/proof/:id", requireLogin, async (req, res) => {
   try {
     const id = String(req.params.id || "");
-    if (!/^\d+$/.test(id)) {
+    if (!/^\\d+$/.test(id)) {
       return res.status(400).json({ ok: false, message: "ID transaksi tidak valid" });
     }
     if (!["admin", "warga", "bendahara"].includes(req.session?.role)) {
       return res.status(403).json({ ok: false, message: "Akses ditolak" });
     }
+
     const data = await supabaseRequest("kas_rt", {
       query: "select=id,jenis,bukti_path" +
         `&id=eq.${encodeURIComponent(id)}&limit=1`
@@ -2216,28 +2217,39 @@ app.get("/api/cash/proof/:id", requireLogin, async (req, res) => {
     if (req.session.role === "warga" && row.jenis !== "keluar") {
       return res.status(403).json({ ok: false, message: "Bukti transaksi ini tidak tersedia untuk akun warga" });
     }
-    const path = String(row.bukti_path);
-    if (!/^\d+-bukti\.(jpg|png|webp)$/.test(path)) {
+
+    const filePath = String(row.bukti_path);
+    if (!/^\\d+-bukti\\.(jpg|png|webp)$/.test(filePath)) {
       return res.status(400).json({ ok: false, message: "Lokasi bukti tidak valid" });
     }
-    const response = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/sign/bukti-pengeluaran/${path}`,
+
+    const storageResponse = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/bukti-pengeluaran/${encodeURIComponent(filePath)}`,
       {
-        method: "POST",
         headers: {
           apikey: SUPABASE_KEY,
-          Authorization: `Bearer ${SUPABASE_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ expiresIn: 300 })
+          Authorization: `Bearer ${SUPABASE_KEY}`
+        }
       }
     );
-    const result = await response.json();
-    if (!response.ok || !result.signedURL) {
-      console.error("SIGNED PROOF ERROR:", result);
-      return res.status(500).json({ ok: false, message: "Gagal membuat tautan bukti" });
+    if (!storageResponse.ok) {
+      console.error("CASH PROOF STORAGE ERROR:", storageResponse.status);
+      return res.status(502).json({ ok: false, message: "Berkas bukti tidak dapat diambil dari penyimpanan" });
     }
-    return res.json({ ok: true, url: `${SUPABASE_URL}/storage/v1${result.signedURL}` });
+
+    const bytes = Buffer.from(await storageResponse.arrayBuffer());
+    if (!bytes.length || bytes.length > 5 * 1024 * 1024) {
+      return res.status(502).json({ ok: false, message: "Ukuran berkas bukti tidak valid" });
+    }
+
+    const mime = filePath.endsWith(".jpg") ? "image/jpeg"
+      : filePath.endsWith(".png") ? "image/png" : "image/webp";
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Content-Length", String(bytes.length));
+    res.setHeader("Content-Disposition", `inline; filename="bukti-kas-${id}.${filePath.split(".").pop()}"`);
+    res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate, max-age=0");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    return res.send(bytes);
   } catch (error) {
     console.error("VIEW PROOF ERROR:", error);
     return res.status(500).json({ ok: false, message: "Gagal membuka bukti pengeluaran" });
