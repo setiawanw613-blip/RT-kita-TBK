@@ -4880,7 +4880,7 @@ app.patch("/api/aspirasi/:id", requireAdmin, async (req, res) => {
             penerima_peran:"warga",
             penerima_warga_id:existing.warga_id,
             judul:"Pembaruan Aspirasi Warga",
-            pesan:"Aspirasi \\"" + String(existing.judul || "Aspirasi Anda") + "\\" telah diperbarui. " + rincian.join(" "),
+            pesan:"Aspirasi " + String(existing.judul || "Aspirasi Anda") + " telah diperbarui. " + rincian.join(" "),
             jenis:"aspirasi",
             tautan:"/",
             referensi_id:Number(existing.id),
