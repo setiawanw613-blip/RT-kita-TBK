@@ -150,7 +150,7 @@ const {
 
     const dataIuran = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at,midtrans_transaction_id" +
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at,midtrans_transaction_id,jalur_pembayaran,disetorkan_oleh_nama" +
         `&bukti_transfer=eq.${encodeURIComponent("MIDTRANS:" + order_id)}`
     });
 
@@ -186,7 +186,7 @@ const {
 
       const dataRiwayat = await supabaseRequest("iuran_warga", {
         query:
-          "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at,midtrans_transaction_id" +
+          "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at,midtrans_transaction_id,jalur_pembayaran,disetorkan_oleh_nama" +
           `&id=in.(${rowIds.join(",")})`
       });
       rows = Array.isArray(dataRiwayat) ? dataRiwayat : [];
@@ -334,17 +334,17 @@ for (const iuran of rows) {
         {
           kategori: "Sampah",
           jumlah: 15000,
-          keterangan: `Sampah dari iuran ${iuran.bulan} - iuran_id ${iuran.id}`
+          keterangan: `Sampah dari iuran ${iuran.bulan} - iuran_id ${iuran.id}${iuran.jalur_pembayaran === "ketua_gang_qris" && iuran.disetorkan_oleh_nama ? " - disetorkan oleh " + iuran.disetorkan_oleh_nama : ""}`
         },
         {
           kategori: "Keamanan",
           jumlah: 15000,
-          keterangan: `Keamanan dari iuran ${iuran.bulan} - iuran_id ${iuran.id}`
+          keterangan: `Keamanan dari iuran ${iuran.bulan} - iuran_id ${iuran.id}${iuran.jalur_pembayaran === "ketua_gang_qris" && iuran.disetorkan_oleh_nama ? " - disetorkan oleh " + iuran.disetorkan_oleh_nama : ""}`
         },
         {
           kategori: "Kas RT",
           jumlah: 5000,
-          keterangan: `Kas RT dari iuran ${iuran.bulan} - iuran_id ${iuran.id}`
+          keterangan: `Kas RT dari iuran ${iuran.bulan} - iuran_id ${iuran.id}${iuran.jalur_pembayaran === "ketua_gang_qris" && iuran.disetorkan_oleh_nama ? " - disetorkan oleh " + iuran.disetorkan_oleh_nama : ""}`
         }
       ];
 
