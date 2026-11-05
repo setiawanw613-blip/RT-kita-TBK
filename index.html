@@ -698,32 +698,8 @@ async function bukaNotifikasiHeader() {
 
     let daftar = hasil.notifikasi || [];
 
-    // Membuka lonceng otomatis menandai semua notifikasi yang tampil sebagai dibaca.
-    const belumDibaca = daftar.filter(item => !item.sudah_dibaca);
-    if (belumDibaca.length) {
-      const hasilTandai = await Promise.allSettled(
-        belumDibaca.map(item => api(
-          "/api/notifikasi/" + encodeURIComponent(Number(item.id)) + "/baca",
-          { method: "PATCH" }
-        ))
-      );
-
-      const gagal = hasilTandai.some((hasilBaca, index) =>
-        hasilBaca.status !== "fulfilled" || !hasilBaca.value?.ok
-      );
-
-      // Ambil ulang status dari server agar lonceng dan badge menu akurat.
-      const terbaru = await api("/api/notifikasi");
-      if (terbaru?.ok && Array.isArray(terbaru.notifikasi)) {
-        daftar = terbaru.notifikasi;
-      }
-
-      await Promise.all([muatNotifikasiHeader(), muatBadgeMenu()]);
-      if (gagal) {
-        console.error("Sebagian notifikasi gagal ditandai sudah dibaca.");
-      }
-    }
-
+    // Notifikasi tetap belum dibaca saat panel dibuka.
+    // Pengguna menandainya secara eksplisit lewat tombol "Tandai sudah dibaca".
     const lama = document.getElementById("panelNotifikasiHeader");
     if (lama) lama.remove();
 
@@ -3673,28 +3649,28 @@ if (hasil.qr_url || hasil.qr_string) {
 
 async function kasWarga(){
   layout("Kas RT",`
-    <div class="card">
-      <div class="muted">Taman Bali Kahuripan</div>
-      <h2 style="margin:8px 0">💰 Transparansi Kas RT</h2>
-      <div style="background:linear-gradient(135deg,#1267c9,#0752a5);color:white;padding:20px;border-radius:16px;margin-top:12px">
-        <div>Saldo Kas RT</div>
-        <div id="kasSaldoBesar" style="font-size:clamp(25px,7vw,34px);font-weight:800;margin:6px 0">Memuat...</div>
-        <div style="font-size:13px;opacity:.9">Kas RT untuk kegiatan warga</div>
+    <div class="card" style="padding:12px;margin-bottom:10px">
+      <div class="muted" style="font-size:11px">Taman Bali Kahuripan</div>
+      <h2 style="font-size:17px;margin:4px 0">💰 Transparansi Kas RT</h2>
+      <div style="background:linear-gradient(135deg,#1267c9,#0752a5);color:white;padding:11px 12px;border-radius:11px;margin-top:8px">
+        <div style="font-size:12px;line-height:1.25">Saldo Kas RT</div>
+        <div id="kasSaldoBesar" style="font-size:clamp(19px,5vw,25px);font-weight:800;margin:4px 0;line-height:1.2;overflow-wrap:anywhere">Memuat...</div>
+        <div style="font-size:11px;opacity:.9">Kas RT untuk kegiatan warga</div>
       </div>
     </div>
 
-    <div class="card">
-      <h3>📊 Ringkasan</h3>
+    <div class="card" style="padding:12px;margin-bottom:10px">
+      <h3 style="font-size:15px;margin:0 0 8px">📊 Ringkasan</h3>
       <div id="kasRingkasan">Memuat...</div>
     </div>
 
-    <div class="card">
-      <h3>📋 Rekap Kategori</h3>
+    <div class="card" style="padding:12px;margin-bottom:10px">
+      <h3 style="font-size:15px;margin:0 0 8px">📋 Rekap Kategori</h3>
       <div id="kasKategori">Memuat...</div>
     </div>
 
-    <div class="card">
-      <h3>📜 Riwayat Transaksi</h3>
+    <div class="card" style="padding:12px;margin-bottom:10px">
+      <h3 style="font-size:15px;margin:0 0 8px">📜 Riwayat Transaksi</h3>
       <div class="muted" style="margin-bottom:12px">Pilih transaksi untuk melihat detailnya.</div>
       <div id="kasRiwayat">Memuat...</div>
     </div>
@@ -3728,10 +3704,10 @@ async function kasWarga(){
     document.getElementById("kasSaldoBesar").textContent = rupiah(saldo);
 
     document.getElementById("kasRingkasan").innerHTML = `
-      <div class="row"><b>Saldo Awal</b><span>${rupiah(0)}</span></div>
-      <div class="row"><b>💵 Total Pemasukan</b><span style="color:#16834a">${rupiah(masuk)}</span></div>
-      <div class="row"><b>💸 Total Pengeluaran</b><span style="color:#c62828">${rupiah(keluar)}</span></div>
-      <div class="row"><b>💰 Saldo Akhir</b><span style="color:#1267c9;font-weight:800">${rupiah(saldo)}</span></div>
+      <div class="row" style="padding:6px 0;font-size:13px"><b>Saldo Awal</b><span>${rupiah(0)}</span></div>
+      <div class="row" style="padding:6px 0;font-size:13px"><b>💵 Total Pemasukan</b><span style="color:#16834a">${rupiah(masuk)}</span></div>
+      <div class="row" style="padding:6px 0;font-size:13px"><b>💸 Total Pengeluaran</b><span style="color:#c62828">${rupiah(keluar)}</span></div>
+      <div class="row" style="padding:6px 0;font-size:13px"><b>💰 Saldo Akhir</b><span style="color:#1267c9;font-weight:800">${rupiah(saldo)}</span></div>
     `;
 
    
@@ -3748,16 +3724,16 @@ document.getElementById("kasKategori").innerHTML =
 
     return `
       <div class="card"
-        style="padding:16px;border:1px solid #e2eaf5;border-radius:16px;margin-bottom:12px;background:${itemKategori.latar}">
-        <div style="display:flex;align-items:center;gap:12px">
-          <div style="font-size:28px">${itemKategori.ikon}</div>
+        style="padding:9px 10px;border:1px solid #e2eaf5;border-radius:10px;margin-bottom:8px;background:${itemKategori.latar}">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:21px">${itemKategori.ikon}</div>
           <div style="flex:1;min-width:0">
             <div style="font-weight:700">${itemKategori.nama}</div>
-            <div style="font-size:12px;color:#64748b;margin-top:4px">
+            <div style="font-size:11px;color:#64748b;margin-top:3px">
               Masuk ${rupiah(item.masuk)} · Keluar ${rupiah(item.keluar)}
             </div>
           </div>
-          <div style="font-size:15px;font-weight:800;color:${itemKategori.warna};white-space:nowrap">
+          <div style="font-size:13px;font-weight:800;color:${itemKategori.warna};white-space:nowrap">
             ${rupiah(saldoKategori)}
           </div>
         </div>
