@@ -23,7 +23,7 @@ function isValidSessionShape(session) {
     const id = session.id;
     const validNumericId =
       (Number.isSafeInteger(id) && id > 0) ||
-      (typeof id === "string" && /^[1-9]\\d*$/.test(id) && Number.isSafeInteger(Number(id)));
+      (typeof id === "string" && /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id)));
     return validNumericId;
   }
 
