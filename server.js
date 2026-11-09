@@ -598,17 +598,33 @@ app.post("/api/iuran/gobiz/retry/:orderId", requireWarga, async (req, res) => {
     });
 
     const prefix = config.environment === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-";
-    newOrderId = prefix + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
-    const newTransaction = await buatTransaksiQRIS({
-      orderId: newOrderId,
-      total: Number(oldOrder.total_amount),
-      namaWarga: warga.nama_lengkap
-    });
+    const proposedOrderId = prefix + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
 
-    const rows = await supabaseRequest("rpc/reserve_gobiz_iuran_retry", {
+    // Persist the retry attempt BEFORE contacting GoBiz. If the provider call or
+    // the later database completion times out, the next request reuses this
+    // stable order_id and the same provider Idempotency-Key.
+    const attemptRows = await supabaseRequest("rpc/start_gobiz_iuran_retry_attempt", {
       method: "POST",
       body: {
         p_old_order_id: oldOrderId,
+        p_proposed_order_id: proposedOrderId
+      }
+    });
+    const attempt = Array.isArray(attemptRows) ? attemptRows[0] : null;
+    if (!attempt?.order_id || Number(attempt.total_amount) !== Number(oldOrder.total_amount)) {
+      throw new Error("Percobaan pembayaran ulang belum tersimpan dengan benar.");
+    }
+    newOrderId = String(attempt.order_id);
+
+    const newTransaction = await buatTransaksiQRIS({
+      orderId: newOrderId,
+      total: Number(attempt.total_amount),
+      namaWarga: warga.nama_lengkap
+    });
+
+    const rows = await supabaseRequest("rpc/complete_gobiz_iuran_retry_attempt", {
+      method: "POST",
+      body: {
         p_new_order_id: newOrderId,
         p_new_transaction_id: String(newTransaction.transaction.id)
       }
