@@ -3,20 +3,20 @@ name: Android APK (release)
 on:
   workflow_dispatch:
     inputs:
-      confirm_new_signing_key:
-        description: "Konfirmasi bahwa keystore di GitHub Secrets adalah kunci BARU dan bukan kunci yang pernah dibagikan"
+      confirm_permanent_signing_key:
+        description: "Pastikan keystore permanen sudah dicadangkan dan akan dipakai ulang untuk setiap rilis."
         required: true
         type: choice
         options:
           - "TIDAK"
-          - "YA_SAYA_PASTIKAN_KUNCI_BARU"
+          - "YA_SAYA_SUDAH_MENCADANGKAN_KUNCI_PERMANEN"
 
 permissions:
   contents: read
 
 jobs:
   build-release-apk:
-    if: inputs.confirm_new_signing_key == 'YA_SAYA_PASTIKAN_KUNCI_BARU'
+    if: inputs.confirm_permanent_signing_key == 'YA_SAYA_SUDAH_MENCADANGKAN_KUNCI_PERMANEN'
     runs-on: ubuntu-latest
     steps:
       - name: Verify signing secrets exist

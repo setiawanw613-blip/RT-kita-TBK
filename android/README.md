@@ -9,7 +9,7 @@ Proyek Android untuk mengemas situs RT Kita melalui WebView HTTPS.
 
 ## Signing APK rilis
 
-Buat satu keystore release yang aman dan simpan salinan cadangan offline. Jangan commit ke repository dan jangan membuat keystore baru untuk setiap rilis karena APK berikutnya harus ditandatangani dengan kunci yang sama agar bisa memperbarui instalasi lama.
+Buat satu keystore release yang aman dan simpan salinan cadangan offline di tempat terpisah. Jangan commit ke repository dan jangan membuat keystore baru untuk setiap rilis karena APK berikutnya harus ditandatangani dengan kunci yang sama agar bisa memperbarui instalasi rilis sebelumnya.
 
 Tambahkan empat GitHub Actions repository secrets:
 - `RT_KITA_KEYSTORE_BASE64`: isi file keystore dalam Base64 satu baris.
@@ -17,7 +17,11 @@ Tambahkan empat GitHub Actions repository secrets:
 - `RT_KITA_KEY_ALIAS`: alias key.
 - `RT_KITA_KEY_PASSWORD`: password key.
 
-Jalankan workflow **Android APK (release)** secara manual. Workflow akan gagal dengan pesan yang jelas jika secrets belum disediakan. Kunci hanya digunakan di runner sementara dan tidak disimpan di artifact.
+Jalankan workflow **Android APK (release)** secara manual dan konfirmasi bahwa keystore permanen telah dicadangkan. Workflow memeriksa keberadaan dan validitas keystore, membangun APK release, memverifikasi tanda tangan, lalu mengunggah artifact. Kunci hanya digunakan di runner sementara dan tidak disimpan di artifact.
+
+Versi Android saat ini adalah `1.0.1` (versionCode `2`). Peningkatan versionCode diperlukan agar Android menerima pembaruan dari versi sebelumnya.
+
+**Catatan perpindahan dari APK debug ke release:** Android hanya mengizinkan pemasangan sebagai pembaruan jika sertifikat penandatangan sama. APK debug yang dibangun di GitHub Actions dapat memiliki sertifikat debug yang berbeda dari keystore release. Jika Android menolak pembaruan karena tanda tangan berbeda, APK debug perlu dihapus lalu APK release dipasang. Data warga dan transaksi yang tersimpan di Supabase tidak ikut terhapus, tetapi sesi login lokal dapat hilang. Pastikan pengguna mengetahui password login sebelum perpindahan.
 
 ## Daftar uji sebelum rilis warga
 
