@@ -4699,8 +4699,8 @@ if (record && !iuranKedaluwarsa.some(
       recovery_required: Boolean(orderId && rowsTersimpan.length),
       message: rowsTersimpan.length
         ? (providerTransactionCreated
-          ? "QRIS dari GoBiz sudah dibuat, tetapi pencatatan akhirnya belum terverifikasi. Jangan membayar QR lain; pulihkan transaksi dengan referensi yang sama atau hubungi Bendahara."
-          : "Tagihan sudah diamankan di sistem, tetapi QRIS belum terkonfirmasi dibuat. Jangan membuat tagihan baru; gunakan pemulihan dengan referensi yang sama.")
+          ? "QRIS dari GoBiz sudah dibuat, tetapi pencatatan akhirnya belum terverifikasi. Jangan membayar QR lain. Referensi pemulihan: " + orderId
+          : "Tagihan sudah diamankan di sistem, tetapi QRIS belum terkonfirmasi dibuat. Jangan membuat tagihan baru. Referensi pemulihan: " + orderId)
         : "Transaksi QRIS belum berhasil disiapkan. Periksa status iuran sebelum mencoba kembali."
     });
   }
