@@ -729,6 +729,11 @@ app.post("/api/gobiz/webhook", async (req, res) => {
           query: "order_id=eq." + encodeURIComponent(orderId) + "&provider=eq.gobiz",
           body: { provider_status: "late_settlement_review", provider_settlement_at: new Date(settlementAt).toISOString() }
         });
+        await supabaseRequest("gobiz_payment_attempts", {
+          method: "PATCH",
+          query: "old_order_id=eq." + encodeURIComponent(orderId) + "&status=eq.reserved",
+          body: { status: "late_settlement_review", updated_at: new Date().toISOString() }
+        });
         try {
           await supabaseRequest("notifikasi", {
             method: "POST",
