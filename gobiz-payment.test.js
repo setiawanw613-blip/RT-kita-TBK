@@ -71,12 +71,14 @@ test("GoBiz QRIS creation registers settlement webhook and sends idempotency key
         json: async () => ({
           success: true,
           data: {
+            outlet: { id: "G123" },
             transaction: {
               id: "00000000-0000-4000-8000-000000000001",
               order_id: "RTTBK-PROD-1900000000000-deadbeef",
               payment_type: "qris",
               status: "pending",
               gross_amount: 35000,
+              currency: "IDR",
               qris_string: "000201010212..."
             },
             actions: []
