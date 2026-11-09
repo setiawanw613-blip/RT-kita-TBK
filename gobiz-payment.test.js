@@ -216,3 +216,26 @@ test("GoBiz access tokens are isolated by environment and cached per credential 
   assert.ok(calls.some(url => url.startsWith("https://integration-goauth.gojekapi.com/")));
   assert.ok(calls.some(url => url.startsWith("https://accounts.go-jek.com/")));
 });
+
+
+test("GoBiz OAuth rejects a non-string or empty access token", async () => {
+  const { getGoBizAccessToken } = require("./gobiz-payment");
+  const invalidTokens = [123, {}, "", "   ", null];
+  for (const invalidToken of invalidTokens) {
+    await assert.rejects(
+      () => getGoBizAccessToken({
+        env: {
+          GOBIZ_ENVIRONMENT: "sandbox",
+          GOBIZ_CLIENT_ID: "invalid-token-test-" + String(invalidToken),
+          GOBIZ_CLIENT_SECRET: "invalid-token-test-secret"
+        },
+        fetchImpl: async () => ({
+          ok: true,
+          status: 200,
+          json: async () => ({ access_token: invalidToken, expires_in: 3600 })
+        })
+      }),
+      /Autentikasi GoBiz gagal/
+    );
+  }
+});
