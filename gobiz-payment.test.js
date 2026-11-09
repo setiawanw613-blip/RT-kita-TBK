@@ -20,7 +20,7 @@ test("GoBiz production and sandbox endpoints are selected from configuration", (
   assert.equal(production.apiBase, "https://api.gobiz.co.id");
   assert.equal(production.oauthBase, "https://accounts.go-jek.com");
   const sandbox = getGoBizConfig({ GOBIZ_ENVIRONMENT: "sandbox" });
-  assert.equal(sandbox.apiBase, "https://api.sandbox.gobiz.co.id");
+  assert.equal(sandbox.apiBase, "https://api.partner-sandbox.gobiz.co.id");
   assert.equal(sandbox.oauthBase, "https://integration-goauth.gojekapi.com");
 });
 
