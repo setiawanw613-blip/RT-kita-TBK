@@ -1,5 +1,5 @@
 -- Direct GoBiz QRIS integration for RT Kita.
--- Existing Midtrans order history is preserved; new orders are explicitly tagged as GoBiz.
+-- Existing Midtrans history is preserved; new GoBiz orders use a separate marker/provider.
 
 ALTER TABLE public.iuran_warga
   ADD COLUMN IF NOT EXISTS gobiz_transaction_id text,
@@ -191,7 +191,8 @@ DECLARE
   v_paid_count integer := 0;
 BEGIN
   IF p_order_id IS NULL
-     OR p_order_id !~ '^RTTBK-GOBIZ-(PROD|SBX)-[0-9]+-[a-f0-9]{8}
+     OR p_order_id !~ '^RTTBK-GOBIZ-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$'
+     OR nullif(btrim(p_transaction_id), '') IS NULL
      OR nullif(btrim(p_outlet_id), '') IS NULL
      OR p_expected_outlet_id IS NULL
      OR p_outlet_id IS DISTINCT FROM p_expected_outlet_id
@@ -210,125 +211,6 @@ BEGIN
 
   IF v_order.total_amount <> p_gross_amount
      OR v_order.provider_transaction_id IS DISTINCT FROM p_transaction_id THEN
-    RAISE EXCEPTION 'NOMINAL_ATAU_TRANSAKSI_GOBIZ_TIDAK_COCOK' USING ERRCODE = '23514';
-  END IF;
-
-  FOR v_id IN SELECT unnest(v_order.row_ids) LOOP
-    SELECT * INTO v_iuran FROM public.iuran_warga WHERE id = v_id FOR UPDATE;
-    IF NOT FOUND
-       OR v_iuran.bukti_transfer <> 'GOBIZ:' || p_order_id
-       OR v_iuran.keluarga_id <> v_order.keluarga_id
-       OR coalesce(v_iuran.total_amount, 0) <> 35000 THEN
-      RAISE EXCEPTION 'CATATAN_IURAN_GOBIZ_TIDAK_COCOK' USING ERRCODE = '23514';
-    END IF;
-    v_count := v_count + 1;
-    IF v_iuran.status = 'lunas' THEN
-      v_paid_count := v_paid_count + 1;
-    END IF;
-  END LOOP;
-
-  IF v_count <> cardinality(v_order.row_ids)
-     OR v_order.total_amount <> v_count * 35000 THEN
-    RAISE EXCEPTION 'TOTAL_IURAN_GOBIZ_TIDAK_COCOK' USING ERRCODE = '23514';
-  END IF;
-
-  IF v_paid_count = v_count THEN
-    UPDATE public.iuran_midtrans_orders
-    SET provider_status = 'settlement',
-        provider_settlement_at = coalesce(provider_settlement_at, p_settlement_at)
-    WHERE order_id = p_order_id;
-    RETURN jsonb_build_object('ok', true, 'already_paid', true, 'updated_rows', 0);
-  END IF;
-
-  IF v_paid_count <> 0 THEN
-    RAISE EXCEPTION 'STATUS_IURAN_GOBIZ_TIDAK_KONSISTEN' USING ERRCODE = '23514';
-  END IF;
-
-  FOR v_id IN SELECT unnest(v_order.row_ids) LOOP
-    SELECT * INTO v_iuran FROM public.iuran_warga WHERE id = v_id FOR UPDATE;
-
-    FOR v_item IN
-      SELECT * FROM (VALUES
-        ('Sampah'::text, 15000::numeric),
-        ('Keamanan'::text, 15000::numeric),
-        ('Kas RT'::text, 5000::numeric)
-      ) AS x(kategori, jumlah)
-    LOOP
-      v_keterangan := v_item.kategori || ' dari iuran ' ||
-        coalesce(v_iuran.bulan::text, '') || ' - iuran_id ' || v_iuran.id::text ||
-        CASE
-          WHEN v_iuran.jalur_pembayaran = 'ketua_gang_qris'
-           AND nullif(v_iuran.disetorkan_oleh_nama, '') IS NOT NULL
-          THEN ' - disetorkan oleh ' || v_iuran.disetorkan_oleh_nama
-          ELSE ''
-        END;
-
-      SELECT * INTO v_kas FROM public.kas_rt
-      WHERE keterangan = v_keterangan LIMIT 1 FOR UPDATE;
-
-      IF FOUND THEN
-        IF v_kas.jenis <> 'masuk'
-           OR coalesce(v_kas.jumlah, 0) <> v_item.jumlah
-           OR (v_kas.kategori IS NOT NULL AND v_kas.kategori <> v_item.kategori) THEN
-          RAISE EXCEPTION 'CATATAN_KAS_GOBIZ_TIDAK_KONSISTEN' USING ERRCODE = '23514';
-        END IF;
-        IF v_kas.kategori IS NULL THEN
-          UPDATE public.kas_rt SET kategori = v_item.kategori WHERE id = v_kas.id;
-        END IF;
-      ELSE
-        INSERT INTO public.kas_rt (tanggal, jenis, kategori, keterangan, jumlah)
-        VALUES (p_settlement_at::date, 'masuk', v_item.kategori, v_keterangan, v_item.jumlah);
-      END IF;
-    END LOOP;
-
-    UPDATE public.iuran_warga
-    SET status = 'lunas',
-        dibayar_at = p_settlement_at,
-        diverifikasi_at = now(),
-        diverifikasi_oleh = 'GoBiz QRIS',
-        gobiz_status = 'settlement',
-        gobiz_settlement_at = p_settlement_at,
-        gobiz_notification_at = now()
-    WHERE id = v_id;
-  END LOOP;
-
-  UPDATE public.iuran_midtrans_orders
-  SET provider_status = 'settlement',
-      provider_settlement_at = p_settlement_at
-  WHERE order_id = p_order_id AND provider = 'gobiz';
-
-  RETURN jsonb_build_object('ok', true, 'already_paid', false, 'updated_rows', v_count);
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public.reserve_gobiz_iuran_batch(text,text,date[],text,text) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.reserve_gobiz_iuran_batch_with_attribution(text,text,date[],text,text,bigint,text) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.settle_gobiz_iuran_order_atomic(text,integer,text,text,text,timestamptz) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.reserve_gobiz_iuran_batch(text,text,date[],text,text) TO service_role;
-GRANT EXECUTE ON FUNCTION public.reserve_gobiz_iuran_batch_with_attribution(text,text,date[],text,text,bigint,text) TO service_role;
-GRANT EXECUTE ON FUNCTION public.settle_gobiz_iuran_order_atomic(text,integer,text,text,text,timestamptz) TO service_role;
-
-COMMENT ON FUNCTION public.settle_gobiz_iuran_order_atomic(text,integer,text,text,text,timestamptz)
-IS 'Idempotent, server-only GoBiz QRIS settlement; verifies outlet, order, total and atomically records all iuran cash entries.';
-
-     OR nullif(btrim(p_transaction_id), '') IS NULL
-     OR nullif(btrim(p_outlet_id), '') IS NULL
-     OR p_outlet_id <> p_expected_outlet_id
-     OR p_gross_amount IS NULL OR p_gross_amount <= 0
-     OR p_settlement_at IS NULL THEN
-    RAISE EXCEPTION 'NOTIFIKASI_GOBIZ_TIDAK_VALID' USING ERRCODE = '22023';
-  END IF;
-
-  SELECT * INTO v_order FROM public.iuran_midtrans_orders
-  WHERE order_id = p_order_id AND provider = 'gobiz'
-  FOR UPDATE;
-
-  IF NOT FOUND OR cardinality(coalesce(v_order.row_ids, ARRAY[]::integer[])) < 1 THEN
-    RAISE EXCEPTION 'ORDER_GOBIZ_TIDAK_DITEMUKAN' USING ERRCODE = 'P0002';
-  END IF;
-
-  IF v_order.total_amount <> p_gross_amount
-     OR v_order.provider_transaction_id <> p_transaction_id THEN
     RAISE EXCEPTION 'NOMINAL_ATAU_TRANSAKSI_GOBIZ_TIDAK_COCOK' USING ERRCODE = '23514';
   END IF;
 
