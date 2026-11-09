@@ -622,6 +622,161 @@ app.post("/api/iuran/gobiz/recover/:orderId", requireWarga, async (req, res) => 
   }
 });
 
+/* CEK STATUS DAN RETRY QRIS SETORAN KETUA GANG */
+app.get("/api/ketua-gang/gobiz/status/:orderId", requireGangLead, async (req, res) => {
+  try {
+    const orderId = String(req.params.orderId || "");
+    if (!/^RTTBK-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$/.test(orderId)) {
+      return res.status(400).json({ ok: false, message: "Referensi transaksi tidak valid." });
+    }
+    const rows = await supabaseRequest("iuran_midtrans_orders", {
+      query: "select=order_id,warga_id,keluarga_id,row_ids,total_amount,provider,provider_transaction_id,provider_status,jalur_pembayaran,disetorkan_oleh_id" +
+        "&order_id=eq." + encodeURIComponent(orderId) + "&provider=eq.gobiz&limit=1"
+    });
+    const order = Array.isArray(rows) ? rows[0] : null;
+    if (!order || order.jalur_pembayaran !== "ketua_gang_qris" ||
+        Number(order.disetorkan_oleh_id) !== Number(req.session.id)) {
+      return res.status(404).json({ ok: false, message: "Transaksi tidak ditemukan untuk akun Ketua Gang ini." });
+    }
+    if (!order.provider_transaction_id) {
+      return res.status(409).json({ ok: false, message: "ID transaksi belum tersimpan. Pulihkan QRIS dengan referensi yang sama." });
+    }
+    const detail = await getGoBizTransactionDetail(order.provider_transaction_id);
+    const transaction = detail.transaction;
+    const config = getGoBizConfig();
+    if (transaction.order_id !== orderId ||
+        Number(transaction.gross_amount) !== Number(order.total_amount) ||
+        String(detail.outlet?.id || "") !== config.outletId) {
+      return res.status(409).json({ ok: false, message: "Detail transaksi GoBiz tidak cocok dengan ledger." });
+    }
+    const status = String(transaction.status || "").toLowerCase();
+    await supabaseRequest("iuran_midtrans_orders", {
+      method: "PATCH",
+      query: "order_id=eq." + encodeURIComponent(orderId) + "&provider=eq.gobiz",
+      body: { provider_status: status }
+    });
+    if (isGoBizSettlementStatus(status)) {
+      const settlementAt = String(transaction.settlement_at || "").trim();
+      if (!settlementAt || Number.isNaN(Date.parse(settlementAt))) {
+        return res.status(409).json({ ok: false, status, message: "Waktu settlement dari GoBiz tidak tersedia; rekonsiliasi otomatis dihentikan." });
+      }
+      await supabaseRequest("rpc/settle_gobiz_iuran_order_atomic", {
+        method: "POST",
+        body: {
+          p_order_id: orderId,
+          p_gross_amount: Number(transaction.gross_amount),
+          p_transaction_id: String(transaction.id),
+          p_outlet_id: String(detail.outlet?.id || ""),
+          p_expected_outlet_id: config.outletId,
+          p_settlement_at: new Date(settlementAt).toISOString()
+        }
+      });
+    } else {
+      await supabaseRequest("iuran_warga", {
+        method: "PATCH",
+        query: "bukti_transfer=eq." + encodeURIComponent("GOBIZ:" + orderId) + "&status=neq.lunas",
+        body: { gobiz_status: status }
+      });
+    }
+    return res.json({
+      ok: true, order_id: orderId, status,
+      can_retry: isGoBizExpiredStatus(status),
+      message: isGoBizSettlementStatus(status)
+        ? "Pembayaran setoran Ketua Gang sudah settlement."
+        : isGoBizExpiredStatus(status)
+          ? "QRIS kedaluwarsa. QR pengganti dapat dibuat dengan aman."
+          : "Status transaksi berhasil diperiksa."
+    });
+  } catch (error) {
+    console.error("GOBIZ GANG STATUS ERROR:", error?.message || error);
+    return res.status(502).json({ ok: false, message: "Status transaksi belum dapat diperiksa ke GoBiz." });
+  }
+});
+
+app.post("/api/ketua-gang/gobiz/retry/:orderId", requireGangLead, async (req, res) => {
+  let newOrderId = null;
+  try {
+    const oldOrderId = String(req.params.orderId || "");
+    if (!/^RTTBK-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$/.test(oldOrderId)) {
+      return res.status(400).json({ ok: false, message: "Referensi transaksi lama tidak valid." });
+    }
+    const rows = await supabaseRequest("iuran_midtrans_orders", {
+      query: "select=order_id,warga_id,keluarga_id,row_ids,total_amount,provider,provider_transaction_id,provider_status,jalur_pembayaran,disetorkan_oleh_id" +
+        "&order_id=eq." + encodeURIComponent(oldOrderId) + "&provider=eq.gobiz&limit=1"
+    });
+    const oldOrder = Array.isArray(rows) ? rows[0] : null;
+    if (!oldOrder || oldOrder.jalur_pembayaran !== "ketua_gang_qris" ||
+        Number(oldOrder.disetorkan_oleh_id) !== Number(req.session.id)) {
+      return res.status(404).json({ ok: false, message: "Transaksi lama tidak ditemukan untuk akun Ketua Gang ini." });
+    }
+    if (!oldOrder.provider_transaction_id) {
+      return res.status(409).json({ ok: false, message: "ID transaksi lama belum tersimpan. Hubungi Bendahara." });
+    }
+    const detail = await getGoBizTransactionDetail(oldOrder.provider_transaction_id);
+    const transaction = detail.transaction;
+    const config = getGoBizConfig();
+    if (transaction.order_id !== oldOrderId ||
+        Number(transaction.gross_amount) !== Number(oldOrder.total_amount) ||
+        String(detail.outlet?.id || "") !== config.outletId) {
+      return res.status(409).json({ ok: false, message: "Data transaksi lama tidak cocok dengan ledger RT Kita." });
+    }
+    const oldStatus = String(transaction.status || "").toLowerCase();
+    if (!isGoBizExpiredStatus(oldStatus)) {
+      return res.status(409).json({ ok: false, status: oldStatus, message: "QRIS lama belum dipastikan kedaluwarsa. Pembayaran ulang ditolak." });
+    }
+    await supabaseRequest("iuran_midtrans_orders", {
+      method: "PATCH",
+      query: "order_id=eq." + encodeURIComponent(oldOrderId) + "&provider=eq.gobiz",
+      body: { provider_status: oldStatus }
+    });
+    const prefix = config.environment === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-";
+    const proposedOrderId = prefix + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
+    const attemptRows = await supabaseRequest("rpc/start_gobiz_iuran_retry_attempt", {
+      method: "POST",
+      body: { p_old_order_id: oldOrderId, p_proposed_order_id: proposedOrderId }
+    });
+    const attempt = Array.isArray(attemptRows) ? attemptRows[0] : null;
+    if (!attempt?.order_id || Number(attempt.total_amount) !== Number(oldOrder.total_amount)) {
+      throw new Error("Percobaan pembayaran ulang belum tersimpan dengan benar.");
+    }
+    newOrderId = String(attempt.order_id);
+    const wargaRows = await supabaseRequest("warga", {
+      query: "select=id,nama_lengkap,keluarga_id&id=eq." + encodeURIComponent(String(oldOrder.warga_id)) + "&limit=1"
+    });
+    const warga = Array.isArray(wargaRows) ? wargaRows[0] : null;
+    if (!warga || String(warga.keluarga_id) !== String(oldOrder.keluarga_id)) {
+      return res.status(409).json({ ok: false, message: "Data warga pada ledger tidak cocok." });
+    }
+    const transaksi = await buatTransaksiQRIS({
+      orderId: newOrderId, total: Number(attempt.total_amount),
+      namaWarga: warga.nama_lengkap,
+      namaPembayar: String(req.session.nama || req.session.username || "Ketua Gang")
+    });
+    const finalized = await supabaseRequest("rpc/complete_gobiz_iuran_retry_attempt", {
+      method: "POST",
+      body: { p_new_order_id: newOrderId, p_new_transaction_id: String(transaksi.transaction.id) }
+    });
+    const savedRows = Array.isArray(finalized) ? finalized : [];
+    if (!savedRows.length ||
+        savedRows.length !== (Array.isArray(oldOrder.row_ids) ? oldOrder.row_ids.length : 0) ||
+        savedRows.some(row => row.bukti_transfer !== "GOBIZ:" + newOrderId)) {
+      return res.status(500).json({ ok: false, order_id: newOrderId, message: "QRIS pengganti dibuat tetapi pencatatan belum terverifikasi. Hubungi Bendahara." });
+    }
+    return res.json({
+      ok: true, order_id: newOrderId, replaces_order_id: oldOrderId,
+      total: Number(oldOrder.total_amount), qr_url: transaksi.qr_url || null,
+      qr_string: transaksi.qr_string || null,
+      message: "QRIS pengganti Ketua Gang berhasil dibuat. Riwayat order lama tetap tersimpan."
+    });
+  } catch (error) {
+    console.error("GOBIZ GANG RETRY ERROR:", error?.message || error);
+    return res.status(500).json({
+      ok: false, order_id: newOrderId,
+      message: "Pembayaran ulang belum berhasil. Jangan membuat order baru. Referensi pemulihan: " + (newOrderId || "")
+    });
+  }
+});
+
 /* PEMULIHAN INTENT QRIS KETUA GANG */
 app.post("/api/ketua-gang/gobiz/recover/:orderId", requireGangLead, async (req, res) => {
   try {
