@@ -123,7 +123,7 @@ async function ensureGoBizPaymentWebhook(callbackUrl, { fetchImpl = fetch, env =
 async function createGoBizQrisTransaction({ orderId, total, namaWarga, namaPembayar, fetchImpl = fetch, env = process.env }) {
   const c = getGoBizConfig(env);
   if (!c.outletId) throw new Error("Outlet ID GoBiz belum dikonfigurasi.");
-  if (!/^RTTBK-GOBIZ-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$/.test(String(orderId || ""))) {
+  if (!/^RTTBK-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$/.test(String(orderId || ""))) {
     throw new Error("Referensi transaksi GoBiz tidak valid.");
   }
   if (!Number.isSafeInteger(Number(total)) || Number(total) <= 0) {
