@@ -23,6 +23,10 @@ test("GoBiz production and sandbox endpoints are selected from configuration", (
   const sandbox = getGoBizConfig({ GOBIZ_ENVIRONMENT: "sandbox" });
   assert.equal(sandbox.apiBase, "https://api.partner-sandbox.gobiz.co.id");
   assert.equal(sandbox.oauthBase, "https://integration-goauth.gojekapi.com");
+  assert.throws(
+    () => getGoBizConfig({ GOBIZ_ENVIRONMENT: "stagin" }),
+    /GOBIZ_ENVIRONMENT harus bernilai sandbox atau production/
+  );
 });
 
 test("GoBiz integration is not considered configured without all required credentials", () => {
@@ -153,6 +157,7 @@ test("GoBiz transaction detail lookup validates transaction identity and QRIS da
   });
   assert.equal(result.transaction.status, "expire");
   assert.equal(result.transaction.order_id, "RTTBK-SBX-1900000000000-deadbeef");
+  assert.ok(calls.some(call => String(call.url).startsWith("https://integration-goauth.gojekapi.com/oauth2/token")));
   assert.ok(calls.some(call => String(call.url).includes("/integrations/payment/outlets/G123/v1/transactions/" + id)));
   await assert.rejects(
     () => getGoBizTransactionDetail("not-a-uuid", { env: { GOBIZ_OUTLET_ID: "G123" } }),
