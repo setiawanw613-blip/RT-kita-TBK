@@ -252,6 +252,10 @@ function isGoBizSettlementStatus(value) {
   return normalizeGoBizTransactionStatus(value) === "settlement";
 }
 
+function isGoBizIdrCurrency(value) {
+  return String(value || "").trim().toUpperCase() === "IDR";
+}
+
 function verifyGoBizWebhookSignature(rawBody, signature, secret) {
   if (!rawBody || !signature || !secret) return false;
   const supplied = String(signature).trim().toLowerCase();
