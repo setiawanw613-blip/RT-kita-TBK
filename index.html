@@ -1197,9 +1197,42 @@ async function pulihkanQRISGang(orderId){
 async function riwayatSetoranGang(){
   try{
     const rows=await api("/api/ketua-gang/riwayat-setoran");
-    const items=(Array.isArray(rows)?rows:[]).map(row=>`<div class="card"><b>${esc(row.nama_warga||"Warga")}</b><div>Bulan iuran: ${esc(row.bulan||"-")}</div><div>Nominal: ${rupiah(row.total_amount||0)}</div><div>Status: <span class="badge">${row.status==="lunas"?"Lunas":"Menunggu pembayaran"}</span></div><div>Petugas penyetor: ${esc(row.disetorkan_oleh_nama||"-")}</div><div class="muted">Order: ${esc(String(row.bukti_transfer||"").replace(/^GOBIZ:/,"").replace(/^MIDTRANS:/,""))}</div>${(row.gobiz_settlement_at||row.midtrans_settlement_at)?`<div class="muted">Dibayar: ${esc(new Date(row.gobiz_settlement_at||row.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}</div>`).join("");
-    layout("Riwayat Setoran QRIS Saya",(items||"<div class='card'>Belum ada riwayat setoran QRIS.</div>")+'<button class="btn secondary" onclick="staffHome()">Kembali</button>');
+    const items=(Array.isArray(rows)?rows:[]).map(row=>{
+      const marker=String(row.bukti_transfer||"");
+      const orderId=marker.startsWith("GOBIZ:")?marker.slice(6):"";
+      return `<div class="card"><b>${esc(row.nama_warga||"Warga")}</b><div>Bulan iuran: ${esc(row.bulan||"-")}</div><div>Nominal: ${rupiah(row.total_amount||0)}</div><div>Status: <span class="badge">${row.status==="lunas"?"Lunas":"Menunggu pembayaran"}</span></div><div>Petugas penyetor: ${esc(row.disetorkan_oleh_nama||"-")}</div><div class="muted">Order: ${esc(marker.replace(/^GOBIZ:/,"").replace(/^MIDTRANS:/,""))}</div>${(row.gobiz_settlement_at||row.midtrans_settlement_at)?`<div class="muted">Dibayar: ${esc(new Date(row.gobiz_settlement_at||row.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}${orderId&&row.status!=="lunas"?`<button class="btn secondary" style="width:100%;margin-top:10px" onclick="cekStatusSetoranGang('${esc(orderId)}')">Periksa status / QR pengganti</button><div id="gangStatus-${esc(orderId)}" class="muted"></div>`:""}</div>`;
+    }).join("");
+    layout("Riwayat Setoran QRIS Saya",(items||"<div class='card'>Belum ada riwayat setoran QRIS.</div>")+'<div id="gangQrisResult"></div><button class="btn secondary" onclick="staffHome()">Kembali</button>');
   }catch(e){alert(e.message||"Gagal memuat riwayat setoran.");}
+}
+async function cekStatusSetoranGang(orderId){
+  const statusBox=document.getElementById("gangStatus-"+orderId);
+  if(statusBox)statusBox.textContent="Memeriksa status GoBiz...";
+  try{
+    const result=await api("/api/ketua-gang/gobiz/status/"+encodeURIComponent(orderId));
+    const status=String(result.status||"").toLowerCase();
+    if(status==="settlement"){
+      if(statusBox)statusBox.textContent="Pembayaran sudah settlement. Memuat ulang riwayat...";
+      setTimeout(()=>riwayatSetoranGang(),1000);
+      return;
+    }
+    if(!result.can_retry){
+      if(statusBox)statusBox.textContent="Status GoBiz: "+status+". Belum perlu membuat QR baru.";
+      return;
+    }
+    if(!confirm("QRIS lama telah kedaluwarsa. Buat QRIS pengganti untuk tagihan yang sama?"))return;
+    if(statusBox)statusBox.textContent="Membuat QRIS pengganti...";
+    const retry=await api("/api/ketua-gang/gobiz/retry/"+encodeURIComponent(orderId),{method:"POST"});
+    let view='<div class="card"><h3>QRIS Pengganti Berhasil Dibuat</h3><div>Order: '+esc(retry.order_id)+'</div><div>Total: '+rupiah(retry.total)+'</div>';
+    if(retry.qr_url)view+='<div style="text-align:center;margin:16px 0"><img src="'+esc(retry.qr_url)+'" alt="QRIS pengganti" style="max-width:260px;width:100%"></div>';
+    if(retry.qr_string)view+='<textarea id="kodeGangRetryQRIS" readonly style="width:100%">'+esc(retry.qr_string)+'</textarea><button class="btn secondary" onclick="navigator.clipboard.writeText(document.getElementById(\'kodeGangRetryQRIS\').value).then(()=>alert(\'Kode disalin\'))">Salin kode QRIS</button>';
+    view+='<small class="muted">QRIS lama tetap tersimpan di riwayat. Gunakan QRIS pengganti ini saja.</small></div>';
+    const target=document.getElementById("gangQrisResult");
+    if(target)target.innerHTML=view;
+    if(statusBox)statusBox.textContent="QRIS pengganti siap dibayar.";
+  }catch(e){
+    if(statusBox)statusBox.textContent=e.message||"Status belum dapat diperiksa.";
+  }
 }
 
 async function lihatWargaGang(){
