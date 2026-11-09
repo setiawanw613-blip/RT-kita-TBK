@@ -4,7 +4,10 @@ const crypto = require("node:crypto");
 const {
   getGoBizConfig,
   isGoBizConfigured,
-  verifyGoBizWebhookSignature
+  verifyGoBizWebhookSignature,
+  isGoBizExpiredStatus,
+  isGoBizSettlementStatus,
+  normalizeGoBizTransactionStatus
 } = require("./gobiz-payment");
 
 test("GoBiz production and sandbox endpoints are selected from configuration", () => {
@@ -152,4 +155,15 @@ test("GoBiz transaction detail lookup validates transaction identity and QRIS da
     () => getGoBizTransactionDetail("not-a-uuid", { env: { GOBIZ_OUTLET_ID: "G123" } }),
     /ID transaksi GoBiz tidak valid/
   );
+});
+
+
+test("GoBiz terminal transaction statuses are normalized safely", () => {
+  for (const status of ["expire", "expired", "cancel", "cancelled", "deny", "denied"]) {
+    assert.equal(isGoBizExpiredStatus(status), true);
+  }
+  assert.equal(isGoBizExpiredStatus("pending"), false);
+  assert.equal(isGoBizSettlementStatus("SETTLEMENT"), true);
+  assert.equal(isGoBizSettlementStatus("pending"), false);
+  assert.equal(normalizeGoBizTransactionStatus(" Expire "), "expire");
 });
