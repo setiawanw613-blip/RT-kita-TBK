@@ -1177,8 +1177,22 @@ async function kirimSetoranGang(){
     const result=await api("/api/ketua-gang/setor-qris",{method:"POST",body:JSON.stringify({warga_id:wargaId,bulan})});
     const box=document.getElementById("gangQrisResult");
     if(box)box.innerHTML=`<div class="card"><h3>QRIS Setoran Berhasil Dibuat</h3><b>${esc(result.nama_warga)}</b><div>Bulan: ${esc(result.bulan)}</div><div>Total: ${rupiah(result.total)}</div><div>Disetorkan oleh: ${esc(result.disetorkan_oleh)}</div><div>Status: Menunggu pembayaran</div>${result.qr_url?`<div style="text-align:center;margin:16px 0"><img src="${esc(result.qr_url)}" alt="QRIS pembayaran" style="max-width:260px;width:100%;height:auto"></div><a class="btn" href="${esc(result.qr_url)}" target="_blank" rel="noopener">Buka QRIS</a>`:"<p>QRIS belum dapat ditampilkan. Periksa detail transaksi GoBiz.</p>"}<small class="muted">Jangan tandai lunas secara manual. Status berubah setelah GoBiz mengonfirmasi settlement.</small><button class="btn secondary" onclick="riwayatSetoranGang()">Lihat riwayat setoran</button></div>`;
-  }catch(e){alert(e.message||"Gagal membuat QRIS.");}
+  }catch(e){
+    const match=String(e.message||"").match(/RTTBK-(?:PROD|SBX)-[0-9]+-[a-f0-9]{8}/i);
+    const box=document.getElementById("gangQrisResult");
+    if(box&&match){
+      box.innerHTML='<div class="card"><b>Setoran belum selesai</b><p>'+esc(e.message)+'</p><button class="btn primary" onclick="pulihkanQRISGang(\''+esc(match[0])+'\')">Pulihkan QRIS dengan referensi yang sama</button></div>';
+    }else alert(e.message||"Gagal membuat QRIS.");
+  }
   finally{if(button){button.disabled=false;button.textContent="Buat QRIS";}}
+}
+async function pulihkanQRISGang(orderId){
+  const box=document.getElementById("gangQrisResult");
+  if(box)box.textContent="Memulihkan QRIS setoran...";
+  try{
+    const result=await api("/api/ketua-gang/gobiz/recover/"+encodeURIComponent(orderId),{method:"POST"});
+    if(box)box.innerHTML='<div class="card"><h3>QRIS Setoran Berhasil Dipulihkan</h3><div>Order: '+esc(result.order_id)+'</div><div>Total: '+rupiah(result.total)+'</div>'+(result.qr_url?'<div style="text-align:center;margin:16px 0"><img src="'+esc(result.qr_url)+'" alt="QRIS" style="max-width:260px;width:100%"></div>':'')+(result.qr_string?'<textarea id="kodeGangQRISPulih" readonly style="width:100%">'+esc(result.qr_string)+'</textarea><button class="btn secondary" onclick="navigator.clipboard.writeText(document.getElementById(\'kodeGangQRISPulih\').value).then(()=>alert(\'Kode disalin\'))">Salin kode QRIS</button>':'')+'<small class="muted">Gunakan QRIS ini saja. Order lama tetap tercatat.</small></div>';
+  }catch(e){if(box)box.innerHTML='<div class="card">'+esc(e.message||"QRIS belum dapat dipulihkan.")+'</div>';}
 }
 async function riwayatSetoranGang(){
   try{
