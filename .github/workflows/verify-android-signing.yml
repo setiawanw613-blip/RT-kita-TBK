@@ -1,0 +1,41 @@
+name: Verify RT TBK permanent Android signing key
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/verify-android-signing.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-permanent-key:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check signing secrets and certificate identity
+        env:
+          KEYSTORE_B64: ${{ secrets.RT_KITA_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RT_KITA_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RT_KITA_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RT_KITA_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$KEYSTORE_B64" || { echo "::error::Secret RT_KITA_KEYSTORE_BASE64 belum tersedia"; exit 1; }
+          test -n "$KEYSTORE_PASSWORD" || { echo "::error::Secret RT_KITA_KEYSTORE_PASSWORD belum tersedia"; exit 1; }
+          test -n "$KEY_ALIAS" || { echo "::error::Secret RT_KITA_KEY_ALIAS belum tersedia"; exit 1; }
+          test -n "$KEY_PASSWORD" || { echo "::error::Secret RT_KITA_KEY_PASSWORD belum tersedia"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/rt-kita-signing"
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rt-kita-signing/release.jks"
+          chmod 600 "$RUNNER_TEMP/rt-kita-signing/release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/rt-kita-signing/release.jks" -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" >/dev/null
+          ACTUAL="$(keytool -exportcert -keystore "$RUNNER_TEMP/rt-kita-signing/release.jks" -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" | sha256sum | awk '{print $1}')"
+          EXPECTED="2682ffc9b05089b77e166e713fa4e036a10eaf7d068cc1050e2ddaa314bd0854"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::Keystore ditemukan tetapi sertifikatnya TIDAK cocok dengan kunci rilis RT TBK sebelumnya. Rilis dihentikan demi mencegah aplikasi warga gagal diperbarui."
+            echo "Fingerprint berbeda. Nilai rahasia tidak ditampilkan."
+            exit 1
+          fi
+          echo "Semua secret tersedia dan fingerprint sertifikat cocok dengan kunci rilis RT TBK sebelumnya."
+          echo "Kunci permanen tervalidasi; tidak ada APK yang dibuat atau dipublikasikan oleh pemeriksaan ini." >> "$GITHUB_STEP_SUMMARY"
