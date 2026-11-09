@@ -4432,6 +4432,15 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
   let rowsTersimpan = [];
   let providerTransactionCreated = false;
   try {
+    const gobizConfig = getGoBizConfig();
+    if (!isGoBizConfigured()) {
+      return res.status(503).json({
+        ok: false,
+        code: "GOBIZ_NOT_CONFIGURED",
+        message: "Pembayaran QRIS GoBiz belum diaktifkan. Tidak ada tagihan warga yang dibuat. Hubungi Bendahara."
+      });
+    }
+
     const wargaId = String(req.body?.warga_id || "").trim();
     const bulan = String(req.body?.bulan || "").trim();
     if (!/^\d+$/.test(wargaId) || !isValidIuranMonth(bulan)) {
@@ -4480,7 +4489,6 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     }
 
     const total = 35000;
-    const gobizConfig = getGoBizConfig();
     orderId = (gobizConfig.environment === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-") +
       Date.now() + "-" + crypto.randomBytes(4).toString("hex");
     const penyetorNama = String(req.session.nama || req.session.username || "Ketua Gang");
@@ -4614,6 +4622,15 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
   let providerTransactionCreated = false;
 
   try {
+    const gobizConfig = getGoBizConfig();
+    if (!isGoBizConfigured()) {
+      return res.status(503).json({
+        ok: false,
+        code: "GOBIZ_NOT_CONFIGURED",
+        message: "Pembayaran QRIS GoBiz belum diaktifkan. Tidak ada tagihan baru yang dibuat. Hubungi Bendahara."
+      });
+    }
+
     const bulans = req.body.bulans;
 
     if (
@@ -4755,7 +4772,6 @@ if (record && !iuranKedaluwarsa.some(
     }
 
     const total = 35000 * dipilih.length;
-    const gobizConfig = getGoBizConfig();
     orderId =
       `${gobizConfig.environment === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-"}${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 
