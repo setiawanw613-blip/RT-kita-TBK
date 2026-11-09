@@ -46,7 +46,7 @@ BEGIN
   IF nullif(btrim(p_warga_id), '') IS NULL
      OR nullif(btrim(p_keluarga_id), '') IS NULL
      OR p_order_id IS NULL
-     OR p_order_id !~ '^RTTBK-GOBIZ-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$'
+     OR p_order_id !~ '^RTTBK-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$'
      OR nullif(btrim(p_transaction_id), '') IS NULL
      OR p_bulans IS NULL
      OR cardinality(p_bulans) < 1
@@ -191,7 +191,7 @@ DECLARE
   v_paid_count integer := 0;
 BEGIN
   IF p_order_id IS NULL
-     OR p_order_id !~ '^RTTBK-GOBIZ-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$'
+     OR p_order_id !~ '^RTTBK-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$'
      OR nullif(btrim(p_transaction_id), '') IS NULL
      OR nullif(btrim(p_outlet_id), '') IS NULL
      OR p_expected_outlet_id IS NULL
