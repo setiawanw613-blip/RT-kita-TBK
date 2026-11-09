@@ -79,14 +79,14 @@ BEGIN
   WHERE id = ANY(v_old.row_ids)
   FOR UPDATE;
 
-  SELECT count(*), coalesce(sum(total_amount), 0)::integer
+  SELECT count(*), coalesce(sum(i.total_amount), 0)::integer
     INTO v_count, v_total
-  FROM public.iuran_warga
-  WHERE id = ANY(v_old.row_ids)
-    AND keluarga_id::text = v_old.keluarga_id::text
-    AND bukti_transfer = 'GOBIZ:' || p_old_order_id
-    AND status <> 'lunas'
-    AND coalesce(total_amount, 0) = 35000;
+  FROM public.iuran_warga AS i
+  WHERE i.id = ANY(v_old.row_ids)
+    AND i.keluarga_id::text = v_old.keluarga_id::text
+    AND i.bukti_transfer = 'GOBIZ:' || p_old_order_id
+    AND i.status <> 'lunas'
+    AND coalesce(i.total_amount, 0) = 35000;
 
   IF v_count <> cardinality(v_old.row_ids)
      OR v_total <> v_old.total_amount
