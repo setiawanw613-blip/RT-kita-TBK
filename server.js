@@ -4797,7 +4797,7 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
 app.post("/api/iuran/verifikasi", requireFinance, async (req, res) => {
   try {
     const id = String(req.body?.id || "").trim();
-    if (!/^\\d+$/.test(id)) {
+    if (!/^\d+$/.test(id)) {
       return res.status(400).json({
         ok: false,
         message: "ID iuran wajib berupa angka yang valid."
