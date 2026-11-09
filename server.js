@@ -15,7 +15,7 @@ const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midt
 const { findConflictingSettledRows } = require("./midtrans-order-reconciliation");
 const { canAccessOwnedRecord } = require("./access-control");
 const { cancelPendingMidtransTransaction } = require("./midtrans-cancel");
-const { createGoBizQrisTransaction, getGoBizTransactionDetail, getGoBizConfig, isGoBizConfigured, verifyGoBizWebhookSignature } = require("./gobiz-payment");
+const { createGoBizQrisTransaction, getGoBizTransactionDetail, getGoBizConfig, isGoBizConfigured, isGoBizExpiredStatus, isGoBizSettlementStatus, verifyGoBizWebhookSignature } = require("./gobiz-payment");
 
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
@@ -489,28 +489,157 @@ app.get("/api/iuran/gobiz/status/:orderId", requireWarga, async (req, res) => {
       query: "order_id=eq." + encodeURIComponent(orderId) + "&provider=eq.gobiz",
       body: { provider_status: status }
     });
-    await supabaseRequest("iuran_warga", {
-      method: "PATCH",
-      query: "bukti_transfer=eq." + encodeURIComponent("GOBIZ:" + orderId) + "&status=neq.lunas",
-      body: { gobiz_status: status }
-    });
 
+    if (isGoBizSettlementStatus(status)) {
+      const settlementAt = transaction.settlement_at || new Date().toISOString();
+      // Polling is a recovery path if the signed webhook was delayed or missed.
+      // The same atomic RPC makes webhook + polling idempotent.
+      await supabaseRequest("rpc/settle_gobiz_iuran_order_atomic", {
+        method: "POST",
+        body: {
+          p_order_id: orderId,
+          p_gross_amount: Number(transaction.gross_amount),
+          p_transaction_id: String(transaction.id),
+          p_outlet_id: String(detail.outlet?.id || ""),
+          p_expected_outlet_id: config.outletId,
+          p_settlement_at: new Date(settlementAt).toISOString()
+        }
+      });
+    } else {
+      await supabaseRequest("iuran_warga", {
+        method: "PATCH",
+        query: "bukti_transfer=eq." + encodeURIComponent("GOBIZ:" + orderId) + "&status=neq.lunas",
+        body: { gobiz_status: status }
+      });
+    }
+
+    const canRetry = isGoBizExpiredStatus(status);
     return res.json({
       ok: true,
       order_id: orderId,
       transaction_id: transaction.id,
       status,
       settlement_at: transaction.settlement_at || null,
-      can_retry: ["expire", "expired", "cancel", "cancelled", "deny"].includes(status),
-      message: ["expire", "expired", "cancel", "cancelled", "deny"].includes(status)
-        ? "GoBiz melaporkan transaksi tidak aktif. Pembayaran ulang tetap memerlukan pemeriksaan dan penggantian order yang aman."
-        : status === "settlement"
-          ? "GoBiz melaporkan pembayaran berhasil. Menunggu atau memeriksa webhook settlement."
+      can_retry: canRetry,
+      retry_endpoint: canRetry ? "/api/iuran/gobiz/retry/" + encodeURIComponent(orderId) : null,
+      message: canRetry
+        ? "GoBiz mengonfirmasi QRIS lama kedaluwarsa. Pembayaran ulang dapat dibuat dengan mempertahankan ledger transaksi lama."
+        : isGoBizSettlementStatus(status)
+          ? "Pembayaran berhasil dan telah direkonsiliasi ke iuran serta kas RT."
           : "Status transaksi GoBiz berhasil diperiksa."
     });
   } catch (error) {
     console.error("GOBIZ TRANSACTION STATUS ERROR:", error?.message || error);
     return res.status(502).json({ ok: false, message: "Status transaksi belum dapat diperiksa ke GoBiz." });
+  }
+});
+
+/* RETRY QRIS GOBIZ SETELAH STATUS KEDALUWARSA TERVERIFIKASI */
+app.post("/api/iuran/gobiz/retry/:orderId", requireWarga, async (req, res) => {
+  let newOrderId = null;
+  try {
+    const oldOrderId = String(req.params.orderId || "");
+    if (!/^RTTBK-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$/.test(oldOrderId)) {
+      return res.status(400).json({ ok: false, message: "Referensi transaksi lama tidak valid." });
+    }
+
+    const wargaRows = await supabaseRequest("warga", {
+      query: "select=id,keluarga_id,nama_lengkap&id=eq." +
+        encodeURIComponent(String(req.session.wargaId)) + "&limit=1"
+    });
+    const warga = Array.isArray(wargaRows) ? wargaRows[0] : null;
+    if (!warga?.keluarga_id) {
+      return res.status(403).json({ ok: false, message: "Data keluarga tidak dapat diverifikasi." });
+    }
+
+    const orderRows = await supabaseRequest("iuran_midtrans_orders", {
+      query: "select=order_id,warga_id,keluarga_id,row_ids,total_amount,provider,provider_transaction_id,provider_status" +
+        "&order_id=eq." + encodeURIComponent(oldOrderId) + "&provider=eq.gobiz&limit=1"
+    });
+    const oldOrder = Array.isArray(orderRows) ? orderRows[0] : null;
+    if (!oldOrder || String(oldOrder.keluarga_id) !== String(warga.keluarga_id)) {
+      return res.status(404).json({ ok: false, message: "Transaksi lama tidak ditemukan untuk akun ini." });
+    }
+    if (!oldOrder.provider_transaction_id) {
+      return res.status(409).json({ ok: false, message: "ID transaksi lama belum tercatat; perlu rekonsiliasi Bendahara." });
+    }
+
+    const detail = await getGoBizTransactionDetail(oldOrder.provider_transaction_id);
+    const transaction = detail.transaction;
+    const config = getGoBizConfig();
+    if (
+      transaction.order_id !== oldOrderId ||
+      Number(transaction.gross_amount) !== Number(oldOrder.total_amount) ||
+      String(detail.outlet?.id || "") !== config.outletId
+    ) {
+      return res.status(409).json({ ok: false, message: "Data transaksi lama tidak cocok dengan ledger RT Kita." });
+    }
+
+    const oldStatus = String(transaction.status || "").toLowerCase();
+    if (!isGoBizExpiredStatus(oldStatus)) {
+      return res.status(409).json({
+        ok: false,
+        status: oldStatus,
+        message: "QRIS lama belum dipastikan kedaluwarsa. Pembayaran ulang ditolak untuk mencegah pembayaran ganda."
+      });
+    }
+
+    await supabaseRequest("iuran_midtrans_orders", {
+      method: "PATCH",
+      query: "order_id=eq." + encodeURIComponent(oldOrderId) + "&provider=eq.gobiz",
+      body: { provider_status: oldStatus }
+    });
+
+    const prefix = config.environment === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-";
+    newOrderId = prefix + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
+    const newTransaction = await buatTransaksiQRIS({
+      orderId: newOrderId,
+      total: Number(oldOrder.total_amount),
+      namaWarga: warga.nama_lengkap
+    });
+
+    const rows = await supabaseRequest("rpc/reserve_gobiz_iuran_retry", {
+      method: "POST",
+      body: {
+        p_old_order_id: oldOrderId,
+        p_new_order_id: newOrderId,
+        p_new_transaction_id: String(newTransaction.transaction.id)
+      }
+    });
+    const savedRows = Array.isArray(rows) ? rows : [];
+    const expectedCount = Array.isArray(oldOrder.row_ids) ? oldOrder.row_ids.length : 0;
+    if (
+      !expectedCount ||
+      savedRows.length !== expectedCount ||
+      savedRows.some(row => row.bukti_transfer !== "GOBIZ:" + newOrderId)
+    ) {
+      console.error("GOBIZ RETRY CREATED BUT LEDGER VERIFICATION FAILED:", {
+        oldOrderId, newOrderId, transactionId: newTransaction.transaction.id
+      });
+      return res.status(500).json({
+        ok: false,
+        order_id: newOrderId,
+        message: "QRIS baru sudah dibuat oleh GoBiz tetapi pencatatan belum terverifikasi. Jangan bayar QR ini; hubungi Bendahara untuk rekonsiliasi."
+      });
+    }
+
+    return res.json({
+      ok: true,
+      order_id: newOrderId,
+      replaces_order_id: oldOrderId,
+      total: Number(oldOrder.total_amount),
+      qr_url: newTransaction.qr_url || null,
+      qr_string: newTransaction.qr_string || null,
+      transaction_status: newTransaction.transaction_status || "pending",
+      message: "QRIS pengganti berhasil dibuat. QRIS lama tetap tersimpan dalam riwayat transaksi."
+    });
+  } catch (error) {
+    console.error("GOBIZ QRIS RETRY ERROR:", error?.message || error);
+    return res.status(500).json({
+      ok: false,
+      order_id: newOrderId,
+      message: "Pembayaran ulang belum dapat disiapkan. Jangan membuat QRIS baru secara manual; periksa riwayat transaksi terlebih dahulu."
+    });
   }
 });
 
