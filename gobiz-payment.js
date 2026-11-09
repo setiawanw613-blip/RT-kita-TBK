@@ -120,6 +120,32 @@ async function ensureGoBizPaymentWebhook(callbackUrl, { fetchImpl = fetch, env =
   return true;
 }
 
+async function getGoBizTransactionDetail(transactionId, { fetchImpl = fetch, env = process.env } = {}) {
+  const c = getGoBizConfig(env);
+  if (!c.outletId) throw new Error("Outlet ID GoBiz belum dikonfigurasi.");
+  const id = String(transactionId || "").trim();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    throw new Error("ID transaksi GoBiz tidak valid.");
+  }
+  const result = await goBizRequest(
+    `/integrations/payment/outlets/${encodeURIComponent(c.outletId)}/v1/transactions/${encodeURIComponent(id)}`,
+    { fetchImpl, env }
+  );
+  const transaction = result?.data?.transaction;
+  if (
+    result?.success !== true ||
+    !transaction ||
+    String(transaction.id) !== id ||
+    String(transaction.payment_type || "").toLowerCase() !== "qris" ||
+    String(transaction.currency || "").toUpperCase() !== "IDR" ||
+    !transaction.order_id ||
+    !Number.isSafeInteger(Number(transaction.gross_amount))
+  ) {
+    throw new Error("Detail transaksi GoBiz tidak lengkap atau tidak cocok.");
+  }
+  return { transaction, outlet: result.data.outlet || null };
+}
+
 async function createGoBizQrisTransaction({ orderId, total, namaWarga, namaPembayar, fetchImpl = fetch, env = process.env }) {
   const c = getGoBizConfig(env);
   if (!c.outletId) throw new Error("Outlet ID GoBiz belum dikonfigurasi.");
@@ -226,5 +252,6 @@ module.exports = {
   goBizRequest,
   ensureGoBizPaymentWebhook,
   createGoBizQrisTransaction,
+  getGoBizTransactionDetail,
   verifyGoBizWebhookSignature
 };
