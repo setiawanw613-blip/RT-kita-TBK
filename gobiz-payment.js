@@ -4,7 +4,7 @@ const tokenCache = new Map();
 const subscriptionCache = new Map();
 
 function getGoBizConfig(env = process.env) {
-  const environment = String(env.GOBIZ_ENVIRONMENT || "production").trim().toLowerCase();
+  const environment = String(env.GOBIZ_ENVIRONMENT || "sandbox").trim().toLowerCase();
   if (!["sandbox", "production"].includes(environment)) {
     throw new Error("GOBIZ_ENVIRONMENT harus bernilai sandbox atau production.");
   }
@@ -35,7 +35,7 @@ async function getGoBizAccessToken({ fetchImpl = fetch, env = process.env, force
     throw new Error("Kredensial GoBiz belum dikonfigurasi di server.");
   }
   const cacheKey = crypto.createHash("sha256")
-    .update([c.oauthBase, c.clientId, c.clientSecret].join("\\n"))
+    .update([c.oauthBase, c.clientId, c.clientSecret].join("\n"))
     .digest("hex");
   const cached = tokenCache.get(cacheKey);
   if (!forceRefresh && cached && Date.now() < cached.expiresAt - 60000) {
