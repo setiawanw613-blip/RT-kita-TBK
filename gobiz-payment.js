@@ -57,12 +57,12 @@ async function getGoBizAccessToken({ fetchImpl = fetch, env = process.env, force
     signal: AbortSignal.timeout(15000)
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok || !body.access_token) {
+  if (!response.ok || typeof body.access_token !== "string" || !body.access_token.trim()) {
     tokenCache.delete(cacheKey);
     console.error("GOBIZ TOKEN ERROR:", response.status);
     throw new Error("Autentikasi GoBiz gagal. Periksa kredensial dan scope API.");
   }
-  const token = String(body.access_token);
+  const token = body.access_token.trim();
   const expiresAt = Date.now() + Math.max(60, Number(body.expires_in) || 3600) * 1000;
   tokenCache.set(cacheKey, { token, expiresAt });
   return token;
