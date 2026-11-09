@@ -20,6 +20,9 @@ test("GoBiz production and sandbox endpoints are selected from configuration", (
   });
   assert.equal(production.apiBase, "https://api.gobiz.co.id");
   assert.equal(production.oauthBase, "https://accounts.go-jek.com");
+  const defaultConfig = getGoBizConfig({});
+  assert.equal(defaultConfig.environment, "sandbox");
+  assert.equal(defaultConfig.apiBase, "https://api.partner-sandbox.gobiz.co.id");
   const sandbox = getGoBizConfig({ GOBIZ_ENVIRONMENT: "sandbox" });
   assert.equal(sandbox.apiBase, "https://api.partner-sandbox.gobiz.co.id");
   assert.equal(sandbox.oauthBase, "https://integration-goauth.gojekapi.com");
@@ -179,4 +182,37 @@ test("GoBiz terminal transaction statuses are normalized safely", () => {
   assert.equal(isGoBizIdrCurrency(null), false);
   assert.equal(isGoBizIdrCurrency("USD"), false);
   assert.equal(normalizeGoBizTransactionStatus(" Expire "), "expire");
+});
+
+
+test("GoBiz access tokens are isolated by environment and cached per credential set", async () => {
+  const { getGoBizAccessToken } = require("./gobiz-payment");
+  const calls = [];
+  const fakeFetch = async (url) => {
+    calls.push(String(url));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ access_token: String(url).includes("integration-goauth") ? "sandbox-token" : "production-token", expires_in: 3600 })
+    };
+  };
+  const common = {
+    GOBIZ_CLIENT_ID: "cache-isolation-test-client",
+    GOBIZ_CLIENT_SECRET: "cache-isolation-test-secret",
+    GOBIZ_OUTLET_ID: "G-CACHE-TEST",
+    GOBIZ_NOTIFICATION_SECRET_KEY: "cache-isolation-test-webhook"
+  };
+  const sandboxEnv = { ...common, GOBIZ_ENVIRONMENT: "sandbox" };
+  const productionEnv = { ...common, GOBIZ_ENVIRONMENT: "production" };
+
+  const sandboxToken = await getGoBizAccessToken({ fetchImpl: fakeFetch, env: sandboxEnv });
+  const productionToken = await getGoBizAccessToken({ fetchImpl: fakeFetch, env: productionEnv });
+  const sandboxTokenAgain = await getGoBizAccessToken({ fetchImpl: fakeFetch, env: sandboxEnv });
+
+  assert.equal(sandboxToken, "sandbox-token");
+  assert.equal(productionToken, "production-token");
+  assert.equal(sandboxTokenAgain, "sandbox-token");
+  assert.equal(calls.length, 2);
+  assert.ok(calls.some(url => url.startsWith("https://integration-goauth.gojekapi.com/")));
+  assert.ok(calls.some(url => url.startsWith("https://accounts.go-jek.com/")));
 });
