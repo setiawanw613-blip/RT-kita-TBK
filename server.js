@@ -4130,6 +4130,7 @@ app.get("/api/iuran", requireFinance, async (req, res) => {
 app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
   let orderId = null;
   let rowsTersimpan = [];
+  let providerTransactionCreated = false;
   try {
     const wargaId = String(req.body?.warga_id || "").trim();
     const bulan = String(req.body?.bulan || "").trim();
@@ -4209,6 +4210,7 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     const transaksi = await buatTransaksiQRIS({
       orderId, total, namaWarga: warga.nama_lengkap, namaPembayar: penyetorNama
     });
+    providerTransactionCreated = true;
     const finalized = await supabaseRequest("rpc/complete_gobiz_iuran_intent", {
       method: "POST",
       body: { p_order_id: orderId, p_transaction_id: String(transaksi.transaction.id) }
@@ -4256,14 +4258,20 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     });
   } catch (error) {
     console.error("SETORAN QRIS KETUA GANG ERROR:", error?.message || error);
-    if (orderId && rowsTersimpan.length === 0) {
-      console.warn("GOBIZ QR dibuat tetapi reservasi database tidak terkonfirmasi; jangan bagikan QR. Periksa dashboard GoBiz:", orderId);
+    if (orderId && rowsTersimpan.length && !providerTransactionCreated) {
+      console.warn("GOBIZ INTENT TERSIMPAN; PEMBUATAN QR BELUM TERKONFIRMASI. Gunakan pemulihan order yang sama:", orderId);
+    } else if (orderId && providerTransactionCreated) {
+      console.error("GOBIZ QR dibuat; finalisasi ledger belum terkonfirmasi. Jangan buat order baru:", orderId);
     }
     return res.status(getSupabaseErrorCode(error) === "23505" ? 409 : 500).json({
       ok: false,
+      order_id: orderId,
+      recovery_required: Boolean(orderId && rowsTersimpan.length),
       message: rowsTersimpan.length
-        ? "QRIS sudah dibuat dan tercatat, tetapi penyimpanan atribusi petugas perlu diperiksa Bendahara. Jangan membuat transaksi baru."
-        : "Gagal membuat setoran QRIS. Periksa riwayat iuran sebelum mencoba lagi."
+        ? (providerTransactionCreated
+          ? "QRIS dari GoBiz sudah dibuat, tetapi pencatatan akhirnya belum terverifikasi. Jangan membayar QR lain; pulihkan transaksi dengan referensi yang sama atau hubungi Bendahara."
+          : "Tagihan sudah diamankan di sistem, tetapi QRIS belum terkonfirmasi dibuat. Jangan membuat tagihan baru; gunakan pemulihan dengan referensi yang sama.")
+        : "Gagal menyiapkan setoran QRIS. Periksa riwayat iuran sebelum mencoba lagi."
     });
   }
 });
@@ -4303,6 +4311,7 @@ app.get("/api/ketua-gang/riwayat-setoran", requireGangLead, async (req, res) => 
 app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
   let orderId = null;
   let rowsTersimpan = [];
+  let providerTransactionCreated = false;
 
   try {
     const bulans = req.body.bulans;
@@ -4475,6 +4484,7 @@ if (record && !iuranKedaluwarsa.some(
       total,
       namaWarga: warga.nama_lengkap
     });
+    providerTransactionCreated = true;
     const finalized = await supabaseRequest("rpc/complete_gobiz_iuran_intent", {
       method: "POST",
       body: { p_order_id: orderId, p_transaction_id: String(transaksi.transaction.id) }
@@ -4531,15 +4541,22 @@ if (record && !iuranKedaluwarsa.some(
   } catch (error) {
     console.error("BAYAR IURAN QRIS ERROR:", error?.message || error);
 
-    if (orderId && rowsTersimpan.length === 0) {
-      console.warn("GOBIZ QR dibuat tetapi reservasi database tidak terkonfirmasi; jangan bagikan QR. Periksa dashboard GoBiz:", orderId);
+    if (orderId && rowsTersimpan.length && !providerTransactionCreated) {
+      console.warn("GOBIZ INTENT TERSIMPAN; PEMBUATAN QR BELUM TERKONFIRMASI. Gunakan pemulihan order yang sama:", orderId);
+    } else if (orderId && providerTransactionCreated) {
+      console.error("GOBIZ QR dibuat; finalisasi ledger belum terkonfirmasi. Jangan buat order baru:", orderId);
     }
     return res.status(
       getSupabaseErrorCode(error) === "23505" ? 409 : 500
     ).json({
       ok: false,
-      message:
-        "Transaksi QRIS belum berhasil disiapkan. Periksa status iuran sebelum mencoba kembali."
+      order_id: orderId,
+      recovery_required: Boolean(orderId && rowsTersimpan.length),
+      message: rowsTersimpan.length
+        ? (providerTransactionCreated
+          ? "QRIS dari GoBiz sudah dibuat, tetapi pencatatan akhirnya belum terverifikasi. Jangan membayar QR lain; pulihkan transaksi dengan referensi yang sama atau hubungi Bendahara."
+          : "Tagihan sudah diamankan di sistem, tetapi QRIS belum terkonfirmasi dibuat. Jangan membuat tagihan baru; gunakan pemulihan dengan referensi yang sama.")
+        : "Transaksi QRIS belum berhasil disiapkan. Periksa status iuran sebelum mencoba kembali."
     });
   }
 });
