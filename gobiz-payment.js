@@ -17,7 +17,7 @@ function getGoBizConfig(env = process.env) {
       ? "https://integration-goauth.gojekapi.com"
       : "https://accounts.go-jek.com",
     apiBase: sandbox
-      ? "https://api.partner-sandbox.gobiz.co.id"
+      ? "https://api.sandbox.gobiz.co.id"
       : "https://api.gobiz.co.id"
   };
 }
