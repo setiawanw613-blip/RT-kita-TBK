@@ -74,17 +74,35 @@ public class MainActivity extends Activity {
                     return;
                 }
                 try {
+                    // Flush WebView cookies first so authenticated same-origin downloads
+                    // use the active RT Kita session in Android's DownloadManager.
+                    CookieManager cookieManager = CookieManager.getInstance();
+                    cookieManager.flush();
+                    String cookie = cookieManager.getCookie(url);
+                    if (cookie == null || cookie.trim().isEmpty()) {
+                        Toast.makeText(MainActivity.this,
+                                "Sesi login tidak terbaca. Silakan masuk ulang lalu coba unduh lagi.",
+                                Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
+                    String fileName = URLUtil.guessFileName(url, contentDisposition, mimeType);
                     DownloadManager.Request request = new DownloadManager.Request(uri);
-                    String cookie = CookieManager.getInstance().getCookie(url);
-                    if (cookie != null) request.addRequestHeader("Cookie", cookie);
-                    if (userAgent != null) request.addRequestHeader("User-Agent", userAgent);
+                    request.addRequestHeader("Cookie", cookie);
+                    if (userAgent != null && !userAgent.trim().isEmpty()) {
+                        request.addRequestHeader("User-Agent", userAgent);
+                    }
                     request.setMimeType(mimeType);
-                    request.setTitle(URLUtil.guessFileName(url, contentDisposition, mimeType));
+                    request.setTitle(fileName);
                     request.setDescription("Mengunduh berkas RT Kita");
                     request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS,
-                            URLUtil.guessFileName(url, contentDisposition, mimeType));
+                    request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName);
                     DownloadManager manager = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (manager == null) {
+                        Toast.makeText(MainActivity.this, "Layanan unduhan perangkat tidak tersedia",
+                                Toast.LENGTH_LONG).show();
+                        return;
+                    }
                     manager.enqueue(request);
                     Toast.makeText(MainActivity.this, "Unduhan dimulai. Periksa folder Download.", Toast.LENGTH_LONG).show();
                 } catch (Exception e) {
