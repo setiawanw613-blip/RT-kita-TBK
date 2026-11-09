@@ -998,7 +998,7 @@ app.post("/api/gobiz/webhook", async (req, res) => {
       outletId !== config.outletId ||
       String(transaction.status || "").toLowerCase() !== "settlement" ||
       String(transaction.payment_type || "").toLowerCase() !== "qris" ||
-      String(transaction.currency || "IDR").toUpperCase() !== "IDR" ||
+      String(transaction.currency || "").trim().toUpperCase() !== "IDR" ||
       !orderId || !transactionId ||
       !Number.isSafeInteger(grossAmount) || grossAmount <= 0 ||
       !settlementAt || Number.isNaN(Date.parse(settlementAt))
