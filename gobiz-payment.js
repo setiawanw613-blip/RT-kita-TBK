@@ -1,11 +1,13 @@
 const crypto = require("crypto");
 
-let cachedToken = null;
-let cachedTokenExpiresAt = 0;
-let subscriptionCheckedAt = 0;
+const tokenCache = new Map();
+const subscriptionCache = new Map();
 
 function getGoBizConfig(env = process.env) {
   const environment = String(env.GOBIZ_ENVIRONMENT || "production").trim().toLowerCase();
+  if (!["sandbox", "production"].includes(environment)) {
+    throw new Error("GOBIZ_ENVIRONMENT harus bernilai sandbox atau production.");
+  }
   const sandbox = environment === "sandbox";
   return {
     environment: sandbox ? "sandbox" : "production",
@@ -32,8 +34,12 @@ async function getGoBizAccessToken({ fetchImpl = fetch, env = process.env, force
   if (!c.clientId || !c.clientSecret) {
     throw new Error("Kredensial GoBiz belum dikonfigurasi di server.");
   }
-  if (!forceRefresh && cachedToken && Date.now() < cachedTokenExpiresAt - 60000) {
-    return cachedToken;
+  const cacheKey = crypto.createHash("sha256")
+    .update([c.oauthBase, c.clientId, c.clientSecret].join("\\n"))
+    .digest("hex");
+  const cached = tokenCache.get(cacheKey);
+  if (!forceRefresh && cached && Date.now() < cached.expiresAt - 60000) {
+    return cached.token;
   }
 
   const form = new URLSearchParams({
@@ -52,14 +58,14 @@ async function getGoBizAccessToken({ fetchImpl = fetch, env = process.env, force
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || !body.access_token) {
-    cachedToken = null;
-    cachedTokenExpiresAt = 0;
+    tokenCache.delete(cacheKey);
     console.error("GOBIZ TOKEN ERROR:", response.status);
     throw new Error("Autentikasi GoBiz gagal. Periksa kredensial dan scope API.");
   }
-  cachedToken = String(body.access_token);
-  cachedTokenExpiresAt = Date.now() + Math.max(60, Number(body.expires_in) || 3600) * 1000;
-  return cachedToken;
+  const token = String(body.access_token);
+  const expiresAt = Date.now() + Math.max(60, Number(body.expires_in) || 3600) * 1000;
+  tokenCache.set(cacheKey, { token, expiresAt });
+  return token;
 }
 
 async function goBizRequest(path, { method = "GET", body, headers: extraHeaders = {}, fetchImpl = fetch, env = process.env } = {}) {
@@ -97,7 +103,9 @@ async function ensureGoBizPaymentWebhook(callbackUrl, { fetchImpl = fetch, env =
   if (!/^https:\/\//i.test(String(callbackUrl || ""))) {
     throw new Error("Alamat webhook GoBiz harus menggunakan HTTPS.");
   }
-  if (!forceCheck && subscriptionCheckedAt && Date.now() - subscriptionCheckedAt < 10 * 60 * 1000) {
+  const cacheKey = [c.environment, c.outletId, callbackUrl].join("|");
+  const checkedAt = subscriptionCache.get(cacheKey) || 0;
+  if (!forceCheck && checkedAt && Date.now() - checkedAt < 10 * 60 * 1000) {
     return true;
   }
 
@@ -116,7 +124,7 @@ async function ensureGoBizPaymentWebhook(callbackUrl, { fetchImpl = fetch, env =
       env
     });
   }
-  subscriptionCheckedAt = Date.now();
+  subscriptionCache.set(cacheKey, Date.now());
   return true;
 }
 
