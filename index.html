@@ -3680,7 +3680,11 @@ if (hasil.qr_url || hasil.qr_string) {
         </button>
       ` : ""}
     </div>
-    <button class="btn secondary" style="width:100%" onclick="iuranWarga()">
+    <button class="btn secondary" id="btnCekStatusGoBiz" style="width:100%;margin-top:10px" onclick="cekStatusGoBiz(${esc(hasil.order_id || '')})">
+      Periksa status pembayaran
+    </button>
+    <div id="statusGoBizInfo" class="muted" style="text-align:center;margin-top:8px"></div>
+    <button class="btn secondary" style="width:100%;margin-top:10px" onclick="iuranWarga()">
       Kembali ke Iuran
     </button>
   `, false);
@@ -3703,6 +3707,32 @@ if (hasil.qr_url || hasil.qr_string) {
 
   } catch(e) {
     alert(e.message || "Gagal mengambil data iuran");
+  }
+}
+
+async function cekStatusGoBiz(orderId){
+  const button=document.getElementById("btnCekStatusGoBiz");
+  const info=document.getElementById("statusGoBizInfo");
+  if(!orderId||!button||!info)return;
+  button.disabled=true;
+  button.textContent="Memeriksa...";
+  info.textContent="";
+  try{
+    const result=await api("/api/iuran/gobiz/status/"+encodeURIComponent(orderId));
+    const status=String(result.status||"").toLowerCase();
+    if(status==="settlement"){
+      info.textContent="GoBiz mengonfirmasi pembayaran berhasil. Memuat ulang status iuran...";
+      setTimeout(()=>iuranWarga(),1200);
+    }else if(result.can_retry){
+      info.textContent="QRIS ini sudah kedaluwarsa/tidak aktif. Jangan membayar melalui QR lama. Hubungi Bendahara/Ketua RT untuk pemeriksaan sebelum QR pengganti dibuat.";
+    }else{
+      info.textContent="Status dari GoBiz: "+status+". Jika belum berubah, periksa kembali beberapa saat lagi.";
+    }
+  }catch(e){
+    info.textContent=e.message||"Status pembayaran belum dapat diperiksa.";
+  }finally{
+    button.disabled=false;
+    button.textContent="Periksa status pembayaran";
   }
 }
 
