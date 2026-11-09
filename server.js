@@ -491,7 +491,14 @@ app.get("/api/iuran/gobiz/status/:orderId", requireWarga, async (req, res) => {
     });
 
     if (isGoBizSettlementStatus(status)) {
-      const settlementAt = transaction.settlement_at || new Date().toISOString();
+      const settlementAt = String(transaction.settlement_at || "").trim();
+      if (!settlementAt || Number.isNaN(Date.parse(settlementAt))) {
+        return res.status(409).json({
+          ok: false,
+          status,
+          message: "GoBiz menyatakan settlement tetapi waktu settlement tidak tersedia. Rekonsiliasi otomatis dihentikan agar waktu pembayaran tidak dikarang."
+        });
+      }
       // Polling is a recovery path if the signed webhook was delayed or missed.
       // The same atomic RPC makes webhook + polling idempotent.
       await supabaseRequest("rpc/settle_gobiz_iuran_order_atomic", {
