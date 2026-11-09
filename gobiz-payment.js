@@ -276,5 +276,6 @@ module.exports = {
   normalizeGoBizTransactionStatus,
   isGoBizExpiredStatus,
   isGoBizSettlementStatus,
+  isGoBizIdrCurrency,
   verifyGoBizWebhookSignature
 };
