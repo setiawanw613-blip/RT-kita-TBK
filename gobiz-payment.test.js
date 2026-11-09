@@ -34,7 +34,7 @@ test("GoBiz integration is not considered configured without all required creden
 test("GoBiz webhook HMAC accepts valid raw-body signature and rejects tampering", () => {
   const rawBody = JSON.stringify({
     header: { event_name: "payment.transaction.settlement" },
-    body: { transaction: { order_id: "RTTBK-GOBIZ-PROD-123-abcdef12" } }
+    body: { transaction: { order_id: "RTTBK-PROD-123-abcdef12" } }
   });
   const secret = "test-webhook-secret";
   const signature = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
@@ -42,4 +42,67 @@ test("GoBiz webhook HMAC accepts valid raw-body signature and rejects tampering"
   assert.equal(verifyGoBizWebhookSignature(rawBody + " ", signature, secret), false);
   assert.equal(verifyGoBizWebhookSignature(rawBody, "bad", secret), false);
   assert.equal(verifyGoBizWebhookSignature(rawBody, signature, ""), false);
+});
+
+
+test("GoBiz QRIS creation registers settlement webhook and sends idempotency key", async () => {
+  const { createGoBizQrisTransaction } = require("./gobiz-payment");
+  const calls = [];
+  const fakeFetch = async (url, options = {}) => {
+    calls.push({ url, options });
+    if (String(url).endsWith("/oauth2/token")) {
+      return {
+        ok: true, status: 200,
+        json: async () => ({ access_token: "test-access-token", expires_in: 3600 })
+      };
+    }
+    if (String(url).endsWith("/integrations/partner/v1/notification-subscriptions") && options.method !== "POST") {
+      return { ok: true, status: 200, json: async () => ({ data: { subscriptions: [] } }) };
+    }
+    if (String(url).endsWith("/integrations/partner/v1/notification-subscriptions") && options.method === "POST") {
+      return { ok: true, status: 201, json: async () => ({ success: true, data: { subscription: { active: true } } }) };
+    }
+    if (String(url).includes("/integrations/payment/outlets/G123/v2/transactions")) {
+      return {
+        ok: true, status: 201,
+        json: async () => ({
+          success: true,
+          data: {
+            transaction: {
+              id: "00000000-0000-4000-8000-000000000001",
+              order_id: "RTTBK-PROD-1900000000000-deadbeef",
+              payment_type: "qris",
+              status: "pending",
+              gross_amount: 35000,
+              qris_string: "000201010212..."
+            },
+            actions: []
+          }
+        })
+      };
+    }
+    throw new Error("Unexpected GoBiz request: " + url);
+  };
+
+  const result = await createGoBizQrisTransaction({
+    orderId: "RTTBK-PROD-1900000000000-deadbeef",
+    total: 35000,
+    namaWarga: "Warga Test",
+    env: {
+      GOBIZ_ENVIRONMENT: "production",
+      GOBIZ_CLIENT_ID: "test-client",
+      GOBIZ_CLIENT_SECRET: "test-secret",
+      GOBIZ_OUTLET_ID: "G123",
+      GOBIZ_NOTIFICATION_SECRET_KEY: "test-webhook-secret",
+      GOBIZ_WEBHOOK_URL: "https://rt-kita-tbk.vercel.app/api/gobiz/webhook"
+    },
+    fetchImpl: fakeFetch
+  });
+
+  assert.equal(result.transaction.status, "pending");
+  assert.equal(result.qr_string, "000201010212...");
+  const createCall = calls.find(call => String(call.url).includes("/integrations/payment/outlets/G123/v2/transactions"));
+  assert.ok(createCall);
+  assert.equal(createCall.options.headers["Idempotency-Key"].length, 32);
+  assert.ok(calls.some(call => String(call.url).endsWith("/integrations/partner/v1/notification-subscriptions") && call.options.method === "POST"));
 });
