@@ -3294,7 +3294,11 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     // Jika layanan gambar sedang tidak tersedia, kop surat tetap dapat dibuat.
     let lambangKabupatenBekasi = null;
     try {
-      const responsLambang = await fetch(URL_LAMBANG_KABUPATEN);
+      // Batasi waktu sumber gambar eksternal. PDF tetap dibuat dengan kop tanpa lambang
+      // bila Wikimedia lambat/tidak tersedia; unduhan warga tidak boleh menggantung.
+      const responsLambang = await fetch(URL_LAMBANG_KABUPATEN, {
+        signal: AbortSignal.timeout(3000)
+      });
       if (responsLambang.ok) {
         const tipeGambar = responsLambang.headers.get("content-type") || "";
         if (tipeGambar.startsWith("image/")) {
@@ -5241,7 +5245,11 @@ app.get("/api/aspirasi/:id/pdf", requireAdmin, async (req, res) => {
     // Gunakan sumber lambang yang sama dengan kop Menu Surat.
     let lambangKabupatenBekasi = null;
     try {
-      const responsLambang = await fetch(URL_LAMBANG_KABUPATEN);
+      // Batasi waktu sumber gambar eksternal. PDF tetap dibuat dengan kop tanpa lambang
+      // bila Wikimedia lambat/tidak tersedia; unduhan warga tidak boleh menggantung.
+      const responsLambang = await fetch(URL_LAMBANG_KABUPATEN, {
+        signal: AbortSignal.timeout(3000)
+      });
       if (responsLambang.ok) {
         const tipeGambar = responsLambang.headers.get("content-type") || "";
         if (tipeGambar.startsWith("image/")) {
