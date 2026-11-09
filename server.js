@@ -3949,7 +3949,7 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
           penerima_peran: "admin",
           judul: "Setoran QRIS Ketua Gang",
           pesan: "Ketua Gang " + penyetorNama + " membuat QRIS Rp35.000 atas nama " +
-            warga.nama_lengkap + " untuk iuran " + bulan + ". Menunggu konfirmasi Midtrans.",
+            warga.nama_lengkap + " untuk iuran " + bulan + ". Menunggu konfirmasi pembayaran GoBiz.",
           jenis: "iuran",
           tautan: "/admin",
           referensi_id: rowsTersimpan[0].id,
