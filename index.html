@@ -2277,7 +2277,7 @@ async function salinBuktiQRIS(tombol) {
     "BUKTI TRANSAKSI QRIS - RT TBK",
     "Order ID: " + (data.order_id || "-"),
     "Transaction ID: " + (data.transaction_id || "-"),
-    "Status Midtrans: " + (data.status_midtrans || "-"),
+    "Status pembayaran: " + (data.status_midtrans || "-"),
     "Total pembayaran: " +
       (typeof rupiah === "function" ? rupiah(data.total) : String(data.total)),
     "Bulan iuran: " + (data.bulan.join(", ") || "-"),
