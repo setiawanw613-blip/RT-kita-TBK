@@ -106,3 +106,50 @@ test("GoBiz QRIS creation registers settlement webhook and sends idempotency key
   assert.equal(createCall.options.headers["Idempotency-Key"].length, 32);
   assert.ok(calls.some(call => String(call.url).endsWith("/integrations/partner/v1/notification-subscriptions") && call.options.method === "POST"));
 });
+
+
+test("GoBiz transaction detail lookup validates transaction identity and QRIS data", async () => {
+  const { getGoBizTransactionDetail } = require("./gobiz-payment");
+  const calls = [];
+  const id = "71839e9c-944b-40ce-bd31-8a76db666f36";
+  const fakeFetch = async (url, options = {}) => {
+    calls.push({ url, options });
+    if (String(url).endsWith("/oauth2/token")) {
+      return { ok: true, status: 200, json: async () => ({ access_token: "test-access-token", expires_in: 3600 }) };
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: {
+          outlet: { id: "G123" },
+          transaction: {
+            id,
+            order_id: "RTTBK-SBX-1900000000000-deadbeef",
+            payment_type: "qris",
+            status: "expire",
+            gross_amount: 35000,
+            currency: "IDR"
+          }
+        }
+      })
+    };
+  };
+  const result = await getGoBizTransactionDetail(id, {
+    fetchImpl: fakeFetch,
+    env: {
+      GOBIZ_ENVIRONMENT: "sandbox",
+      GOBIZ_CLIENT_ID: "test-client",
+      GOBIZ_CLIENT_SECRET: "test-secret",
+      GOBIZ_OUTLET_ID: "G123"
+    }
+  });
+  assert.equal(result.transaction.status, "expire");
+  assert.equal(result.transaction.order_id, "RTTBK-SBX-1900000000000-deadbeef");
+  assert.ok(calls.some(call => String(call.url).includes("/integrations/payment/outlets/G123/v1/transactions/" + id)));
+  await assert.rejects(
+    () => getGoBizTransactionDetail("not-a-uuid", { env: { GOBIZ_OUTLET_ID: "G123" } }),
+    /ID transaksi GoBiz tidak valid/
+  );
+});
