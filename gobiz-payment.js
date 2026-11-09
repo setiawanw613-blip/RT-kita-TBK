@@ -62,7 +62,7 @@ async function getGoBizAccessToken({ fetchImpl = fetch, env = process.env, force
   return cachedToken;
 }
 
-async function goBizRequest(path, { method = "GET", body, fetchImpl = fetch, env = process.env } = {}) {
+async function goBizRequest(path, { method = "GET", body, headers: extraHeaders = {}, fetchImpl = fetch, env = process.env } = {}) {
   const c = getGoBizConfig(env);
   let token = await getGoBizAccessToken({ fetchImpl, env });
   const makeRequest = accessToken => fetchImpl(c.apiBase + path, {
@@ -70,7 +70,8 @@ async function goBizRequest(path, { method = "GET", body, fetchImpl = fetch, env
     headers: {
       Authorization: `Bearer ${accessToken}`,
       Accept: "application/json",
-      ...(body ? { "Content-Type": "application/json" } : {})
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...extraHeaders
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
     signal: AbortSignal.timeout(15000)
@@ -139,6 +140,7 @@ async function createGoBizQrisTransaction({ orderId, total, namaWarga, namaPemba
       method: "POST",
       fetchImpl,
       env,
+      headers: { "Idempotency-Key": idempotencyKey },
       body: {
         payment_type: "qris",
         transaction_details: {
