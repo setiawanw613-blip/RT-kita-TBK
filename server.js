@@ -15,7 +15,7 @@ const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midt
 const { findConflictingSettledRows } = require("./midtrans-order-reconciliation");
 const { canAccessOwnedRecord } = require("./access-control");
 const { cancelPendingMidtransTransaction } = require("./midtrans-cancel");
-const { createGoBizQrisTransaction, getGoBizConfig, isGoBizConfigured, verifyGoBizWebhookSignature } = require("./gobiz-payment");
+const { createGoBizQrisTransaction, getGoBizTransactionDetail, getGoBizConfig, isGoBizConfigured, verifyGoBizWebhookSignature } = require("./gobiz-payment");
 
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
@@ -443,6 +443,76 @@ if (!barisDiperbarui || barisDiperbarui.status !== "lunas") {
   }
 });
 
+
+/* PEMERIKSAAN STATUS TRANSAKSI GOBIZ - KHUSUS PEMILIK IURAN */
+app.get("/api/iuran/gobiz/status/:orderId", requireWarga, async (req, res) => {
+  try {
+    const orderId = String(req.params.orderId || "");
+    if (!/^RTTBK-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$/.test(orderId)) {
+      return res.status(400).json({ ok: false, message: "Referensi transaksi tidak valid." });
+    }
+
+    const wargaRows = await supabaseRequest("warga", {
+      query: "select=id,keluarga_id&id=eq." + encodeURIComponent(String(req.session.wargaId)) + "&limit=1"
+    });
+    const warga = Array.isArray(wargaRows) ? wargaRows[0] : null;
+    if (!warga?.keluarga_id) {
+      return res.status(403).json({ ok: false, message: "Data keluarga tidak dapat diverifikasi." });
+    }
+
+    const orderRows = await supabaseRequest("iuran_midtrans_orders", {
+      query: "select=order_id,warga_id,keluarga_id,row_ids,total_amount,provider,provider_transaction_id,provider_status" +
+        "&order_id=eq." + encodeURIComponent(orderId) + "&provider=eq.gobiz&limit=1"
+    });
+    const order = Array.isArray(orderRows) ? orderRows[0] : null;
+    if (!order || String(order.keluarga_id) !== String(warga.keluarga_id)) {
+      return res.status(404).json({ ok: false, message: "Transaksi tidak ditemukan untuk akun warga ini." });
+    }
+    if (!order.provider_transaction_id) {
+      return res.status(409).json({ ok: false, message: "ID transaksi GoBiz belum tercatat. Perlu rekonsiliasi Bendahara." });
+    }
+
+    const detail = await getGoBizTransactionDetail(order.provider_transaction_id);
+    const transaction = detail.transaction;
+    const config = getGoBizConfig();
+    if (
+      transaction.order_id !== orderId ||
+      Number(transaction.gross_amount) !== Number(order.total_amount) ||
+      String(detail.outlet?.id || "") !== config.outletId
+    ) {
+      return res.status(409).json({ ok: false, message: "Detail transaksi GoBiz tidak cocok dengan catatan iuran." });
+    }
+
+    const status = String(transaction.status || "").toLowerCase();
+    await supabaseRequest("iuran_midtrans_orders", {
+      method: "PATCH",
+      query: "order_id=eq." + encodeURIComponent(orderId) + "&provider=eq.gobiz",
+      body: { provider_status: status }
+    });
+    await supabaseRequest("iuran_warga", {
+      method: "PATCH",
+      query: "bukti_transfer=eq." + encodeURIComponent("GOBIZ:" + orderId) + "&status=neq.lunas",
+      body: { gobiz_status: status }
+    });
+
+    return res.json({
+      ok: true,
+      order_id: orderId,
+      transaction_id: transaction.id,
+      status,
+      settlement_at: transaction.settlement_at || null,
+      can_retry: ["expire", "expired", "cancel", "cancelled", "deny"].includes(status),
+      message: ["expire", "expired", "cancel", "cancelled", "deny"].includes(status)
+        ? "GoBiz melaporkan transaksi tidak aktif. Pembayaran ulang tetap memerlukan pemeriksaan dan penggantian order yang aman."
+        : status === "settlement"
+          ? "GoBiz melaporkan pembayaran berhasil. Menunggu atau memeriksa webhook settlement."
+          : "Status transaksi GoBiz berhasil diperiksa."
+    });
+  } catch (error) {
+    console.error("GOBIZ TRANSACTION STATUS ERROR:", error?.message || error);
+    return res.status(502).json({ ok: false, message: "Status transaksi belum dapat diperiksa ke GoBiz." });
+  }
+});
 
 /* WEBHOOK SETTLEMENT GOBIZ - SIGNATURE HMAC SHA256 */
 app.post("/api/gobiz/webhook", async (req, res) => {
