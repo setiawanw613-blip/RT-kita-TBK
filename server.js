@@ -683,17 +683,52 @@ app.post("/api/gobiz/webhook", async (req, res) => {
       return res.status(400).json({ ok: false, message: "Data settlement GoBiz tidak lengkap atau tidak cocok." });
     }
 
-    const settlement = await supabaseRequest("rpc/settle_gobiz_iuran_order_atomic", {
-      method: "POST",
-      body: {
-        p_order_id: orderId,
-        p_gross_amount: grossAmount,
-        p_transaction_id: transactionId,
-        p_outlet_id: outletId,
-        p_expected_outlet_id: config.outletId,
-        p_settlement_at: new Date(settlementAt).toISOString()
+    let settlement;
+    try {
+      settlement = await supabaseRequest("rpc/settle_gobiz_iuran_order_atomic", {
+        method: "POST",
+        body: {
+          p_order_id: orderId,
+          p_gross_amount: grossAmount,
+          p_transaction_id: transactionId,
+          p_outlet_id: outletId,
+          p_expected_outlet_id: config.outletId,
+          p_settlement_at: new Date(settlementAt).toISOString()
+        }
+      });
+    } catch (settlementError) {
+      const detail = String(settlementError?.message || settlementError);
+      if (/CATATAN_IURAN_GOBIZ_TIDAK_COCOK|TOTAL_IURAN_GOBIZ_TIDAK_COCOK|STATUS_IURAN_GOBIZ_TIDAK_KONSISTEN|ORDER_GOBIZ_TIDAK_DITEMUKAN/.test(detail)) {
+        // A prior QR can settle after a replacement was reserved. Never mark the
+        // replacement's iuran as paid from the old order; surface a refund review.
+        await supabaseRequest("iuran_midtrans_orders", {
+          method: "PATCH",
+          query: "order_id=eq." + encodeURIComponent(orderId) + "&provider=eq.gobiz",
+          body: { provider_status: "late_settlement_review", provider_settlement_at: new Date(settlementAt).toISOString() }
+        });
+        try {
+          await supabaseRequest("notifikasi", {
+            method: "POST",
+            body: {
+              penerima_peran: "admin",
+              judul: "Pembayaran QRIS Lama Perlu Pemeriksaan",
+              pesan: "Transaksi GoBiz lama " + orderId + " (" + transactionId + ") terkonfirmasi settlement setelah order iuran diganti. Iuran tidak diubah otomatis. Periksa kemungkinan pembayaran ganda dan lakukan rekonsiliasi/pengembalian dana manual.",
+              jenis: "iuran",
+              tautan: "/admin",
+              sudah_dibaca: false
+            }
+          });
+        } catch (notificationError) {
+          console.error("GOBIZ LATE SETTLEMENT ALERT ERROR:", notificationError?.message || notificationError);
+        }
+        return res.status(200).json({
+          ok: true,
+          code: "LATE_SETTLEMENT_REQUIRES_REVIEW",
+          message: "Pembayaran dari QRIS lama terdeteksi. Iuran tidak diubah; Bendahara perlu memeriksa kemungkinan pembayaran ganda."
+        });
       }
-    });
+      throw settlementError;
+    }
 
     const rows = Number(settlement?.updated_rows || 0) > 0
       ? await supabaseRequest("iuran_warga", {
