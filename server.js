@@ -15,7 +15,7 @@ const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midt
 const { findConflictingSettledRows } = require("./midtrans-order-reconciliation");
 const { canAccessOwnedRecord } = require("./access-control");
 const { cancelPendingMidtransTransaction } = require("./midtrans-cancel");
-const { createGoBizQrisTransaction, getGoBizConfig, verifyGoBizWebhookSignature } = require("./gobiz-payment");
+const { createGoBizQrisTransaction, getGoBizConfig, isGoBizConfigured, verifyGoBizWebhookSignature } = require("./gobiz-payment");
 
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
@@ -4350,10 +4350,10 @@ app.get("/api/qris/history", requireFinance, async (req, res) => {
 
     return res.json({
       ok: true,
-      mode: getMidtransModeInfo(),
+      mode: { mode: getGoBizConfig().environment, configured: isGoBizConfigured() },
       sumber: "Database iuran RT TBK",
       catatan:
-        "Data transaksi berasal dari database aplikasi. Status dan waktu Midtrans ditampilkan jika telah diterima dan disimpan dari notifikasi yang valid. Konfirmasi transaksi resmi dan pencairan dana harus diperiksa secara terpisah.",
+        "Riwayat mencakup settlement GoBiz QRIS dan transaksi Midtrans lama. Konfirmasi hanya dicatat setelah tanda tangan webhook GoBiz valid dan nominal cocok.",
       data: hasil
     });
   } catch (error) {
