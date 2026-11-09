@@ -1176,14 +1176,14 @@ async function kirimSetoranGang(){
   try{
     const result=await api("/api/ketua-gang/setor-qris",{method:"POST",body:JSON.stringify({warga_id:wargaId,bulan})});
     const box=document.getElementById("gangQrisResult");
-    if(box)box.innerHTML=`<div class="card"><h3>QRIS Setoran Berhasil Dibuat</h3><b>${esc(result.nama_warga)}</b><div>Bulan: ${esc(result.bulan)}</div><div>Total: ${rupiah(result.total)}</div><div>Disetorkan oleh: ${esc(result.disetorkan_oleh)}</div><div>Status: Menunggu pembayaran</div>${result.qr_url?`<div style="text-align:center;margin:16px 0"><img src="${esc(result.qr_url)}" alt="QRIS pembayaran" style="max-width:260px;width:100%;height:auto"></div><a class="btn" href="${esc(result.qr_url)}" target="_blank" rel="noopener">Buka QRIS</a>`:"<p>QRIS image belum tersedia dari Midtrans. Periksa detail transaksi.</p>"}<small class="muted">Jangan tandai lunas secara manual. Status akan berubah setelah Midtrans mengonfirmasi pembayaran.</small><button class="btn secondary" onclick="riwayatSetoranGang()">Lihat riwayat setoran</button></div>`;
+    if(box)box.innerHTML=`<div class="card"><h3>QRIS Setoran Berhasil Dibuat</h3><b>${esc(result.nama_warga)}</b><div>Bulan: ${esc(result.bulan)}</div><div>Total: ${rupiah(result.total)}</div><div>Disetorkan oleh: ${esc(result.disetorkan_oleh)}</div><div>Status: Menunggu pembayaran</div>${result.qr_url?`<div style="text-align:center;margin:16px 0"><img src="${esc(result.qr_url)}" alt="QRIS pembayaran" style="max-width:260px;width:100%;height:auto"></div><a class="btn" href="${esc(result.qr_url)}" target="_blank" rel="noopener">Buka QRIS</a>`:"<p>QRIS belum dapat ditampilkan. Periksa detail transaksi GoBiz.</p>"}<small class="muted">Jangan tandai lunas secara manual. Status berubah setelah GoBiz mengonfirmasi settlement.</small><button class="btn secondary" onclick="riwayatSetoranGang()">Lihat riwayat setoran</button></div>`;
   }catch(e){alert(e.message||"Gagal membuat QRIS.");}
   finally{if(button){button.disabled=false;button.textContent="Buat QRIS";}}
 }
 async function riwayatSetoranGang(){
   try{
     const rows=await api("/api/ketua-gang/riwayat-setoran");
-    const items=(Array.isArray(rows)?rows:[]).map(row=>`<div class="card"><b>${esc(row.nama_warga||"Warga")}</b><div>Bulan iuran: ${esc(row.bulan||"-")}</div><div>Nominal: ${rupiah(row.total_amount||0)}</div><div>Status: <span class="badge">${row.status==="lunas"?"Lunas":"Menunggu pembayaran"}</span></div><div>Petugas penyetor: ${esc(row.disetorkan_oleh_nama||"-")}</div><div class="muted">Order: ${esc(String(row.bukti_transfer||"").replace("MIDTRANS:",""))}</div>${row.midtrans_settlement_at?`<div class="muted">Dibayar: ${esc(new Date(row.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}</div>`).join("");
+    const items=(Array.isArray(rows)?rows:[]).map(row=>`<div class="card"><b>${esc(row.nama_warga||"Warga")}</b><div>Bulan iuran: ${esc(row.bulan||"-")}</div><div>Nominal: ${rupiah(row.total_amount||0)}</div><div>Status: <span class="badge">${row.status==="lunas"?"Lunas":"Menunggu pembayaran"}</span></div><div>Petugas penyetor: ${esc(row.disetorkan_oleh_nama||"-")}</div><div class="muted">Order: ${esc(String(row.bukti_transfer||"").replace(/^GOBIZ:/,"").replace(/^MIDTRANS:/,""))}</div>${(row.gobiz_settlement_at||row.midtrans_settlement_at)?`<div class="muted">Dibayar: ${esc(new Date(row.gobiz_settlement_at||row.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}</div>`).join("");
     layout("Riwayat Setoran QRIS Saya",(items||"<div class='card'>Belum ada riwayat setoran QRIS.</div>")+'<button class="btn secondary" onclick="staffHome()">Kembali</button>');
   }catch(e){alert(e.message||"Gagal memuat riwayat setoran.");}
 }
@@ -2001,7 +2001,7 @@ async function transparansiQRIS(tombolReload) {
               </div>
 
               <div style="font-size:12px;color:#64748b;margin-top:12px">
-                Order ID Midtrans
+                Order ID GoBiz / Midtrans lama
               </div>
               <div style="font-weight:800;margin-top:4px;color:#0f172a">
                 ${esc(item.order_id || "-")}
@@ -2009,9 +2009,9 @@ async function transparansiQRIS(tombolReload) {
 
               ${barisBukti("Jalur pembayaran", item.jalur_pembayaran==="ketua_gang_qris"?"Setoran QRIS oleh Ketua Gang":"Pembayaran langsung warga")}
               ${item.disetorkan_oleh_nama?barisBukti("Ketua Gang penyetor",item.disetorkan_oleh_nama):""}
-              ${barisBukti("Transaction ID Midtrans", item.transaction_id)}
-              ${barisBukti("Status transaksi Midtrans", item.status_midtrans)}
-              ${barisBukti("Waktu settlement Midtrans", formatWaktu(item.waktu_settlement))}
+              ${barisBukti("ID Transaksi GoBiz / Midtrans lama", item.transaction_id)}
+              ${barisBukti("Status transaksi GoBiz / Midtrans lama", item.status_midtrans)}
+              ${barisBukti("Waktu settlement GoBiz / Midtrans lama", formatWaktu(item.waktu_settlement))}
               ${barisBukti("Waktu notifikasi webhook tercatat", formatWaktu(item.waktu_notifikasi))}
 
               <div style="border-top:1px solid #e2e8f0;margin-top:14px;padding-top:14px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap">
@@ -2055,18 +2055,18 @@ async function transparansiQRIS(tombolReload) {
           Transparansi Dana QRIS
         </div>
         <div style="margin-top:6px;color:#475569">
-          Riwayat pembayaran iuran melalui Midtrans yang tercatat di RT TBK.
+          Riwayat pembayaran GoBiz QRIS dan transaksi Midtrans lama yang tercatat di RT TBK.
         </div>
         <div style="display:inline-block;margin-top:12px;background:#fff7ed;color:#9a3412;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700">
-          ${!modeInfo.configured ? "KONFIGURASI MIDTRANS BELUM LENGKAP" : modeInfo.mode === "production" ? "MODE PRODUKSI" : "MODE SANDBOX / UJI COBA"}
+          ${!modeInfo.configured ? "KONFIGURASI GOBIZ BELUM LENGKAP" : modeInfo.mode === "production" ? "MODE PRODUKSI" : "MODE SANDBOX / UJI COBA"}
         </div>
       </div>
 
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:15px;margin-bottom:18px">
-        <div style="font-weight:700;margin-bottom:6px">Saldo Aktual Midtrans</div>
+        <div style="font-weight:700;margin-bottom:6px">Saldo GoPay Merchant</div>
         <div style="font-size:20px;font-weight:800;color:#64748b">Belum terhubung</div>
         <div style="font-size:13px;color:#64748b;margin-top:6px">
-          Saldo resmi, biaya transaksi, dan pencairan belum diambil dari laporan Midtrans.
+          Saldo, biaya transaksi, dan pencairan GoPay Merchant tidak ditarik otomatis; periksa laporan di aplikasi GoPay Merchant.
         </div>
       </div>
 
@@ -2157,11 +2157,11 @@ async function transparansiQRISWarga(tombolReload) {
                 </span>
               </div>
 
-              ${barisBukti("Order ID Midtrans", item.order_id)}
+              ${barisBukti("Order ID GoBiz / Midtrans lama", item.order_id)}
               ${barisBukti("Jalur pembayaran", item.jalur_pembayaran==="ketua_gang_qris"?"Setoran QRIS oleh Ketua Gang":"Pembayaran langsung warga")}
               ${item.disetorkan_oleh_nama?barisBukti("Ketua Gang penyetor",item.disetorkan_oleh_nama):""}
-              ${barisBukti("Transaction ID Midtrans", item.transaction_id)}
-              ${barisBukti("Status transaksi Midtrans", item.status_midtrans)}
+              ${barisBukti("ID Transaksi GoBiz / Midtrans lama", item.transaction_id)}
+              ${barisBukti("Status transaksi GoBiz / Midtrans lama", item.status_midtrans)}
               ${barisBukti("Waktu settlement", formatWaktu(item.waktu_settlement))}
               ${barisBukti("Waktu notifikasi tercatat", formatWaktu(item.waktu_notifikasi))}
 
@@ -2228,14 +2228,14 @@ async function transparansiQRISWarga(tombolReload) {
           Periksa riwayat pembayaran iuran QRIS keluarga Anda.
         </div>
         <div style="display:inline-block;margin-top:12px;background:#fff7ed;color:#9a3412;padding:6px 10px;border-radius:20px;font-size:12px;font-weight:700">
-          ${!modeInfo.configured ? "KONFIGURASI MIDTRANS BELUM LENGKAP" : modeInfo.mode === "production" ? "MODE PRODUKSI" : "MODE SANDBOX / UJI COBA"}
+          ${!modeInfo.configured ? "KONFIGURASI GOBIZ BELUM LENGKAP" : modeInfo.mode === "production" ? "MODE PRODUKSI" : "MODE SANDBOX / UJI COBA"}
         </div>
       </div>
 
       <div style="background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:15px;margin-bottom:16px">
         <strong>Informasi saldo</strong>
         <div style="font-size:13px;color:#64748b;margin-top:6px">
-          Saldo aktual dan pencairan dana Midtrans belum terhubung ke aplikasi.
+          Saldo dan pencairan GoPay Merchant belum ditarik otomatis ke aplikasi.
         </div>
       </div>
 
@@ -3361,9 +3361,9 @@ async function iuranAdmin(filter = "all"){
           <div>Total: ${rupiah(item.total_amount||0)}</div>
           <div>Jalur: <b>${jalur==="ketua_gang_qris"?"QRIS melalui Ketua Gang":"Pembayaran langsung oleh warga"}</b></div>
           ${jalur==="ketua_gang_qris"?`<div>Ketua Gang penyetor: <b>${esc(item.disetorkan_oleh_nama||"-")}</b></div>`:""}
-          <div>Status: <span class="badge">${esc(item.status==="lunas"?"Lunas":item.status==="menunggu_verifikasi"?(String(item.bukti_transfer||"").startsWith("MIDTRANS:")?"Menunggu pembayaran":"Menunggu verifikasi"):item.status||"Belum lunas")}</span></div>
-          ${item.midtrans_settlement_at?`<div class="muted">Konfirmasi Midtrans: ${esc(new Date(item.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}
-          ${item.status==="menunggu_verifikasi"&&!String(item.bukti_transfer||"").startsWith("MIDTRANS:")?`<button class="btn" onclick="verifikasiIuran('${item.id}')">Verifikasi pembayaran manual</button>`:""}
+          <div>Status: <span class="badge">${esc(item.status==="lunas"?"Lunas":item.status==="menunggu_verifikasi"?((String(item.bukti_transfer||"").startsWith("MIDTRANS:")||String(item.bukti_transfer||"").startsWith("GOBIZ:"))?"Menunggu pembayaran":"Menunggu verifikasi"):item.status||"Belum lunas")}</span></div>
+          ${(item.gobiz_settlement_at||item.midtrans_settlement_at)?`<div class="muted">Konfirmasi pembayaran: ${esc(new Date(item.gobiz_settlement_at||item.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}
+          ${item.status==="menunggu_verifikasi"&&!String(item.bukti_transfer||"").startsWith("MIDTRANS:")&&!String(item.bukti_transfer||"").startsWith("GOBIZ:")?`<button class="btn" onclick="verifikasiIuran('${item.id}')">Verifikasi pembayaran manual</button>`:""}
         </div>`;
       });
     }
