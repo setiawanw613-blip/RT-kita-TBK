@@ -4179,29 +4179,44 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     }
 
     const total = 35000;
-    orderId = (String(process.env.GOBIZ_ENVIRONMENT || "production").toLowerCase() === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-") +
+    const gobizConfig = getGoBizConfig();
+    orderId = (gobizConfig.environment === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-") +
       Date.now() + "-" + crypto.randomBytes(4).toString("hex");
     const penyetorNama = String(req.session.nama || req.session.username || "Ketua Gang");
-    const transaksi = await buatTransaksiQRIS({ orderId, total, namaWarga: warga.nama_lengkap, namaPembayar: penyetorNama });
-
     const penyetorId = Number(req.session.id);
-    const hasilReserva = await supabaseRequest("rpc/reserve_gobiz_iuran_batch_with_attribution", {
+
+    // Simpan iuran + ledger order sebelum meminta QR ke GoBiz. Jika request provider
+    // timeout setelah QR dibuat, order yang sama dapat direkonsiliasi tanpa QR baru.
+    const intent = await supabaseRequest("rpc/reserve_gobiz_iuran_intent", {
       method: "POST",
       body: {
         p_warga_id: String(warga.id),
         p_keluarga_id: keluargaId,
         p_bulans: [bulan + "-01"],
         p_order_id: orderId,
-        p_transaction_id: transaksi.transaction.id,
+        p_jalur_pembayaran: "ketua_gang_qris",
         p_disetorkan_oleh_id: penyetorId,
         p_disetorkan_oleh_nama: penyetorNama
       }
     });
-    rowsTersimpan = Array.isArray(hasilReserva) ? hasilReserva : [];
+    rowsTersimpan = Array.isArray(intent) ? intent : [];
     if (rowsTersimpan.length !== 1 || rowsTersimpan[0].bukti_transfer !== "GOBIZ:" + orderId ||
         rowsTersimpan[0].jalur_pembayaran !== "ketua_gang_qris" ||
         Number(rowsTersimpan[0].disetorkan_oleh_id) !== penyetorId) {
-      throw new Error("Reservasi iuran QRIS dan atribusi penyetor tidak lengkap atau tidak cocok dengan order.");
+      throw new Error("Reservasi awal iuran QRIS dan atribusi penyetor tidak lengkap.");
+    }
+
+    const transaksi = await buatTransaksiQRIS({
+      orderId, total, namaWarga: warga.nama_lengkap, namaPembayar: penyetorNama
+    });
+    const finalized = await supabaseRequest("rpc/complete_gobiz_iuran_intent", {
+      method: "POST",
+      body: { p_order_id: orderId, p_transaction_id: String(transaksi.transaction.id) }
+    });
+    rowsTersimpan = Array.isArray(finalized) ? finalized : [];
+    if (rowsTersimpan.length !== 1 || rowsTersimpan[0].bukti_transfer !== "GOBIZ:" + orderId ||
+        rowsTersimpan[0].gobiz_transaction_id !== String(transaksi.transaction.id)) {
+      throw new Error("QRIS berhasil dibuat tetapi pencatatan transaksi belum terverifikasi.");
     }
 
     try {
@@ -4431,36 +4446,49 @@ if (record && !iuranKedaluwarsa.some(
     }
 
     const total = 35000 * dipilih.length;
+    const gobizConfig = getGoBizConfig();
     orderId =
-      `${String(process.env.GOBIZ_ENVIRONMENT || "production").toLowerCase() === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-"}${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+      `${gobizConfig.environment === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-"}${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 
-    // Buat transaksi QRIS terlebih dahulu.
+    // Reservasi atomik dilakukan lebih dahulu. Bila API GoBiz timeout setelah
+    // membuat QR, order_id ini tetap tercatat dan tidak akan membuat tagihan ganda.
+    const intent = await supabaseRequest("rpc/reserve_gobiz_iuran_intent", {
+      method: "POST",
+      body: {
+        p_warga_id: String(warga.id),
+        p_keluarga_id: keluargaId,
+        p_bulans: dipilih.map(bulan => bulan + "-01"),
+        p_order_id: orderId,
+        p_jalur_pembayaran: "warga_qris"
+      }
+    });
+    rowsTersimpan = Array.isArray(intent) ? intent : [];
+    if (
+      rowsTersimpan.length !== dipilih.length ||
+      rowsTersimpan.some(row => row.bukti_transfer !== `GOBIZ:${orderId}`)
+    ) {
+      throw new Error("Reservasi awal iuran QRIS tidak lengkap atau tidak cocok dengan order.");
+    }
+
     const transaksi = await buatTransaksiQRIS({
       orderId,
       total,
       namaWarga: warga.nama_lengkap
     });
-
-
-const idsPengganti = iuranKedaluwarsa.map(row => Number(row.id));
-const hasilReserva = await supabaseRequest("rpc/reserve_gobiz_iuran_batch", {
-  method: "POST",
-  body: {
-    p_warga_id: String(warga.id),
-    p_keluarga_id: keluargaId,
-    p_bulans: dipilih.map(bulan => bulan + "-01"),
-    p_order_id: orderId,
-    p_transaction_id: transaksi.transaction.id
-  }
-});
-
-rowsTersimpan = Array.isArray(hasilReserva) ? hasilReserva : [];
-if (
-  rowsTersimpan.length !== dipilih.length ||
-  rowsTersimpan.some(row => row.bukti_transfer !== `GOBIZ:${orderId}`)
-) {
-  throw new Error("Reservasi iuran QRIS tidak lengkap atau tidak cocok dengan order.");
-}
+    const finalized = await supabaseRequest("rpc/complete_gobiz_iuran_intent", {
+      method: "POST",
+      body: { p_order_id: orderId, p_transaction_id: String(transaksi.transaction.id) }
+    });
+    rowsTersimpan = Array.isArray(finalized) ? finalized : [];
+    if (
+      rowsTersimpan.length !== dipilih.length ||
+      rowsTersimpan.some(row =>
+        row.bukti_transfer !== `GOBIZ:${orderId}` ||
+        row.gobiz_transaction_id !== String(transaksi.transaction.id)
+      )
+    ) {
+      throw new Error("QRIS berhasil dibuat tetapi pencatatan transaksi belum terverifikasi.");
+    }
 
 
 
