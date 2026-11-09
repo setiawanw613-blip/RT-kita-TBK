@@ -56,6 +56,8 @@ async function buatTransaksiQRIS({ orderId, total, namaWarga, namaPembayar }) {
         "Accept": "application/json",
         "X-Override-Notification": "https://rt-kita-tbk.vercel.app/api/midtrans/webhook"
       },
+      // Batasi waktu tunggu gateway agar proses pembuatan QRIS tidak menggantung.
+      signal: AbortSignal.timeout(15000),
       body: JSON.stringify({
         payment_type: "qris",
         transaction_details: {
