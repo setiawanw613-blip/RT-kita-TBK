@@ -49,6 +49,15 @@ BEGIN
   FOR UPDATE;
 
   IF FOUND THEN
+    SELECT o.* INTO v_old
+    FROM public.iuran_midtrans_orders AS o
+    WHERE o.order_id = p_old_order_id AND o.provider = 'gobiz'
+    FOR UPDATE;
+    IF NOT FOUND
+       OR lower(coalesce(v_old.provider_status, '')) NOT IN
+         ('expire', 'expired', 'cancel', 'cancelled', 'deny', 'denied') THEN
+      RAISE EXCEPTION 'ORDER_LAMA_TIDAK_LAGI_KEDALUWARSA' USING ERRCODE = '23514';
+    END IF;
     IF v_attempt.status NOT IN ('creating', 'reserved') THEN
       RAISE EXCEPTION 'ATTEMPT_RETRY_GOBIZ_PERLU_REVIEW' USING ERRCODE = '23514';
     END IF;
