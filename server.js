@@ -5848,6 +5848,68 @@ doc.end();
   }
 });
 
+/* UNDUH APK RESMI RT TBK — tautan publik pendek untuk warga.
+   File diambil dari rilis GitHub terbaru lalu dikirim sebagai attachment,
+   sehingga warga tidak perlu membuka halaman rilis atau mencari tombol aset. */
+app.get("/download", async (req, res) => {
+  const releaseUrl = "https://github.com/setiawanw613-blip/RT-kita-TBK/releases/latest/download/RT-TBK.apk";
+
+  try {
+    const upstream = await fetch(releaseUrl, {
+      method: "GET",
+      redirect: "follow",
+      headers: {
+        "Accept": "application/octet-stream",
+        "User-Agent": "RT-TBK-APK-Downloader"
+      },
+      signal: AbortSignal.timeout(25000)
+    });
+
+    if (!upstream.ok || !upstream.body) {
+      throw new Error(`Unduhan APK dari rilis resmi gagal (HTTP ${upstream.status}).`);
+    }
+
+    const finalUrl = new URL(upstream.url);
+    if (
+      finalUrl.protocol !== "https:" ||
+      !(finalUrl.hostname === "release-assets.githubusercontent.com" ||
+        finalUrl.hostname === "objects.githubusercontent.com" ||
+        finalUrl.hostname.endsWith(".githubusercontent.com"))
+    ) {
+      await upstream.body.cancel();
+      throw new Error("Tujuan unduhan APK tidak sesuai host resmi GitHub.");
+    }
+
+    const contentType = upstream.headers.get("content-type") || "application/octet-stream";
+    if (/text\/html|application\/json/i.test(contentType)) {
+      await upstream.body.cancel();
+      throw new Error("Server rilis tidak mengembalikan berkas APK.");
+    }
+
+    res.status(200);
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    res.setHeader("Content-Disposition", 'attachment; filename="RT-TBK.apk"');
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    const contentLength = upstream.headers.get("content-length");
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+
+    const { Readable } = require("node:stream");
+    Readable.fromWeb(upstream.body)
+      .on("error", error => {
+        console.error("STREAM UNDUHAN APK RT TBK ERROR:", error?.message || error);
+        if (!res.headersSent) res.status(502).end("Unduhan APK gagal. Silakan coba kembali.");
+        else res.destroy(error);
+      })
+      .pipe(res);
+  } catch (error) {
+    console.error("UNDUHAN APK RT TBK ERROR:", error?.message || error);
+    if (!res.headersSent) {
+      res.status(503).type("text/plain").send("APK RT TBK sementara tidak dapat diunduh. Silakan coba beberapa saat lagi.");
+    }
+  }
+});
+
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
