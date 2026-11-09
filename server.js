@@ -541,6 +541,87 @@ app.get("/api/iuran/gobiz/status/:orderId", requireWarga, async (req, res) => {
   }
 });
 
+/* PEMULIHAN QRIS YANG SUDAH DI-RESERVE TAPI BELUM FINAL */
+app.post("/api/iuran/gobiz/recover/:orderId", requireWarga, async (req, res) => {
+  try {
+    const orderId = String(req.params.orderId || "");
+    if (!/^RTTBK-(PROD|SBX)-[0-9]+-[a-f0-9]{8}$/.test(orderId)) {
+      return res.status(400).json({ ok: false, message: "Referensi transaksi tidak valid." });
+    }
+    const config = getGoBizConfig();
+    const expectedPrefix = config.environment === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-";
+    if (!orderId.startsWith(expectedPrefix)) {
+      return res.status(409).json({ ok: false, message: "Lingkungan transaksi tidak sesuai dengan konfigurasi GoBiz saat ini." });
+    }
+
+    const wargaRows = await supabaseRequest("warga", {
+      query: "select=id,keluarga_id,nama_lengkap&id=eq." +
+        encodeURIComponent(String(req.session.wargaId)) + "&limit=1"
+    });
+    const warga = Array.isArray(wargaRows) ? wargaRows[0] : null;
+    if (!warga?.keluarga_id) {
+      return res.status(403).json({ ok: false, message: "Data keluarga tidak dapat diverifikasi." });
+    }
+
+    const orderRows = await supabaseRequest("iuran_midtrans_orders", {
+      query: "select=order_id,warga_id,keluarga_id,row_ids,total_amount,provider,provider_transaction_id,provider_status,jalur_pembayaran" +
+        "&order_id=eq." + encodeURIComponent(orderId) + "&provider=eq.gobiz&limit=1"
+    });
+    const order = Array.isArray(orderRows) ? orderRows[0] : null;
+    if (!order || String(order.keluarga_id) !== String(warga.keluarga_id) ||
+        order.jalur_pembayaran !== "warga_qris") {
+      return res.status(404).json({ ok: false, message: "Intent pembayaran tidak ditemukan untuk akun ini." });
+    }
+    if (order.provider_status === "pending" && order.provider_transaction_id) {
+      const known = await getGoBizTransactionDetail(order.provider_transaction_id);
+      if (known.transaction.order_id !== orderId ||
+          Number(known.transaction.gross_amount) !== Number(order.total_amount) ||
+          String(known.outlet?.id || "") !== config.outletId) {
+        return res.status(409).json({ ok: false, message: "Transaksi provider tidak cocok dengan catatan RT Kita." });
+      }
+      if (isGoBizSettlementStatus(known.transaction.status)) {
+        return res.status(409).json({ ok: false, message: "Pembayaran sudah settlement. Periksa riwayat iuran; QR tidak perlu dibuat ulang." });
+      }
+      return res.status(409).json({ ok: false, message: "Transaksi QRIS sudah tercatat. Gunakan QR yang sebelumnya ditampilkan atau periksa statusnya." });
+    }
+    if (order.provider_status !== "creating" || order.provider_transaction_id) {
+      return res.status(409).json({ ok: false, message: "Status intent tidak mengizinkan pemulihan otomatis." });
+    }
+
+    // Reuse the original order_id: createGoBizQrisTransaction derives the same
+    // Idempotency-Key, so a response lost after provider creation is recoverable.
+    const transaksi = await buatTransaksiQRIS({
+      orderId,
+      total: Number(order.total_amount),
+      namaWarga: warga.nama_lengkap
+    });
+    const finalized = await supabaseRequest("rpc/complete_gobiz_iuran_intent", {
+      method: "POST",
+      body: { p_order_id: orderId, p_transaction_id: String(transaksi.transaction.id) }
+    });
+    const rows = Array.isArray(finalized) ? finalized : [];
+    if (rows.length !== (Array.isArray(order.row_ids) ? order.row_ids.length : 0) ||
+        rows.some(row => row.gobiz_transaction_id !== String(transaksi.transaction.id))) {
+      return res.status(500).json({
+        ok: false, order_id: orderId,
+        message: "GoBiz merespons tetapi finalisasi belum terverifikasi. Jangan membuat pembayaran baru; hubungi Bendahara."
+      });
+    }
+    return res.json({
+      ok: true, order_id: orderId, total: Number(order.total_amount),
+      qr_url: transaksi.qr_url || null, qr_string: transaksi.qr_string || null,
+      transaction_status: transaksi.transaction_status || "pending",
+      message: "QRIS dipulihkan menggunakan referensi transaksi yang sama."
+    });
+  } catch (error) {
+    console.error("GOBIZ INTENT RECOVERY ERROR:", error?.message || error);
+    return res.status(502).json({
+      ok: false,
+      message: "Pemulihan belum berhasil. Jangan membuat order baru; periksa kembali dengan referensi transaksi yang sama."
+    });
+  }
+});
+
 /* RETRY QRIS GOBIZ SETELAH STATUS KEDALUWARSA TERVERIFIKASI */
 app.post("/api/iuran/gobiz/retry/:orderId", requireWarga, async (req, res) => {
   let newOrderId = null;
