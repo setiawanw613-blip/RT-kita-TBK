@@ -3693,10 +3693,13 @@ if (hasil.qr_url || hasil.qr_string) {
 }
 
       } catch (e) {
+        const recoveryMatch = String(e.message || "").match(/RTTBK-(?:PROD|SBX)-[0-9]+-[a-f0-9]{8}/i);
+        const recoveryOrder = recoveryMatch ? recoveryMatch[0] : "";
         pesan.innerHTML = `
           <div style="background:#fff1f2;color:#b91c1c;padding:12px;border-radius:10px">
-            <b>Pembayaran tidak bisa diproses</b>
+            <b>Pembayaran belum selesai</b>
             <div style="margin-top:5px">${esc(e.message || "Periksa tunggakan bulan sebelumnya.")}</div>
+            ${recoveryOrder ? '<button type="button" class="btn primary" style="width:100%;margin-top:10px" onclick="pulihkanQRISGoBiz(\''+esc(recoveryOrder)+'\')">Pulihkan QRIS dengan referensi yang sama</button>' : ""}
           </div>
         `;
       } finally {
@@ -3752,6 +3755,23 @@ async function buatUlangQRISGoBiz(orderId){
     info.innerHTML=html;
   }catch(e){
     info.textContent=e.message||"QRIS pengganti belum dapat dibuat. Jangan membayar QR lama.";
+  }
+}
+
+async function pulihkanQRISGoBiz(orderId){
+  const pesan=document.getElementById("pesanIuran")||document.querySelector("[data-iuran-message]");
+  if(pesan)pesan.textContent="Memulihkan QRIS menggunakan referensi transaksi yang sama...";
+  try{
+    const result=await api("/api/iuran/gobiz/recover/"+encodeURIComponent(orderId),{method:"POST"});
+    let view='<div class="card" style="text-align:center"><h2>QRIS berhasil dipulihkan</h2>';
+    view+='<p>Nomor transaksi:</p><b style="overflow-wrap:anywhere">'+esc(result.order_id)+'</b>';
+    view+='<p>Total pembayaran:</p><h2>'+rupiah(result.total)+'</h2>';
+    if(result.qr_url)view+='<img src="'+esc(result.qr_url)+'" alt="QRIS" style="display:block;width:100%;max-width:320px;margin:16px auto">';
+    if(result.qr_string)view+='<p>Kode QRIS:</p><textarea id="kodeQRISPulih" readonly style="width:100%">'+esc(result.qr_string)+'</textarea><button class="btn secondary" style="width:100%" onclick="navigator.clipboard.writeText(document.getElementById(\'kodeQRISPulih\').value).then(()=>alert(\'Kode disalin\'))">Salin kode QRIS</button>';
+    view+='</div><button class="btn secondary" style="width:100%;margin-top:10px" onclick="iuranWarga()">Kembali ke Iuran</button>';
+    layout("Pembayaran QRIS",view,false);
+  }catch(e){
+    if(pesan)pesan.textContent=e.message||"QRIS belum dapat dipulihkan. Jangan membuat transaksi baru.";
   }
 }
 
