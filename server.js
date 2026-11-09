@@ -15,7 +15,7 @@ const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midt
 const { findConflictingSettledRows } = require("./midtrans-order-reconciliation");
 const { canAccessOwnedRecord } = require("./access-control");
 const { cancelPendingMidtransTransaction } = require("./midtrans-cancel");
-const { createGoBizQrisTransaction, getGoBizTransactionDetail, getGoBizConfig, isGoBizConfigured, isGoBizExpiredStatus, isGoBizSettlementStatus, verifyGoBizWebhookSignature } = require("./gobiz-payment");
+const { createGoBizQrisTransaction, getGoBizTransactionDetail, getGoBizConfig, isGoBizConfigured, isGoBizExpiredStatus, isGoBizSettlementStatus, isGoBizIdrCurrency, verifyGoBizWebhookSignature } = require("./gobiz-payment");
 
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
@@ -998,7 +998,7 @@ app.post("/api/gobiz/webhook", async (req, res) => {
       outletId !== config.outletId ||
       String(transaction.status || "").toLowerCase() !== "settlement" ||
       String(transaction.payment_type || "").toLowerCase() !== "qris" ||
-      String(transaction.currency || "").trim().toUpperCase() !== "IDR" ||
+      !isGoBizIdrCurrency(transaction.currency) ||
       !orderId || !transactionId ||
       !Number.isSafeInteger(grossAmount) || grossAmount <= 0 ||
       !settlementAt || Number.isNaN(Date.parse(settlementAt))
