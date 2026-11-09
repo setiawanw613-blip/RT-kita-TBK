@@ -3773,7 +3773,7 @@ async function buatUlangQRISGoBiz(orderId){
 }
 
 async function pulihkanQRISGoBiz(orderId){
-  const pesan=document.getElementById("pesanIuran")||document.querySelector("[data-iuran-message]");
+  const pesan=document.getElementById("pesanPilihIuran");
   if(pesan)pesan.textContent="Memulihkan QRIS menggunakan referensi transaksi yang sama...";
   try{
     const result=await api("/api/iuran/gobiz/recover/"+encodeURIComponent(orderId),{method:"POST"});
