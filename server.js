@@ -3978,25 +3978,7 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
   } catch (error) {
     console.error("SETORAN QRIS KETUA GANG ERROR:", error?.message || error);
     if (orderId && rowsTersimpan.length === 0) {
-      try {
-        const check = await supabaseRequest("iuran_warga", {
-          query: "select=id&bukti_transfer=eq." + encodeURIComponent("GOBIZ:" + orderId) + "&limit=1"
-        });
-        const alreadyReserved = Array.isArray(check) && check.length > 0;
-        if (!alreadyReserved) {
-          const serverKey = getMidtransServerKeyForOrder(orderId);
-          if (serverKey) {
-            const canceled = await cancelPendingMidtransTransaction({
-              orderId,
-              serverKey,
-              apiBase: getMidtransApiBaseForOrder(orderId)
-            });
-            if (!canceled.ok) console.warn("SETORAN QRIS PERLU REKONSILIASI:", canceled);
-          }
-        }
-      } catch (reconcileError) {
-        console.error("SETORAN QRIS REKONSILIASI ERROR:", reconcileError?.message || reconcileError);
-      }
+      console.warn("GOBIZ QR dibuat tetapi reservasi database tidak terkonfirmasi; jangan bagikan QR. Periksa dashboard GoBiz:", orderId);
     }
     return res.status(getSupabaseErrorCode(error) === "23505" ? 409 : 500).json({
       ok: false,
@@ -4257,47 +4239,8 @@ if (
   } catch (error) {
     console.error("BAYAR IURAN QRIS ERROR:", error?.message || error);
 
-    // If the atomic reservation did not persist any rows, reconcile the
-    // external Midtrans order. Never cancel after a successful DB reservation.
     if (orderId && rowsTersimpan.length === 0) {
-      try {
-        // A network/response error can happen after Postgres committed.
-        // Verify the order marker before cancelling the external payment.
-        const rekonsiliasi = await supabaseRequest("iuran_warga", {
-          query:
-            "select=id" +
-            "&bukti_transfer=eq." +
-            encodeURIComponent(`GOBIZ:${orderId}`) +
-            "&limit=1"
-        });
-        const orderSudahTersimpan =
-          Array.isArray(rekonsiliasi) && rekonsiliasi.length > 0;
-
-        if (orderSudahTersimpan) {
-          console.warn("MIDTRANS CANCEL SKIPPED: order already exists in database.");
-        } else {
-          const serverKey = getMidtransServerKeyForOrder(orderId);
-          const apiBase = getMidtransApiBaseForOrder(orderId);
-          if (serverKey) {
-            const pembatalan = await cancelPendingMidtransTransaction({
-              orderId,
-              serverKey,
-              apiBase
-            });
-            if (!pembatalan.ok) {
-              console.warn("QRIS RECONCILIATION NEEDS REVIEW:", {
-                orderId,
-                status: pembatalan.status,
-                reason: pembatalan.reason
-              });
-            }
-          }
-        }
-      } catch (cancelError) {
-        // Fail closed: if database reconciliation is unavailable, do not
-        // cancel a payment whose reservation state cannot be confirmed.
-        console.error("QRIS RECONCILIATION ERROR:", cancelError?.message || cancelError);
-      }
+      console.warn("GOBIZ QR dibuat tetapi reservasi database tidak terkonfirmasi; jangan bagikan QR. Periksa dashboard GoBiz:", orderId);
     }
     return res.status(
       getSupabaseErrorCode(error) === "23505" ? 409 : 500
