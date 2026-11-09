@@ -236,6 +236,20 @@ async function createGoBizQrisTransaction({ orderId, total, namaWarga, namaPemba
   };
 }
 
+function normalizeGoBizTransactionStatus(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isGoBizExpiredStatus(value) {
+  return ["expire", "expired", "cancel", "cancelled", "deny", "denied"].includes(
+    normalizeGoBizTransactionStatus(value)
+  );
+}
+
+function isGoBizSettlementStatus(value) {
+  return normalizeGoBizTransactionStatus(value) === "settlement";
+}
+
 function verifyGoBizWebhookSignature(rawBody, signature, secret) {
   if (!rawBody || !signature || !secret) return false;
   const supplied = String(signature).trim().toLowerCase();
@@ -253,5 +267,8 @@ module.exports = {
   ensureGoBizPaymentWebhook,
   createGoBizQrisTransaction,
   getGoBizTransactionDetail,
+  normalizeGoBizTransactionStatus,
+  isGoBizExpiredStatus,
+  isGoBizSettlementStatus,
   verifyGoBizWebhookSignature
 };
