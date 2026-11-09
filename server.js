@@ -496,12 +496,14 @@ app.post("/api/gobiz/webhook", async (req, res) => {
       }
     });
 
-    const rows = await supabaseRequest("iuran_warga", {
-      query:
-        "select=id,warga_id,bulan,status&bukti_transfer=eq." +
-        encodeURIComponent("GOBIZ:" + orderId) +
-        "&status=eq.lunas"
-    });
+    const rows = Number(settlement?.updated_rows || 0) > 0
+      ? await supabaseRequest("iuran_warga", {
+          query:
+            "select=id,warga_id,bulan,status&bukti_transfer=eq." +
+            encodeURIComponent("GOBIZ:" + orderId) +
+            "&status=eq.lunas"
+        })
+      : [];
 
     for (const row of Array.isArray(rows) ? rows : []) {
       try {
@@ -4479,10 +4481,10 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
 
     return res.json({
       ok: true,
-      mode: getMidtransModeInfo(),
+      mode: { mode: getGoBizConfig().environment, configured: isGoBizConfigured() },
       sumber: "Riwayat transaksi keluarga sendiri",
       catatan:
-        "Data hanya mencakup pembayaran QRIS keluarga yang sedang login. Konfirmasi transaksi resmi dan pencairan dana harus diperiksa secara terpisah.",
+        "Data hanya mencakup pembayaran QRIS keluarga yang sedang login. Settlement GoBiz dicatat setelah tanda tangan webhook valid dan nominal cocok.",
       data: hasil
     });
   } catch (error) {
