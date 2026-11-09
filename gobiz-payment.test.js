@@ -7,6 +7,7 @@ const {
   verifyGoBizWebhookSignature,
   isGoBizExpiredStatus,
   isGoBizSettlementStatus,
+  isGoBizIdrCurrency,
   normalizeGoBizTransactionStatus
 } = require("./gobiz-payment");
 
@@ -167,5 +168,10 @@ test("GoBiz terminal transaction statuses are normalized safely", () => {
   assert.equal(isGoBizExpiredStatus("pending"), false);
   assert.equal(isGoBizSettlementStatus("SETTLEMENT"), true);
   assert.equal(isGoBizSettlementStatus("pending"), false);
+  assert.equal(isGoBizIdrCurrency("IDR"), true);
+  assert.equal(isGoBizIdrCurrency(" idr "), true);
+  assert.equal(isGoBizIdrCurrency(""), false);
+  assert.equal(isGoBizIdrCurrency(null), false);
+  assert.equal(isGoBizIdrCurrency("USD"), false);
   assert.equal(normalizeGoBizTransactionStatus(" Expire "), "expire");
 });
