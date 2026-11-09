@@ -1,6 +1,5 @@
 -- Atomic settlement for manual iuran verification.
--- The application server calls this with its private Supabase service credential.
--- Keep this function SECURITY INVOKER; do not expose it to client roles.
+-- Called only by the trusted application server using service_role.
 
 CREATE OR REPLACE FUNCTION public.verifikasi_iuran_atomic(
   p_iuran_id integer,
@@ -14,17 +13,16 @@ DECLARE
   v_iuran public.iuran_warga%ROWTYPE;
   v_item record;
   v_keterangan text;
+  v_kas public.kas_rt%ROWTYPE;
 BEGIN
   IF p_iuran_id IS NULL OR p_iuran_id <= 0 THEN
     RAISE EXCEPTION 'ID iuran tidak valid' USING ERRCODE = '22023';
   END IF;
-
   IF length(btrim(coalesce(p_diverifikasi_oleh, ''))) = 0 THEN
     RAISE EXCEPTION 'Identitas petugas wajib diisi' USING ERRCODE = '22023';
   END IF;
 
-  SELECT *
-    INTO v_iuran
+  SELECT * INTO v_iuran
     FROM public.iuran_warga
    WHERE id = p_iuran_id
    FOR UPDATE;
@@ -33,13 +31,12 @@ BEGIN
     RAISE EXCEPTION 'Data iuran tidak ditemukan' USING ERRCODE = 'P0002';
   END IF;
 
-  -- Repeated requests are safe: an already-paid row is returned unchanged.
+  -- A repeated request returns the already settled row without booking again.
   IF v_iuran.status = 'lunas' THEN
     RETURN NEXT v_iuran;
     RETURN;
   END IF;
 
-  -- Do not allow a forged or outdated amount to be settled as a standard month.
   IF coalesce(v_iuran.total_amount, 0) <> 35000 THEN
     RAISE EXCEPTION 'Nominal iuran tidak sesuai tarif resmi' USING ERRCODE = '22023';
   END IF;
@@ -57,20 +54,25 @@ BEGIN
       coalesce(v_iuran.bulan::text, '') ||
       ' - iuran_id ' || v_iuran.id::text;
 
-    -- The iuran row lock serializes concurrent verification attempts.
-    -- Existing entries are preserved; only missing categories are inserted.
-    IF NOT EXISTS (
-      SELECT 1
-        FROM public.kas_rt k
-       WHERE k.keterangan = v_keterangan
-         AND k.jenis = 'masuk'
-         AND k.jumlah = v_item.jumlah
-    ) THEN
-      INSERT INTO public.kas_rt (
-        tanggal, jenis, kategori, keterangan, jumlah
-      ) VALUES (
-        CURRENT_DATE, 'masuk', v_item.kategori, v_keterangan, v_item.jumlah
-      );
+    SELECT * INTO v_kas
+      FROM public.kas_rt
+     WHERE keterangan = v_keterangan
+     LIMIT 1
+     FOR UPDATE;
+
+    IF FOUND THEN
+      IF v_kas.jenis <> 'masuk'
+         OR coalesce(v_kas.jumlah, 0) <> v_item.jumlah
+         OR (v_kas.kategori IS NOT NULL AND v_kas.kategori <> v_item.kategori) THEN
+        RAISE EXCEPTION 'Catatan kas untuk iuran ini tidak konsisten: %', v_keterangan
+          USING ERRCODE = '23514';
+      END IF;
+      IF v_kas.kategori IS NULL THEN
+        UPDATE public.kas_rt SET kategori = v_item.kategori WHERE id = v_kas.id;
+      END IF;
+    ELSE
+      INSERT INTO public.kas_rt (tanggal, jenis, kategori, keterangan, jumlah)
+      VALUES (CURRENT_DATE, 'masuk', v_item.kategori, v_keterangan, v_item.jumlah);
     END IF;
   END LOOP;
 
@@ -91,4 +93,4 @@ REVOKE ALL ON FUNCTION public.verifikasi_iuran_atomic(integer, text) FROM anon, 
 GRANT EXECUTE ON FUNCTION public.verifikasi_iuran_atomic(integer, text) TO service_role;
 
 COMMENT ON FUNCTION public.verifikasi_iuran_atomic(integer, text)
-IS 'Atomically verifies one Rp35,000 iuran and books Sampah, Keamanan, and Kas RT once. Server-only.';
+IS 'Server-only atomic verification of one Rp35,000 iuran and its three cash ledger entries.';
