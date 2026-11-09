@@ -7,6 +7,7 @@ const { getMidtransApiBaseForNewTransaction, getMidtransApiBaseForOrder, getMidt
 const { normalizeStorageObjectPath } = require("./storage-path");
 const { csvCell } = require("./csv-safe");
 const { isValidNewResidentPassword } = require("./password-policy");
+const { createRateLimitKey } = require("./rate-limit-key");
 const { detectImageType } = require("./image-validation");
 const { createSignedSessionToken, verifySignedSessionToken } = require("./session-security");
 const { isValidIuranMonth } = require("./iuran-validation");
@@ -981,6 +982,27 @@ if (
   });
 }
 
+// Batasi percobaan pendaftaran per nomor HP dengan pencatatan persisten.
+const sessionSecret = process.env.SESSION_SECRET;
+if (typeof sessionSecret !== "string" || Buffer.byteLength(sessionSecret, "utf8") < 32) {
+  console.error("REGISTER CONFIG ERROR: SESSION_SECRET is missing or too short");
+  return res.status(503).json({ ok: false, message: "Layanan pendaftaran sedang tidak siap. Silakan coba kembali nanti." });
+}
+const registrationRateLimitKey = createRateLimitKey(sessionSecret, "register", no_hp);
+const registrationRateLimitRows = await supabaseRequest("rpc/consume_login_rate_limit", {
+  method: "POST",
+  body: { p_key_hash: registrationRateLimitKey, p_window_seconds: 900, p_max_attempts: 5 }
+});
+const registrationRateLimit = Array.isArray(registrationRateLimitRows) ? registrationRateLimitRows[0] : registrationRateLimitRows;
+if (!registrationRateLimit || typeof registrationRateLimit.allowed !== "boolean") {
+  throw new Error("Respons pembatasan pendaftaran tidak valid");
+}
+if (!registrationRateLimit.allowed) {
+  const retryAfter = Math.max(1, Number(registrationRateLimit.retry_after_seconds) || 900);
+  res.setHeader("Retry-After", String(retryAfter));
+  return res.status(429).json({ ok: false, message: "Terlalu banyak percobaan pendaftaran untuk nomor HP ini. Silakan coba lagi beberapa menit kemudian." });
+}
+
     const existing = await supabaseRequest("warga", {
       query:
         `select=id` +
@@ -1138,9 +1160,7 @@ app.post("/api/login", async (req, res) => {
     }
 
     // Persistent account-based throttling shared by all Vercel instances.
-    const rateLimitKey = crypto.createHmac("sha256", sessionSecret)
-      .update("login:" + role + ":" + username.trim().toLowerCase())
-      .digest("hex");
+    const rateLimitKey = createRateLimitKey(sessionSecret, "login", role + ":" + username);
     const rateLimitRows = await supabaseRequest("rpc/consume_login_rate_limit", {
       method: "POST",
       body: { p_key_hash: rateLimitKey, p_window_seconds: 900, p_max_attempts: 5 }
