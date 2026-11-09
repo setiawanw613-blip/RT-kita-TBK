@@ -43,9 +43,9 @@ BEGIN
     RAISE EXCEPTION 'REFERENSI_RETRY_GOBIZ_TIDAK_VALID' USING ERRCODE = '22023';
   END IF;
 
-  SELECT * INTO v_attempt
-  FROM public.gobiz_payment_attempts
-  WHERE old_order_id = p_old_order_id
+  SELECT a.* INTO v_attempt
+  FROM public.gobiz_payment_attempts AS a
+  WHERE a.old_order_id = p_old_order_id
   FOR UPDATE;
 
   IF FOUND THEN
@@ -56,9 +56,9 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT * INTO v_old
-  FROM public.iuran_midtrans_orders
-  WHERE order_id = p_old_order_id AND provider = 'gobiz'
+  SELECT o.* INTO v_old
+  FROM public.iuran_midtrans_orders AS o
+  WHERE o.order_id = p_old_order_id AND o.provider = 'gobiz'
   FOR UPDATE;
 
   IF NOT FOUND
@@ -104,7 +104,7 @@ BEGIN
 
   RETURN QUERY
   SELECT a.order_id, a.total_amount, a.status
-  FROM public.gobiz_payment_attempts a
+  FROM public.gobiz_payment_attempts AS a
   WHERE a.old_order_id = p_old_order_id;
 END;
 $$;
