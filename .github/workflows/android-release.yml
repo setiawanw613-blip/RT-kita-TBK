@@ -4,19 +4,23 @@ on:
   workflow_dispatch:
     inputs:
       confirm_permanent_signing_key:
-        description: "Pastikan keystore permanen sudah dicadangkan dan akan dipakai ulang untuk setiap rilis."
+        description: "Konfirmasi kunci permanen RT TBK sudah tervalidasi dan dicadangkan."
         required: true
         type: choice
         options:
           - "TIDAK"
           - "YA_SAYA_SUDAH_MENCADANGKAN_KUNCI_PERMANEN"
+  push:
+    branches: ["main"]
+    paths:
+      - "android/app/build.gradle"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-release-apk:
-    if: inputs.confirm_permanent_signing_key == 'YA_SAYA_SUDAH_MENCADANGKAN_KUNCI_PERMANEN'
+    if: github.event_name == 'push' || inputs.confirm_permanent_signing_key == 'YA_SAYA_SUDAH_MENCADANGKAN_KUNCI_PERMANEN'
     runs-on: ubuntu-latest
     steps:
       - name: Verify signing secrets exist
@@ -26,10 +30,11 @@ jobs:
           KEY_ALIAS: ${{ secrets.RT_KITA_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.RT_KITA_KEY_PASSWORD }}
         run: |
-          test -n "$KEYSTORE_B64" || (echo "Missing RT_KITA_KEYSTORE_BASE64" && exit 1)
-          test -n "$KEYSTORE_PASSWORD" || (echo "Missing RT_KITA_KEYSTORE_PASSWORD" && exit 1)
-          test -n "$KEY_ALIAS" || (echo "Missing RT_KITA_KEY_ALIAS" && exit 1)
-          test -n "$KEY_PASSWORD" || (echo "Missing RT_KITA_KEY_PASSWORD" && exit 1)
+          set -euo pipefail
+          test -n "$KEYSTORE_B64" || (echo "::error::Missing signing keystore" && exit 1)
+          test -n "$KEYSTORE_PASSWORD" || (echo "::error::Missing keystore password" && exit 1)
+          test -n "$KEY_ALIAS" || (echo "::error::Missing key alias" && exit 1)
+          test -n "$KEY_PASSWORD" || (echo "::error::Missing key password" && exit 1)
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,7 +50,7 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Prepare and validate private signing key
+      - name: Prepare and validate permanent signing key
         env:
           KEYSTORE_B64: ${{ secrets.RT_KITA_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.RT_KITA_KEYSTORE_PASSWORD }}
@@ -56,8 +61,13 @@ jobs:
           printf '%s' "$KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/rt-kita-signing/release.jks"
           chmod 600 "$RUNNER_TEMP/rt-kita-signing/release.jks"
           keytool -list -keystore "$RUNNER_TEMP/rt-kita-signing/release.jks" -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" >/dev/null
-          FINGERPRINT="$(keytool -exportcert -keystore "$RUNNER_TEMP/rt-kita-signing/release.jks" -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" | sha256sum | awk '{print $1}')"
-          echo "SHA-256 sertifikat penanda tangan: $FINGERPRINT" >> "$GITHUB_STEP_SUMMARY"
+          ACTUAL="$(keytool -exportcert -keystore "$RUNNER_TEMP/rt-kita-signing/release.jks" -storepass:env KEYSTORE_PASSWORD -alias "$KEY_ALIAS" | sha256sum | awk '{print $1}')"
+          EXPECTED="2682ffc9b05089b77e166e713fa4e036a10eaf7d068cc1050e2ddaa314bd0854"
+          if [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::Fingerprint keystore tidak cocok dengan sertifikat RT TBK sebelumnya. Rilis dihentikan."
+            exit 1
+          fi
+          echo "Keystore permanen RT TBK cocok dengan sertifikat rilis sebelumnya." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build signed release APK
         working-directory: android
@@ -68,14 +78,40 @@ jobs:
           RT_KITA_KEY_PASSWORD: ${{ secrets.RT_KITA_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
 
-      - name: Verify APK signature
+      - name: Verify APK signature and version
+        id: apk
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs android/app/build/outputs/apk/release/app-release.apk
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/release/app-release.apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
+          VERSION_NAME="$(sed -n "s/^[[:space:]]*versionName '\([^']*\)'/\1/p" android/app/build.gradle | head -n1)"
+          VERSION_CODE="$(sed -n "s/^[[:space:]]*versionCode \([0-9]*\)/\1/p" android/app/build.gradle | head -n1)"
+          test -n "$VERSION_NAME" && test -n "$VERSION_CODE"
+          echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          cp "$APK" "$RUNNER_TEMP/RT-TBK.apk"
+          echo "APK release RT TBK v$VERSION_NAME (kode $VERSION_CODE) lolos verifikasi tanda tangan." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload signed release APK
+      - name: Publish public APK download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v${{ steps.apk.outputs.version_name }}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$RUNNER_TEMP/RT-TBK.apk" --clobber --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$TAG" "$RUNNER_TEMP/RT-TBK.apk" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "RT TBK Android ${{ steps.apk.outputs.version_name }}" \
+              --notes "APK resmi RT TBK versi ${{ steps.apk.outputs.version_name }}. Unduh hanya dari tautan resmi RT TBK." \
+              --latest
+          fi
+
+      - name: Upload signed APK build artifact
         uses: actions/upload-artifact@v4
         with:
           name: rt-kita-android-release
-          path: android/app/build/outputs/apk/release/app-release.apk
+          path: ${{ runner.temp }}/RT-TBK.apk
           if-no-files-found: error
           retention-days: 30
