@@ -3997,7 +3997,7 @@ app.get("/api/ketua-gang/riwayat-setoran", requireGangLead, async (req, res) => 
       return res.status(403).json({ ok: false, message: "Identitas akun Ketua Gang tidak valid." });
     }
     const rows = await supabaseRequest("iuran_warga", {
-      query: "select=id,warga_id,bulan,status,total_amount,bukti_transfer,dibayar_at,midtrans_status,midtrans_settlement_at,jalur_pembayaran,disetorkan_oleh_id,disetorkan_oleh_nama" +
+      query: "select=id,warga_id,bulan,status,total_amount,bukti_transfer,dibayar_at,midtrans_status,midtrans_settlement_at,gobiz_status,gobiz_settlement_at,jalur_pembayaran,disetorkan_oleh_id,disetorkan_oleh_nama" +
         "&jalur_pembayaran=eq.ketua_gang_qris&disetorkan_oleh_id=eq." +
         encodeURIComponent(penyetorId) + "&order=bulan.desc&limit=500"
     });
@@ -4259,9 +4259,8 @@ app.get("/api/qris/history", requireFinance, async (req, res) => {
   try {
     const data = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh,midtrans_transaction_id,midtrans_status,midtrans_settlement_at,midtrans_notifikasi_at,jalur_pembayaran,disetorkan_oleh_nama" +
-        "&bukti_transfer=like." +
-        encodeURIComponent("MIDTRANS:%") +
+        "select=id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh,midtrans_transaction_id,midtrans_status,midtrans_settlement_at,midtrans_notifikasi_at,gobiz_transaction_id,gobiz_status,gobiz_settlement_at,gobiz_notification_at,jalur_pembayaran,disetorkan_oleh_nama" +
+        "&or=" + encodeURIComponent("(bukti_transfer.like.MIDTRANS:*,bukti_transfer.like.GOBIZ:*)") +
         "&order=bulan.desc&limit=1000"
     });
 
@@ -4270,9 +4269,10 @@ app.get("/api/qris/history", requireFinance, async (req, res) => {
 
     for (const row of rows) {
       const bukti = String(row.bukti_transfer || "");
-      if (!bukti.startsWith("MIDTRANS:")) continue;
+      if (!bukti.startsWith("MIDTRANS:") && !bukti.startsWith("GOBIZ:")) continue;
 
-      const orderId = bukti.slice("MIDTRANS:".length);
+      const prefix = bukti.startsWith("GOBIZ:") ? "GOBIZ:" : "MIDTRANS:";
+      const orderId = bukti.slice(prefix.length);
       if (!orderId) continue;
 
       if (!transaksi.has(orderId)) {
@@ -4280,16 +4280,16 @@ app.get("/api/qris/history", requireFinance, async (req, res) => {
           order_id: orderId,
           jalur_pembayaran: row.jalur_pembayaran || "warga_qris",
           disetorkan_oleh_nama: row.disetorkan_oleh_nama || null,
-          transaction_id: row.midtrans_transaction_id || null,
-          status_midtrans: row.midtrans_status || null,
-          waktu_settlement: row.midtrans_settlement_at || null,
-          waktu_notifikasi: row.midtrans_notifikasi_at || null,
+          transaction_id: row.gobiz_transaction_id || row.midtrans_transaction_id || null,
+          status_midtrans: row.gobiz_status || row.midtrans_status || null,
+          waktu_settlement: row.gobiz_settlement_at || row.midtrans_settlement_at || null,
+          waktu_notifikasi: row.gobiz_notification_at || row.midtrans_notifikasi_at || null,
           total: 0,
           jumlah_bulan: 0,
           bulan: [],
           rincian: [],
-          status: "lunas",
-          waktu: null
+          status: row.status || "menunggu_verifikasi",
+          waktu: row.dibayar_at || null
         });
       }
 
@@ -4297,20 +4297,17 @@ app.get("/api/qris/history", requireFinance, async (req, res) => {
       const nominal = Number(row.total_amount) || 0;
 
       // Ambil bukti yang tersedia dari setiap baris iuran.
-      if (!item.transaction_id && row.midtrans_transaction_id) {
-        item.transaction_id = row.midtrans_transaction_id;
+      if (!item.transaction_id && (row.gobiz_transaction_id || row.midtrans_transaction_id)) {
+        item.transaction_id = row.gobiz_transaction_id || row.midtrans_transaction_id;
       }
-
-      if (!item.status_midtrans && row.midtrans_status) {
-        item.status_midtrans = row.midtrans_status;
+      if (!item.status_midtrans && (row.gobiz_status || row.midtrans_status)) {
+        item.status_midtrans = row.gobiz_status || row.midtrans_status;
       }
-
-      if (!item.waktu_settlement && row.midtrans_settlement_at) {
-        item.waktu_settlement = row.midtrans_settlement_at;
+      if (!item.waktu_settlement && (row.gobiz_settlement_at || row.midtrans_settlement_at)) {
+        item.waktu_settlement = row.gobiz_settlement_at || row.midtrans_settlement_at;
       }
-
-      if (!item.waktu_notifikasi && row.midtrans_notifikasi_at) {
-        item.waktu_notifikasi = row.midtrans_notifikasi_at;
+      if (!item.waktu_notifikasi && (row.gobiz_notification_at || row.midtrans_notifikasi_at)) {
+        item.waktu_notifikasi = row.gobiz_notification_at || row.midtrans_notifikasi_at;
       }
 
       item.total += nominal;
@@ -4391,10 +4388,9 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
 
     const data = await supabaseRequest("iuran_warga", {
       query:
-        "select=id,keluarga_id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh,midtrans_transaction_id,midtrans_status,midtrans_settlement_at,midtrans_notifikasi_at,jalur_pembayaran,disetorkan_oleh_nama" +
+        "select=id,keluarga_id,bulan,status,total_amount,bukti_transfer,dibayar_at,diverifikasi_at,diverifikasi_oleh,midtrans_transaction_id,midtrans_status,midtrans_settlement_at,midtrans_notifikasi_at,gobiz_transaction_id,gobiz_status,gobiz_settlement_at,gobiz_notification_at,jalur_pembayaran,disetorkan_oleh_nama" +
         `&keluarga_id=eq.${encodeURIComponent(String(warga.keluarga_id))}` +
-        "&bukti_transfer=like." +
-        encodeURIComponent("MIDTRANS:%") +
+        "&or=" + encodeURIComponent("(bukti_transfer.like.MIDTRANS:*,bukti_transfer.like.GOBIZ:*)") +
         "&order=bulan.desc&limit=500"
     });
 
@@ -4403,9 +4399,10 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
 
     for (const row of rows) {
       const bukti = String(row.bukti_transfer || "");
-      if (!bukti.startsWith("MIDTRANS:")) continue;
+      if (!bukti.startsWith("MIDTRANS:") && !bukti.startsWith("GOBIZ:")) continue;
 
-      const orderId = bukti.slice("MIDTRANS:".length);
+      const prefix = bukti.startsWith("GOBIZ:") ? "GOBIZ:" : "MIDTRANS:";
+      const orderId = bukti.slice(prefix.length);
       if (!orderId) continue;
 
       if (!transaksi.has(orderId)) {
@@ -4413,33 +4410,33 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
           order_id: orderId,
           jalur_pembayaran: row.jalur_pembayaran || "warga_qris",
           disetorkan_oleh_nama: row.disetorkan_oleh_nama || null,
-          transaction_id: row.midtrans_transaction_id || null,
-          status_midtrans: row.midtrans_status || null,
-          waktu_settlement: row.midtrans_settlement_at || null,
-          waktu_notifikasi: row.midtrans_notifikasi_at || null,
+          transaction_id: row.gobiz_transaction_id || row.midtrans_transaction_id || null,
+          status_midtrans: row.gobiz_status || row.midtrans_status || null,
+          waktu_settlement: row.gobiz_settlement_at || row.midtrans_settlement_at || null,
+          waktu_notifikasi: row.gobiz_notification_at || row.midtrans_notifikasi_at || null,
           total: 0,
           jumlah_bulan: 0,
           bulan: [],
           rincian: [],
-          status: "lunas",
-          waktu: null
+          status: row.status || "menunggu_verifikasi",
+          waktu: row.dibayar_at || null
         });
       }
 
       const item = transaksi.get(orderId);
       const nominal = Number(row.total_amount) || 0;
 
-      if (!item.transaction_id && row.midtrans_transaction_id) {
-        item.transaction_id = row.midtrans_transaction_id;
+      if (!item.transaction_id && (row.gobiz_transaction_id || row.midtrans_transaction_id)) {
+        item.transaction_id = row.gobiz_transaction_id || row.midtrans_transaction_id;
       }
-      if (!item.status_midtrans && row.midtrans_status) {
-        item.status_midtrans = row.midtrans_status;
+      if (!item.status_midtrans && (row.gobiz_status || row.midtrans_status)) {
+        item.status_midtrans = row.gobiz_status || row.midtrans_status;
       }
-      if (!item.waktu_settlement && row.midtrans_settlement_at) {
-        item.waktu_settlement = row.midtrans_settlement_at;
+      if (!item.waktu_settlement && (row.gobiz_settlement_at || row.midtrans_settlement_at)) {
+        item.waktu_settlement = row.gobiz_settlement_at || row.midtrans_settlement_at;
       }
-      if (!item.waktu_notifikasi && row.midtrans_notifikasi_at) {
-        item.waktu_notifikasi = row.midtrans_notifikasi_at;
+      if (!item.waktu_notifikasi && (row.gobiz_notification_at || row.midtrans_notifikasi_at)) {
+        item.waktu_notifikasi = row.gobiz_notification_at || row.midtrans_notifikasi_at;
       }
 
       item.total += nominal;
