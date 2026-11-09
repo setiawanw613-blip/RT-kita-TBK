@@ -197,8 +197,10 @@ async function createGoBizQrisTransaction({ orderId, total, namaWarga, namaPemba
     !transaction ||
     transaction.order_id !== orderId ||
     Number(transaction.gross_amount) !== Number(total) ||
+    String(transaction.currency || "").toUpperCase() !== "IDR" ||
     String(transaction.payment_type).toLowerCase() !== "qris" ||
-    !transaction.id
+    String(response?.data?.outlet?.id || "") !== c.outletId ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(transaction.id || ""))
   ) {
     throw new Error("Respons QRIS GoBiz tidak cocok dengan tagihan RT Kita.");
   }
