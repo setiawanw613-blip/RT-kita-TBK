@@ -3917,7 +3917,7 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     }
 
     const total = 35000;
-    orderId = (String(process.env.GOBIZ_ENVIRONMENT || "production").toLowerCase() === "sandbox" ? "RTTBK-GOBIZ-SBX-" : "RTTBK-GOBIZ-PROD-") +
+    orderId = (String(process.env.GOBIZ_ENVIRONMENT || "production").toLowerCase() === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-") +
       Date.now() + "-" + crypto.randomBytes(4).toString("hex");
     const penyetorNama = String(req.session.nama || req.session.username || "Ketua Gang");
     const transaksi = await buatTransaksiQRIS({ orderId, total, namaWarga: warga.nama_lengkap, namaPembayar: penyetorNama });
@@ -4170,7 +4170,7 @@ if (record && !iuranKedaluwarsa.some(
 
     const total = 35000 * dipilih.length;
     orderId =
-      `${String(process.env.GOBIZ_ENVIRONMENT || "production").toLowerCase() === "sandbox" ? "RTTBK-GOBIZ-SBX-" : "RTTBK-GOBIZ-PROD-"}${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+      `${String(process.env.GOBIZ_ENVIRONMENT || "production").toLowerCase() === "sandbox" ? "RTTBK-SBX-" : "RTTBK-PROD-"}${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 
     // Buat transaksi QRIS terlebih dahulu.
     const transaksi = await buatTransaksiQRIS({
