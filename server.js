@@ -15,6 +15,7 @@ const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midt
 const { findConflictingSettledRows } = require("./midtrans-order-reconciliation");
 const { canAccessOwnedRecord } = require("./access-control");
 const { cancelPendingMidtransTransaction } = require("./midtrans-cancel");
+const { createGoBizQrisTransaction, getGoBizConfig, verifyGoBizWebhookSignature } = require("./gobiz-payment");
 
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
 const app = express();
@@ -34,54 +35,11 @@ app.use((req, res, next) => {
 
   next();
 });
-app.use(express.json({ limit: "256kb" }));
+app.use(express.json({ limit: "256kb", verify(req, res, buffer) { req.rawBody = Buffer.from(buffer); } }));
 
-/* MIDTRANS QRIS: endpoint dipilih sesuai mode dan asal order. */
+/* QRIS DINAMIS LANGSUNG MELALUI API RESMI GOBIZ */
 async function buatTransaksiQRIS({ orderId, total, namaWarga, namaPembayar }) {
-  const serverKey = getMidtransServerKeyForNewTransaction();
-
-  if (!serverKey) {
-    throw new Error("Kunci Midtrans untuk mode yang aktif belum diatur di Vercel.");
-  }
-
-  const auth = Buffer.from(`${serverKey}:`).toString("base64");
-
-  const response = await fetch(
-    `${getMidtransApiBaseForNewTransaction()}/v2/charge`,
-    {
-      method: "POST",
-      headers: {
-        "Authorization": `Basic ${auth}`,
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "X-Override-Notification": "https://rt-kita-tbk.vercel.app/api/midtrans/webhook"
-      },
-      // Batasi waktu tunggu gateway agar proses pembuatan QRIS tidak menggantung.
-      signal: AbortSignal.timeout(15000),
-      body: JSON.stringify({
-        payment_type: "qris",
-        transaction_details: {
-          order_id: orderId,
-          gross_amount: total
-        },
-        customer_details: {
-          first_name: namaPembayar || namaWarga || "Warga RT TBK"
-        },
-        qris: {
-          acquirer: "gopay"
-        }
-      })
-    }
-  );
-
-  const hasil = await response.json();
-
-  if (!response.ok) {
-    console.error("MIDTRANS QRIS ERROR:", hasil);
-    throw new Error("Transaksi QRIS gagal dibuat. Periksa mode dan kredensial Midtrans.");
-  }
-
-  return hasil;
+  return createGoBizQrisTransaction({ orderId, total, namaWarga, namaPembayar });
 }
 
 
@@ -482,6 +440,97 @@ if (!barisDiperbarui || barisDiperbarui.status !== "lunas") {
       ok: false,
       message: "Gagal memproses notifikasi pembayaran."
     });
+  }
+});
+
+
+/* WEBHOOK SETTLEMENT GOBIZ - SIGNATURE HMAC SHA256 */
+app.post("/api/gobiz/webhook", async (req, res) => {
+  try {
+    const config = getGoBizConfig();
+    const signature = req.get("X-Go-Signature");
+    if (!config.notificationSecret || !verifyGoBizWebhookSignature(
+      req.rawBody,
+      signature,
+      config.notificationSecret
+    )) {
+      return res.status(403).json({ ok: false, message: "Tanda tangan GoBiz tidak valid." });
+    }
+
+    const event = req.body || {};
+    const eventName = String(event.header?.event_name || event.header?.event_type || "");
+    if (eventName !== "payment.transaction.settlement") {
+      return res.status(200).json({ ok: true, ignored: true });
+    }
+
+    const payload = event.body || {};
+    const outletId = String(payload.outlet?.id || "");
+    const transaction = payload.transaction || {};
+    const orderId = String(transaction.order_id || "");
+    const transactionId = String(transaction.id || "");
+    const grossAmount = Number(transaction.gross_amount);
+    const settlementAt = String(transaction.settlement_at || "");
+
+    if (
+      !config.outletId ||
+      outletId !== config.outletId ||
+      String(transaction.status || "").toLowerCase() !== "settlement" ||
+      String(transaction.payment_type || "").toLowerCase() !== "qris" ||
+      String(transaction.currency || "IDR").toUpperCase() !== "IDR" ||
+      !orderId || !transactionId ||
+      !Number.isSafeInteger(grossAmount) || grossAmount <= 0 ||
+      !settlementAt || Number.isNaN(Date.parse(settlementAt))
+    ) {
+      return res.status(400).json({ ok: false, message: "Data settlement GoBiz tidak lengkap atau tidak cocok." });
+    }
+
+    const settlement = await supabaseRequest("rpc/settle_gobiz_iuran_order_atomic", {
+      method: "POST",
+      body: {
+        p_order_id: orderId,
+        p_gross_amount: grossAmount,
+        p_transaction_id: transactionId,
+        p_outlet_id: outletId,
+        p_expected_outlet_id: config.outletId,
+        p_settlement_at: new Date(settlementAt).toISOString()
+      }
+    });
+
+    const rows = await supabaseRequest("iuran_warga", {
+      query:
+        "select=id,warga_id,bulan,status&bukti_transfer=eq." +
+        encodeURIComponent("GOBIZ:" + orderId) +
+        "&status=eq.lunas"
+    });
+
+    for (const row of Array.isArray(rows) ? rows : []) {
+      try {
+        await supabaseRequest("notifikasi", {
+          method: "POST",
+          body: {
+            penerima_peran: "warga",
+            penerima_warga_id: row.warga_id,
+            judul: "Pembayaran Iuran Berhasil",
+            pesan: `Iuran bulan ${String(row.bulan || "").slice(0, 7)} telah lunas melalui GoPay Merchant QRIS.`,
+            jenis: "iuran",
+            tautan: "/",
+            referensi_id: row.id,
+            sudah_dibaca: false
+          }
+        });
+      } catch (notificationError) {
+        console.error("NOTIFIKASI GOBIZ ERROR:", notificationError?.message || notificationError);
+      }
+    }
+
+    return res.status(200).json({
+      ok: true,
+      message: "Settlement GoBiz berhasil direkonsiliasi.",
+      result: settlement
+    });
+  } catch (error) {
+    console.error("GOBIZ WEBHOOK ERROR:", error?.message || error);
+    return res.status(500).json({ ok: false, message: "Gagal memproses notifikasi settlement GoBiz." });
   }
 });
 
