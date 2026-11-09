@@ -1,4 +1,4 @@
-# RT Kita — Aplikasi Administrasi RT
+# RT TBK — Aplikasi Administrasi RT
 
 Aplikasi web/PWA untuk Ketua RT dan warga. Fitur utama meliputi login, data warga dan keluarga, dashboard, kas RT, iuran, pembayaran QRIS, pengajuan surat, pengaduan, pengumuman, aspirasi warga, serta akses melalui HP.
 
@@ -12,7 +12,12 @@ Atur variabel berikut melalui pengaturan Environment Variables pada layanan host
 - `ADMIN_PASSWORD`: password Ketua RT. Wajib diisi; aplikasi tidak menyediakan password admin bawaan.
 - `ADMIN_USER`: nama pengguna Ketua RT; jika tidak diatur, nilainya `admin`.
 
-Untuk pembayaran QRIS Sandbox, atur `MIDTRANS_SERVER_KEY`. Aplikasi saat ini menolak mode produksi Midtrans; jangan mengatur `MIDTRANS_IS_PRODUCTION=true` sebelum alur produksi disiapkan dan diuji.
+## Pembayaran QRIS Midtrans
+
+- Mode Sandbox menggunakan `MIDTRANS_SERVER_KEY` (atau `MIDTRANS_SANDBOX_SERVER_KEY`).
+- Mode produksi hanya aktif jika `MIDTRANS_IS_PRODUCTION=true` dan menggunakan `MIDTRANS_PRODUCTION_SERVER_KEY`.
+- Jangan mengaktifkan mode produksi sebelum kredensial resmi tersedia, URL webhook sudah terdaftar di dashboard Midtrans, serta transaksi uji dan rekonsiliasi sudah diverifikasi. Jangan pernah menaruh Server Key di kode atau membagikannya kepada warga.
+- Kunci Sandbox tidak digunakan sebagai pengganti kunci produksi.
 
 ## Menjalankan aplikasi
 
@@ -27,9 +32,9 @@ Aplikasi membutuhkan koneksi Supabase dan variabel lingkungan yang disebutkan di
 
 - Password warga baru disimpan menggunakan hash scrypt dengan salt acak.
 - Sesi ditandatangani dengan HMAC dan cookie HttpOnly, Secure, serta SameSite=Lax.
-- Jangan membagikan `SUPABASE_SERVICE_ROLE_KEY`, `MIDTRANS_SERVER_KEY`, atau `SESSION_SECRET`.
-- Jika sebelumnya pernah membagikan kunci rahasia di tempat umum, segera rotasi kunci tersebut melalui dashboard penyedia layanan.
+- Tabel warga dan keuangan tidak dibuka untuk akses langsung peran `anon` atau `authenticated`; aplikasi mengakses data melalui server.
+- Jangan membagikan `SUPABASE_SERVICE_ROLE_KEY`, `MIDTRANS_SERVER_KEY`, `MIDTRANS_PRODUCTION_SERVER_KEY`, atau `SESSION_SECRET`. Jika pernah terekspos, segera rotasi melalui dashboard penyedia layanan.
 
 ## Pemeriksaan kode
 
-GitHub Actions memeriksa sintaks seluruh file JavaScript aplikasi dan format JSON konfigurasi setiap kali ada perubahan pada repository atau pull request.
+GitHub Actions memeriksa sintaks file JavaScript, konfigurasi, dan pengujian otomatis setiap kali ada perubahan pada repository atau pull request.
