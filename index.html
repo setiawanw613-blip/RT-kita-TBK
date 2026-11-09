@@ -3742,7 +3742,7 @@ async function buatUlangQRISGoBiz(orderId){
   if(!info||!orderId)return;
   info.textContent="Memverifikasi QRIS lama dan menyiapkan QR pengganti...";
   try{
-    const result=await api("/api/iuran/gobiz/retry/"+encodeURIComponent(orderId),{method:"POST",body:{}});
+    const result=await api("/api/iuran/gobiz/retry/"+encodeURIComponent(orderId),{method:"POST"});
     if(!result.ok)throw new Error(result.message||"QRIS pengganti gagal dibuat.");
     let html='<div style="margin-top:12px;padding:12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff">';
     html+='<b>QRIS pengganti berhasil dibuat</b><div style="font-size:12px;overflow-wrap:anywhere;margin-top:6px">Order: '+esc(result.order_id)+'</div>';
