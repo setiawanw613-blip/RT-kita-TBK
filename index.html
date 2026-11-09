@@ -3724,7 +3724,8 @@ async function cekStatusGoBiz(orderId){
       info.textContent="GoBiz mengonfirmasi pembayaran berhasil. Memuat ulang status iuran...";
       setTimeout(()=>iuranWarga(),1200);
     }else if(result.can_retry){
-      info.textContent="QRIS ini sudah kedaluwarsa/tidak aktif. Jangan membayar melalui QR lama. Hubungi Bendahara/Ketua RT untuk pemeriksaan sebelum QR pengganti dibuat.";
+      info.innerHTML="QRIS lama sudah dikonfirmasi kedaluwarsa oleh GoBiz. Jangan gunakan QR lama."+
+        '<button type="button" class="btn primary" style="width:100%;margin-top:10px" onclick="buatUlangQRISGoBiz('+JSON.stringify(orderId)+')">Buat QRIS pengganti</button>';
     }else{
       info.textContent="Status dari GoBiz: "+status+". Jika belum berubah, periksa kembali beberapa saat lagi.";
     }
@@ -3733,6 +3734,24 @@ async function cekStatusGoBiz(orderId){
   }finally{
     button.disabled=false;
     button.textContent="Periksa status pembayaran";
+  }
+}
+
+async function buatUlangQRISGoBiz(orderId){
+  const info=document.getElementById("statusGoBizInfo");
+  if(!info||!orderId)return;
+  info.textContent="Memverifikasi QRIS lama dan menyiapkan QR pengganti...";
+  try{
+    const result=await api("/api/iuran/gobiz/retry/"+encodeURIComponent(orderId),{method:"POST",body:{}});
+    if(!result.ok)throw new Error(result.message||"QRIS pengganti gagal dibuat.");
+    let html='<div style="margin-top:12px;padding:12px;border:1px solid #cbd5e1;border-radius:12px;background:#fff">';
+    html+='<b>QRIS pengganti berhasil dibuat</b><div style="font-size:12px;overflow-wrap:anywhere;margin-top:6px">Order: '+esc(result.order_id)+'</div>';
+    if(result.qr_url)html+='<img src="'+esc(result.qr_url)+'" alt="QRIS pengganti" style="display:block;width:100%;max-width:300px;margin:12px auto">';
+    if(result.qr_string)html+='<textarea id="kodeQRISPengganti" readonly style="width:100%;min-height:76px">'+esc(result.qr_string)+'</textarea><button type="button" class="btn secondary" style="width:100%;margin-top:8px" onclick="navigator.clipboard.writeText(document.getElementById(\'kodeQRISPengganti\').value).then(()=>alert(\'Kode QRIS disalin\'))">Salin kode QRIS</button>';
+    html+='<div style="font-size:12px;color:#64748b;margin-top:8px">QRIS lama tetap tercatat. Bayar hanya menggunakan QRIS pengganti ini.</div></div>';
+    info.innerHTML=html;
+  }catch(e){
+    info.textContent=e.message||"QRIS pengganti belum dapat dibuat. Jangan membayar QR lama.";
   }
 }
 
