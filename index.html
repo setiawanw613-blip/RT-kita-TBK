@@ -966,45 +966,30 @@ if(role==="warga"){
   document.getElementById("app").innerHTML=`
     <div class="wrap">
       <div class="logo">
-        <h1>RT Kita</h1>
+        <h1>RT TBK</h1>
         <div class="muted">RT 04 / RW 01 · Taman Bali Kahuripan</div>
       </div>
 
       <div class="card">
-        <h2>📝 Daftar sebagai Warga</h2>
+        <h2>📝 Daftar Akun Warga</h2>
+        <p class="muted">Data KK dan KTP sudah didata oleh Ketua RT. Masukkan NIK dan nomor KK untuk mencocokkan data Anda.</p>
 
-        <label>Nama Lengkap</label>
-        <input id="regNama" placeholder="Masukkan nama lengkap">
+        <label>NIK sesuai KTP</label>
+        <input id="regNik" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit NIK">
 
-        <label>NIK</label>
-        <input id="regNik" inputmode="numeric" placeholder="Masukkan NIK">
+        <label>Nomor KK</label>
+        <input id="regKk" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit nomor KK">
 
-        <label>No. KK</label>
-<input id="regKk" inputmode="numeric" placeholder="Masukkan No. KK">
+        <label>Nomor HP aktif</label>
+        <input id="regHp" inputmode="tel" autocomplete="tel" placeholder="Contoh: 081234567890">
 
-<label>Hubungan dalam Keluarga</label>
-<select id="regHubungan">
-  <option value="">Pilih hubungan</option>
-  <option value="Kepala Keluarga">👨 Ayah / Kepala Keluarga</option>
-  <option value="Istri">👩 Ibu / Istri</option>
-  <option value="Anak">👦 Anak</option>
-  <option value="Saudara">👥 Saudara</option>
-  <option value="Anggota Keluarga Lain">👤 Anggota Keluarga Lain</option>
-</select>
-
-<label>Nomor HP</label>
-        <input id="regHp" inputmode="tel" placeholder="Masukkan nomor HP">
-
-        <label>Password</label>
+        <label>Buat Password</label>
         <input id="regPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Minimal 8 karakter">
-        <div class="muted" style="font-size:12px;margin-top:4px">Password baru minimal 8 karakter.</div>
-
-        <label>Alamat</label>
-        <textarea id="regAlamat" placeholder="Masukkan alamat tempat tinggal"></textarea>
+        <div class="muted" style="font-size:12px;margin-top:4px">Nomor HP digunakan untuk login. Password minimal 8 karakter.</div>
 
         <button class="btn" style="width:100%;margin-top:16px"
           onclick="submitRegisterWarga()">
-          Daftar Warga
+          Daftar Akun
         </button>
 
         <button class="btn secondary" style="width:100%;margin-top:10px"
@@ -1015,50 +1000,34 @@ if(role==="warga"){
     </div>`;
 }
 
-  async function submitRegisterWarga(){
-  const nama_lengkap=document.getElementById("regNama").value.trim();
-  const nik=document.getElementById("regNik").value.trim();
-  const no_kk=document.getElementById("regKk").value.trim();
-    const hubungan_keluarga=document.getElementById("regHubungan").value;
+async function submitRegisterWarga(){
+  const nik=document.getElementById("regNik").value.replace(/\D/g,"");
+  const no_kk=document.getElementById("regKk").value.replace(/\D/g,"");
   const no_hp=document.getElementById("regHp").value.trim();
-  const password=document.getElementById("regPassword").value.trim();
-  const alamat=document.getElementById("regAlamat").value.trim();
+  const password=document.getElementById("regPassword").value;
 
- if(!nama_lengkap || !no_kk || !no_hp || !password || !alamat || !hubungan_keluarga){
-  alert("Semua data wajib diisi");
-  return;
-}
-
-if(password.length < 8){
-  alert("Password minimal 8 karakter.");
-  return;
-}
-
-if(hubungan_keluarga !== "Anak" && !nik){
-  alert("NIK wajib diisi untuk hubungan ini");
-  return;
-}
+  if(!/^\d{16}$/.test(nik) || !/^\d{16}$/.test(no_kk)){
+    alert("NIK dan nomor KK harus masing-masing 16 digit.");
+    return;
+  }
+  if(!no_hp || !password){
+    alert("Nomor HP dan password wajib diisi.");
+    return;
+  }
+  if(password.length < 8){
+    alert("Password minimal 8 karakter.");
+    return;
+  }
 
   try{
-    const data=await api("/api/register-warga",{
+    await api("/api/register-warga",{
       method:"POST",
-     body:JSON.stringify({
-  nama_lengkap,
-  nik,
-  no_kk,
-  hubungan_keluarga,
-  no_hp,
-  password,
-  alamat
-})
+      body:JSON.stringify({nik,no_kk,no_hp,password})
     });
-
-    alert("Pendaftaran berhasil. Silakan masuk menggunakan nomor HP dan password.");
-
+    alert("Pendaftaran berhasil dikirim. Akun menunggu persetujuan Ketua RT. Setelah disetujui, login menggunakan nomor HP dan password.");
     loginPage();
     document.getElementById("role").value="warga";
     changeLoginForm();
-
   }catch(e){
     alert(e.message || "Pendaftaran gagal");
   }
