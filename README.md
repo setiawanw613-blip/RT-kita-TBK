@@ -50,4 +50,4 @@ GitHub Actions memeriksa sintaks file JavaScript, konfigurasi, dan pengujian oto
 - Gambar dapat dibaca OCR di browser menggunakan Tesseract.js Bahasa Indonesia + Inggris. PDF disimpan dan dapat dicetak, tetapi OCR otomatis PDF belum diaktifkan.
 - OCR hanya menghasilkan teks/kandidat NIK. Ketua RT wajib mencocokkan data dengan dokumen asli; sistem tidak melakukan validasi Dukcapil dan tidak otomatis membuat/mengubah data warga.
 - Tombol **Lihat / Cetak** membuka dokumen asli melalui tautan bertanda tangan yang berlaku 5 menit. Setelah terbuka, gunakan fitur cetak browser/perangkat.
-- Migrasi: `supabase/migrations/202611110001_create_private_resident_identity_documents.sql`.
+- Migrasi: `supabase/migrations/20261111063759_create_private_resident_identity_documents.sql`.
