@@ -1525,9 +1525,10 @@ async function arsipIdentitasAdmin(){
 
 async function muatArsipIdentitas(){
   try{
-    const data=await api("/api/identitas");
+    const [data,residents]=await Promise.all([api("/api/identitas"),api("/api/residents")]);
     window._identitasFamilies=data.families||[];
     window._identitasDocuments=data.documents||[];
+    window._identitasResidents=Array.isArray(residents)?residents:[];
     const select=document.getElementById("identitasFamily");
     if(select){
       select.innerHTML='<option value="">Pilih keluarga...</option>'+window._identitasFamilies.map(f=>
@@ -1549,10 +1550,15 @@ function renderArsipIdentitas(){
   if(!docs.length){box.innerHTML='<p class="muted">Belum ada dokumen yang diarsipkan.</p>';return;}
   const linked=docs.filter(d=>d.warga_id).length;
   const pending=docs.filter(d=>d.status_verifikasi!=="terverifikasi").length;
-  box.innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:12px">
+  const residents=window._identitasResidents||[];
+  const nikCounts={};
+  residents.forEach(w=>{const n=String(w.nik||"").trim();if(n)nikCounts[n]=(nikCounts[n]||0)+1;});
+  const nikIssues=residents.filter(w=>!/^[0-9]{16}$/.test(String(w.nik||""))||(nikCounts[String(w.nik||"").trim()]||0)>1).length;
+  box.innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-bottom:12px">
     <div style="background:#eff6ff;border-radius:9px;padding:9px;text-align:center"><b>${families.length}</b><div style="font-size:10px;color:#64748b">Keluarga</div></div>
     <div style="background:#f0fdf4;border-radius:9px;padding:9px;text-align:center"><b>${linked}</b><div style="font-size:10px;color:#64748b">KTP terhubung</div></div>
     <div style="background:#fff7ed;border-radius:9px;padding:9px;text-align:center"><b>${pending}</b><div style="font-size:10px;color:#64748b">Perlu verifikasi</div></div>
+    <div style="background:#fef2f2;border-radius:9px;padding:9px;text-align:center"><b>${nikIssues}</b><div style="font-size:10px;color:#64748b">NIK perlu dicek</div></div>
   </div>`+families.map(f=>{
     const list=docs.filter(d=>String(d.keluarga_id)===String(f.id));
     if(!list.length)return "";
