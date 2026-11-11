@@ -2121,7 +2121,7 @@ app.post("/api/identitas/upload-url", requireAdmin, async (req,res) => {
     const size=Number(req.body?.ukuran_bytes);
     const originalName=String(req.body?.nama_file||"dokumen").slice(0,180);
     const allowed=["image/jpeg","image/png","image/webp","application/pdf"];
-    if(!/^\\d+$/.test(keluargaId)||!["KK","KTP"].includes(kind)||!allowed.includes(mime)||!Number.isSafeInteger(size)||size<1||size>8388608)
+    if(!/^[0-9]+$/.test(keluargaId)||!["KK","KTP"].includes(kind)||!allowed.includes(mime)||!Number.isSafeInteger(size)||size<1||size>8388608)
       return res.status(400).json({ok:false,message:"Data file tidak valid. Maksimal 8 MB per dokumen."});
     const familyRows=await supabaseRequest("keluarga",{query:"select=id&id=eq."+encodeURIComponent(keluargaId)+"&limit=1"});
     if(!Array.isArray(familyRows)||!familyRows.length)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
@@ -2156,7 +2156,7 @@ app.post("/api/identitas/register-upload", requireAdmin, async(req,res)=>{
     const mime=String(req.body?.mime_type||"").toLowerCase();
     const size=Number(req.body?.ukuran_bytes);
     const name=String(req.body?.nama_file||"dokumen").slice(0,180);
-    if(!/^\\d+$/.test(keluargaId)||!storagePath.startsWith(keluargaId+"/")||!/^\\d+\\/[0-9a-f-]{36}-[a-zA-Z0-9._-]{1,90}$/i.test(storagePath)||
+    if(!/^[0-9]+$/.test(keluargaId)||!storagePath.startsWith(keluargaId+"/")||!(new RegExp("^"+keluargaId+"/[0-9a-f-]{36}-[a-zA-Z0-9._-]{1,90}$","i")).test(storagePath)||
       !["KK","KTP"].includes(kind)||!["image/jpeg","image/png","image/webp","application/pdf"].includes(mime)||
       !Number.isSafeInteger(size)||size<1||size>8388608)
       return res.status(400).json({ok:false,message:"Metadata dokumen tidak valid."});
