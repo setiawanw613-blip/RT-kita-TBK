@@ -1704,20 +1704,43 @@ function parseAnggotaKkDariOcr(text){
 }
 function parseKtpDariOcr(text){
   const source=String(text||"").replace(/\r/g,"");
-  let nik=ambilFieldOcr(source,[/NIK\s*[:：]?\s*([0-9\s.-]{16,24})/i]);
-  nik=(nik.match(/\d/g)||[]).join("");
-  if(!/^\d{16}$/.test(nik)){
-    const normalized=source.toUpperCase().replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
-    const m=normalized.match(/\b\d{16}\b/);nik=m?m[0]:"";
+  const lines=source.split("\n").map(x=>x.trim()).filter(Boolean);
+  const normalizeDigits=value=>String(value||"").toUpperCase()
+    .replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
+  // OCR sering memisahkan label NIK dan angka ke baris berbeda.
+  const nikLabel=lines.findIndex(line=>/\bN[1I]K\b/i.test(line));
+  let nik="";
+  if(nikLabel>=0){
+    for(const line of lines.slice(nikLabel,Math.min(lines.length,nikLabel+4))){
+      const digits=normalizeDigits(line).replace(/[^0-9]/g,"");
+      const match=digits.match(/\d{16}/);
+      if(match){nik=match[0];break;}
+    }
   }
-  const nama=ambilFieldOcr(source,[/NAMA\s*[:：]?\s*([^\n]+)/i]);
+  if(!nik){
+    const normalized=normalizeDigits(source);
+    const candidates=normalized.match(/(?:\d[\s.-]*){16,}/g)||[];
+    for(const candidate of candidates){
+      const match=candidate.replace(/\D/g,"").match(/\d{16}/);
+      if(match){nik=match[0];break;}
+    }
+  }
+  // Nama bisa berada tepat di bawah label NAMA, bukan di baris yang sama.
+  let nama="";
+  const namaIndex=lines.findIndex(line=>/^N[4A]M[4A]\b/i.test(line)||/\bNAMA\s*[:：]/i.test(line));
+  if(namaIndex>=0){
+    const sameLine=lines[namaIndex].replace(/^.*?N[4A]M[4A]\s*[:：]?/i,"").trim();
+    const nextLine=lines.slice(namaIndex+1,namaIndex+3).find(line=>line.length>=3&&!/^(NIK|TEMPAT|TGL|JENIS|ALAMAT|AGAMA|STATUS|KEWARGANEGARAAN)\b/i.test(line))||"";
+    const candidate=sameLine||nextLine;
+    nama=candidate.replace(/[^A-ZÀ-ÿ .'’-]/gi," ").replace(/\s+/g," ").trim();
+  }
   const jkText=ambilFieldOcr(source,[/JENIS\s*KELAMIN\s*[:：]?\s*([^\n]+)/i]);
   const jenis_kelamin=/PEREMPUAN/i.test(jkText)?"Perempuan":/LAKI/i.test(jkText)?"Laki-laki":"";
   const lahir=ambilFieldOcr(source,[/(?:TEMPAT\s*[/ ]\s*TGL\s*LAHIR|TEMPAT\s*LAHIR)\s*[:：]?\s*([^\n]+)/i]);
-  const dateMatch=lahir.match(/(\d{1,2}[\/-]\d{1,2}[\/-]\d{4})/);
+  const dateMatch=lahir.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{4})/);
   const tanggal_lahir=dateMatch?tanggalOcrKeIso(dateMatch[1]):"";
   const tempat_lahir=lahir.replace(dateMatch?dateMatch[0]:"","").replace(/[,;:]/g," ").trim().slice(0,100);
-  return {nik,nama_lengkap:nama.replace(/^(?:NAMA\s*)/i,"").trim(),jenis_kelamin,tempat_lahir,tanggal_lahir,hubungan_keluarga:"Anggota Keluarga"};
+  return {nik,nama_lengkap:nama,jenis_kelamin,tempat_lahir,tanggal_lahir,hubungan_keluarga:"Anggota Keluarga"};
 }
 
 async function uploadArsipIdentitas(){
