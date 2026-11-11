@@ -1739,16 +1739,10 @@ async function uploadArsipIdentitas(){
       await worker.setParameters({tessedit_pageseg_mode:"6",preserve_interword_spaces:"1"});
       let result=await worker.recognize(ocrImage);
       let recognizedText=String(result?.data?.text||"");
-      // Jalankan beberapa mode baca. Hasil tiap percobaan digabung agar nomor
-      // yang terbaca pada salah satu mode tidak hilang oleh mode lainnya.
+      // Jika nomor KK belum terbaca, langsung fokus ke potongan header.
+      // Hindari pemindaian ulang seluruh halaman yang memperlambat HP.
       if(selected[i].kind==="KK"&&!/^\d{16}$/.test(parseKkDariOcr(recognizedText).no_kk)){
-        await worker.setParameters({tessedit_pageseg_mode:"11",preserve_interword_spaces:"1"});
-        result=await worker.recognize(ocrImage);
-        const alternateText=String(result?.data?.text||"");
-        recognizedText+="\n"+alternateText;
-      }
-      if(selected[i].kind==="KK"&&!/^\d{16}$/.test(parseKkDariOcr(recognizedText).no_kk)){
-        progress.textContent="Memeriksa bagian nomor KK secara khusus...";
+        progress.textContent="Memeriksa nomor KK...";
         const headerImage=await siapkanPotonganHeaderKk(selected[i].file);
         await worker.setParameters({tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",tessedit_char_whitelist:"0123456789OQILSBZ.- "});
         result=await worker.recognize(headerImage);
@@ -1858,7 +1852,7 @@ async function siapkanGambarOcr(file){
   try{
     const longest=Math.max(source.width,source.height);
     if(!longest)throw new Error("Ukuran foto tidak valid: "+(file.name||"foto"));
-    const scale=Math.min(1.25,2400/longest);
+    const scale=Math.min(1.15,1800/longest);
     const canvas=document.createElement("canvas");
     canvas.width=Math.max(1,Math.round(source.width*scale));
     canvas.height=Math.max(1,Math.round(source.height*scale));
@@ -1980,7 +1974,7 @@ async function jalankanOcrIdentitas(id){
       let combined="";
       try{
         // KTP kedua dan seterusnya dicoba dengan beberapa tata letak OCR.
-        for(const mode of ["6","11","12","3"]){
+        for(const mode of ["6","11"]){
           await worker.setParameters({tessedit_pageseg_mode:mode,preserve_interword_spaces:"1",tessedit_char_whitelist:""});
           const result=await worker.recognize(prepared);
           combined+="\n"+String(result?.data?.text||"");
