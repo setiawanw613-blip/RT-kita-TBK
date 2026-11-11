@@ -2009,6 +2009,38 @@ app.post("/api/identitas/keluarga-otomatis", requireAdmin, async (req,res) => {
   }
 });
 
+app.post("/api/identitas/keluarga/:id/anggota-kk", requireAdmin, async(req,res)=>{
+  try{
+    const familyId=String(req.params.id||"");
+    const members=Array.isArray(req.body?.anggota)?req.body.anggota.slice(0,20):[];
+    if(!/^\d+$/.test(familyId)||!members.length)return res.status(400).json({ok:false,message:"Daftar anggota KK kosong atau tidak valid."});
+    const families=await supabaseRequest("keluarga",{query:"select=id,no_kk,alamat,rt,rw&id=eq."+encodeURIComponent(familyId)+"&limit=1"});
+    const family=Array.isArray(families)?families[0]:null;
+    if(!family)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
+    let created=0,duplicates=0,skipped=0;
+    for(const member of members){
+      const nik=String(member?.nik||"").replace(/\D/g,"");
+      const nama=String(member?.nama_lengkap||"").trim().slice(0,120);
+      const hubungan=String(member?.hubungan_keluarga||"Lainnya").trim();
+      const jk=String(member?.jenis_kelamin||"");
+      if(!/^\d{16}$/.test(nik)||nama.length<3||!["Kepala Keluarga","Istri","Suami","Anak","Orang Tua","Lainnya"].includes(hubungan)|| (jk&&!["Laki-laki","Perempuan"].includes(jk))){skipped++;continue;}
+      const existing=await supabaseRequest("warga",{query:"select=id,keluarga_id&nik=eq."+encodeURIComponent(nik)+"&limit=1"});
+      const warga=Array.isArray(existing)?existing[0]:null;
+      if(warga){if(String(warga.keluarga_id)!==familyId)duplicates++;else skipped++;continue;}
+      await supabaseRequest("warga",{method:"POST",body:{
+        nik,nama_lengkap:nama,no_kk:family.no_kk,jenis_kelamin:jk||null,
+        alamat:family.alamat||"",rt:family.rt||"004",rw:family.rw||"01",
+        hubungan_keluarga:hubungan,keluarga_id:Number(familyId),status_warga:"menunggu_verifikasi"
+      }});
+      created++;
+    }
+    res.status(200).json({ok:true,created,duplicates,skipped,message:"Anggota yang terbaca dari KK dicatat dan menunggu verifikasi Ketua RT."});
+  }catch(error){
+    console.error("CREATE FAMILY MEMBERS FROM KK ERROR:",error);
+    res.status(500).json({ok:false,message:"Gagal mencatat anggota dari KK. Arsip KK tetap tersimpan."});
+  }
+});
+
 app.post("/api/identitas/:id/anggota-otomatis", requireAdmin, async(req,res)=>{
   try{
     const docId=String(req.params.id||"");
