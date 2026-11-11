@@ -1603,9 +1603,9 @@ async function uploadArsipIdentitas(){
   const btn=document.getElementById("btnUploadIdentitas");
   const progress=document.getElementById("identitasProgress");
   btn.disabled=true;btn.textContent="Mengunggah...";
+  let worker=null;
   try{
     const selected=[{file:kk,kind:"KK"},...ktps.map(file=>({file,kind:"KTP"}))];
-    const worker=selected.some(x=>x.file.type!=="application/pdf")?await loadTesseractIdentitas():null;
     for(let i=0;i<selected.length;i++){
       const item=selected[i],file=item.file;
       progress.textContent="Menyiapkan "+item.kind+" "+(i+1)+"/"+selected.length+"...";
@@ -1619,8 +1619,9 @@ async function uploadArsipIdentitas(){
         ukuran_bytes:file.size,nama_file:file.name
       })});
       const doc=registered.document;
-      if(file.type!=="application/pdf"&&worker){
+      if(file.type!=="application/pdf"){
         try{
+          if(!worker)worker=await loadTesseractIdentitas();
           progress.textContent="Membaca teks "+item.kind+" "+(i+1)+"/"+selected.length+"...";
           const ocr=await worker.recognize(file);
           const textOcr=String(ocr?.data?.text||"").slice(0,50000);
@@ -1630,7 +1631,7 @@ async function uploadArsipIdentitas(){
         }
       }
     }
-    if(worker)await worker.terminate();
+    if(worker){await worker.terminate();worker=null;}
     document.getElementById("identitasKK").value="";
     document.getElementById("identitasKTP").value="";
     await muatArsipIdentitas();
@@ -1640,6 +1641,7 @@ async function uploadArsipIdentitas(){
     progress.textContent="";
     alert(e.message);
   }finally{
+    if(worker)await worker.terminate();
     btn.disabled=false;btn.textContent="⬆️ Upload KK dan KTP";
   }
 }
