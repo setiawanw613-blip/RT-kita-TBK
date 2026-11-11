@@ -1256,6 +1256,10 @@ async function adminHome(){
   <span style="font-size:26px">👨‍👩‍👧</span>
   <span>Data Keluarga</span>
 </button>
+<button onclick="arsipIdentitasAdmin()">
+  <span style="font-size:26px">🪪</span>
+  <span>Arsip KK & KTP</span>
+</button>
 
 <button onclick="cash()">
   <span style="font-size:26px">💰</span>
@@ -1471,6 +1475,203 @@ function toggleKeluargaCard(id, button){
 
   const icon = button.querySelector("span:last-child");
   if(icon) icon.textContent = panel.hidden ? "＋" : "−";
+}
+
+
+
+async function arsipIdentitasAdmin(){
+  layout("Arsip KK & KTP",`
+    <div class="card">
+      <h3 style="margin-top:0">Pendataan dokumen keluarga</h3>
+      <p class="muted" style="font-size:12px">Khusus Ketua RT. Unggah satu KK dan beberapa KTP. File disimpan privat dan hanya dapat dibuka petugas berwenang.</p>
+      <label>Pilih keluarga yang sudah terdaftar</label>
+      <select id="identitasFamily" style="width:100%;margin:6px 0 12px;padding:10px;border:1px solid #cbd5e1;border-radius:9px">
+        <option value="">Memuat keluarga...</option>
+      </select>
+      <details style="margin:10px 0">
+        <summary style="cursor:pointer;font-weight:700;color:#174a82">＋ Buat data keluarga baru</summary>
+        <div style="padding-top:10px">
+          <label>Nomor KK (16 digit)</label><input id="idNoKk" inputmode="numeric" maxlength="16" placeholder="Masukkan nomor KK">
+          <label>Nama kepala keluarga</label><input id="idKepala" placeholder="Nama sesuai KK">
+          <label>Alamat lengkap</label><textarea id="idAlamat" placeholder="Alamat rumah"></textarea>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <div><label>RT</label><input id="idRt" value="004"></div>
+            <div><label>RW</label><input id="idRw" value="01"></div>
+          </div>
+          <button class="btn" type="button" onclick="buatKeluargaIdentitas()">Simpan keluarga</button>
+        </div>
+      </details>
+    </div>
+    <div class="card">
+      <label>Upload satu KK (JPG/PNG/WebP/PDF, maks. 8 MB)</label>
+      <input id="identitasKK" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" style="width:100%;margin:7px 0 14px">
+      <label>Upload KTP semua anggota keluarga (maks. 20 file, masing-masing 8 MB)</label>
+      <input id="identitasKTP" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" style="width:100%;margin:7px 0 12px">
+      <p class="muted" style="font-size:11px">Satu file untuk satu KTP. Gunakan foto yang terang, utuh, dan tidak buram.</p>
+      <button id="btnUploadIdentitas" class="btn" type="button" onclick="uploadArsipIdentitas()">⬆️ Upload KK dan KTP</button>
+      <div id="identitasProgress" class="muted" style="font-size:12px;margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Arsip tersimpan</h3>
+      <div id="identitasDocs">Memuat arsip...</div>
+    </div>
+    <div class="card" style="background:#fff7ed;border:1px solid #fed7aa">
+      <b style="color:#9a3412">Perlindungan data</b>
+      <p style="font-size:12px;color:#7c2d12;margin-bottom:0">KK dan KTP adalah data pribadi. Jangan membagikan tautan dokumen ke grup. Hasil OCR hanya kandidat pembacaan dan wajib dicocokkan dengan dokumen asli.</p>
+    </div>
+  `);
+  await muatArsipIdentitas();
+}
+
+async function muatArsipIdentitas(){
+  try{
+    const data=await api("/api/identitas");
+    window._identitasFamilies=data.families||[];
+    window._identitasDocuments=data.documents||[];
+    const select=document.getElementById("identitasFamily");
+    if(select){
+      select.innerHTML='<option value="">Pilih keluarga...</option>'+window._identitasFamilies.map(f=>
+        `<option value="${Number(f.id)}">${esc(f.kepala_keluarga||"Keluarga")} — KK ${esc("•••• "+String(f.no_kk||"").slice(-4))} (RT ${esc(f.rt||"")} / RW ${esc(f.rw||"")})</option>`
+      ).join("");
+    }
+    renderArsipIdentitas();
+  }catch(e){
+    const box=document.getElementById("identitasDocs");
+    if(box)box.innerHTML=`<div class="error">${esc(e.message)}</div>`;
+  }
+}
+
+function renderArsipIdentitas(){
+  const box=document.getElementById("identitasDocs");
+  if(!box)return;
+  const docs=window._identitasDocuments||[];
+  const families=window._identitasFamilies||[];
+  if(!docs.length){box.innerHTML='<p class="muted">Belum ada dokumen yang diarsipkan.</p>';return;}
+  box.innerHTML=families.map(f=>{
+    const list=docs.filter(d=>String(d.keluarga_id)===String(f.id));
+    if(!list.length)return "";
+    const kk=list.filter(d=>d.jenis_dokumen==="KK");
+    const ktp=list.filter(d=>d.jenis_dokumen==="KTP");
+    const docCard=d=>{
+      const status=d.status_verifikasi==="terverifikasi"?"Terverifikasi":d.status_verifikasi==="perlu_perbaikan"?"Perlu perbaikan":"Menunggu verifikasi";
+      const statusColor=d.status_verifikasi==="terverifikasi"?"#dcfce7":d.status_verifikasi==="perlu_perbaikan"?"#fee2e2":"#fef3c7";
+      return `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px;margin:7px 0">
+        <div style="font-weight:700;font-size:13px">${d.jenis_dokumen==="KK"?"📄 KK":"🪪 KTP"} — ${esc(d.nama_file)}</div>
+        <div style="font-size:11px;color:#64748b;margin:4px 0">${Math.max(1,Math.round(Number(d.ukuran_bytes||0)/1024))} KB · <span style="background:${statusColor};padding:2px 6px;border-radius:10px">${status}</span></div>
+        ${d.ocr_text?'<details><summary style="font-size:12px;cursor:pointer">Lihat hasil OCR</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto">'+esc(d.ocr_text)+'</pre></details>':''}
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+          <button class="btn" style="margin:0;padding:7px 10px;font-size:12px" onclick="bukaCetakIdentitas(${Number(d.id)})">🖨️ Lihat / Cetak</button>
+          ${d.mime_type!=="application/pdf"&&!d.ocr_text?'<button class="btn secondary" style="margin:0;padding:7px 10px;font-size:12px" onclick="jalankanOcrIdentitas('+Number(d.id)+')">🔎 OCR</button>':''}
+          ${d.status_verifikasi!=="terverifikasi"?'<button class="btn secondary" style="margin:0;padding:7px 10px;font-size:12px" onclick="verifikasiDokumenIdentitas('+Number(d.id)+')">✓ Verifikasi</button>':''}
+        </div>
+      </div>`;
+    };
+    return `<div style="border:1px solid #dbe5f2;border-radius:12px;padding:11px;margin:10px 0">
+      <b>🏠 ${esc(f.kepala_keluarga||"Keluarga")}</b>
+      <div class="muted" style="font-size:11px;margin:3px 0 8px">No. KK: •••• ${esc(String(f.no_kk||"").slice(-4))} · ${esc(f.alamat||"")}</div>
+      <b style="font-size:12px">Kartu Keluarga (${kk.length})</b>${kk.map(docCard).join("")||'<p class="muted" style="font-size:12px">KK belum diunggah.</p>'}
+      <b style="font-size:12px;display:block;margin-top:10px">KTP Anggota (${ktp.length})</b>${ktp.map(docCard).join("")||'<p class="muted" style="font-size:12px">KTP belum diunggah.</p>'}
+    </div>`;
+  }).join("")||'<p class="muted">Tidak ada arsip keluarga.</p>';
+}
+
+async function buatKeluargaIdentitas(){
+  const no_kk=document.getElementById("idNoKk")?.value.trim();
+  const kepala_keluarga=document.getElementById("idKepala")?.value.trim();
+  const alamat=document.getElementById("idAlamat")?.value.trim();
+  const rt=document.getElementById("idRt")?.value.trim()||"004";
+  const rw=document.getElementById("idRw")?.value.trim()||"01";
+  try{
+    const result=await api("/api/identitas/keluarga",{method:"POST",body:JSON.stringify({no_kk,kepala_keluarga,alamat,rt,rw})});
+    await muatArsipIdentitas();
+    const select=document.getElementById("identitasFamily");
+    if(select&&result.family)select.value=String(result.family.id);
+    alert(result.message||"Data keluarga berhasil disimpan.");
+  }catch(e){alert(e.message);}
+}
+
+async function uploadArsipIdentitas(){
+  const familyId=document.getElementById("identitasFamily")?.value;
+  const kk=document.getElementById("identitasKK")?.files?.[0];
+  const ktps=Array.from(document.getElementById("identitasKTP")?.files||[]);
+  if(!familyId){alert("Pilih atau buat data keluarga terlebih dahulu.");return;}
+  if(!kk||!ktps.length){alert("Wajib unggah satu KK dan minimal satu KTP.");return;}
+  if(ktps.length>20){alert("Maksimal 20 file KTP dalam satu kali unggah.");return;}
+  const all=[kk,...ktps];
+  if(all.some(f=>f.size>8*1024*1024)){alert("Setiap file maksimal 8 MB.");return;}
+  const btn=document.getElementById("btnUploadIdentitas");
+  const progress=document.getElementById("identitasProgress");
+  btn.disabled=true;btn.textContent="Mengunggah...";
+  try{
+    const form=new FormData();
+    form.append("keluarga_id",familyId);
+    form.append("kk",kk);
+    ktps.forEach(f=>form.append("ktp",f));
+    const result=await api("/api/identitas/upload",{method:"POST",body:form});
+    progress.textContent="Dokumen tersimpan. OCR gambar sedang diproses di perangkat ini...";
+    const workerPromise=loadTesseractIdentitas();
+    const worker=await workerPromise;
+    for(let i=0;i<result.documents.length;i++){
+      const doc=result.documents[i];
+      const file=doc.jenis_dokumen==="KK"?kk:ktps.shift();
+      if(doc.mime_type!=="application/pdf"&&file){
+        try{
+          const ocr=await worker.recognize(file);
+          const textOcr=String(ocr?.data?.text||"").slice(0,50000);
+          await api("/api/identitas/"+doc.id+"/ocr",{method:"PATCH",body:JSON.stringify({ocr_text:textOcr})});
+          const niks=[...new Set(textOcr.match(/\b\d{16}\b/g)||[])];
+          progress.textContent="OCR "+(i+1)+"/"+result.documents.length+" selesai · kandidat NIK: "+niks.length+". Periksa hasilnya di arsip.";
+        }catch(ocrError){
+          progress.textContent="Dokumen tersimpan; OCR satu file gagal. Dokumen tetap bisa dicetak.";
+        }
+      }else{
+        if(doc.jenis_dokumen==="KTP")ktps.shift();
+      }
+    }
+    await worker.terminate();
+    document.getElementById("identitasKK").value="";
+    document.getElementById("identitasKTP").value="";
+    await muatArsipIdentitas();
+    progress.textContent="Selesai. Dokumen asli tersimpan privat; hasil OCR menunggu pemeriksaan Ketua RT.";
+    alert(result.message+" Periksa hasil OCR dan cocokkan dengan dokumen asli sebelum verifikasi.");
+  }catch(e){
+    progress.textContent="";
+    alert(e.message);
+  }finally{
+    btn.disabled=false;btn.textContent="⬆️ Upload KK dan KTP";
+  }
+}
+
+async function loadTesseractIdentitas(){
+  if(!window.Tesseract){
+    await new Promise((resolve,reject)=>{
+      const script=document.createElement("script");
+      script.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+      script.onload=resolve;script.onerror=()=>reject(new Error("Pustaka OCR tidak dapat dimuat. Periksa koneksi internet."));
+      document.head.appendChild(script);
+    });
+  }
+  return window.Tesseract.createWorker("ind+eng",1,{
+    langPath:"https://tessdata.projectnaptha.com/4.0.0",
+    logger:m=>{if(m.status==="recognizing text")console.log("OCR progress",Math.round((m.progress||0)*100)+"%");}
+  });
+}
+
+async function jalankanOcrIdentitas(id){
+  alert("Untuk menjalankan OCR ulang, unggah ulang dokumen gambar dari perangkat. Dokumen PDF tetap dapat dibuka dan dicetak.");
+}
+
+function bukaCetakIdentitas(id){
+  const win=window.open("/api/identitas/"+encodeURIComponent(id)+"/file","_blank","noopener");
+  if(!win)alert("Izinkan pop-up untuk membuka dokumen cetak.");
+}
+
+async function verifikasiDokumenIdentitas(id){
+  if(!confirm("Sudah mencocokkan dokumen asli dan hasil pembacaan?"))return;
+  try{
+    await api("/api/identitas/"+id+"/verify",{method:"PATCH",body:JSON.stringify({status_verifikasi:"terverifikasi"})});
+    await muatArsipIdentitas();
+  }catch(e){alert(e.message);}
 }
 
 
