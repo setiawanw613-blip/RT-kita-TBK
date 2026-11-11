@@ -1621,7 +1621,7 @@ async function uploadArsipIdentitas(){
           const ocr=await worker.recognize(file);
           const textOcr=String(ocr?.data?.text||"").slice(0,50000);
           await api("/api/identitas/"+doc.id+"/ocr",{method:"PATCH",body:JSON.stringify({ocr_text:textOcr})});
-          const niks=[...new Set(textOcr.match(/\\b\\d{16}\\b/g)||[])];
+          const niks=[...new Set(textOcr.match(/\b\d{16}\b/g)||[])];
           progress.textContent="OCR "+(i+1)+"/"+result.documents.length+" selesai · kandidat NIK: "+niks.length+". Periksa hasilnya di arsip.";
         }catch(ocrError){
           progress.textContent="Dokumen tersimpan; OCR satu file gagal. Dokumen tetap bisa dicetak.";
