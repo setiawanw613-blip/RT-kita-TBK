@@ -1609,26 +1609,26 @@ async function uploadArsipIdentitas(){
     ktps.forEach(f=>form.append("ktp",f));
     const result=await api("/api/identitas/upload",{method:"POST",body:form});
     progress.textContent="Dokumen tersimpan. OCR gambar sedang diproses di perangkat ini...";
-    const workerPromise=loadTesseractIdentitas();
-    const worker=await workerPromise;
+    const fileQueue={KK:[kk],KTP:Array.from(document.getElementById("identitasKTP")?.files||[])};
+    const imageDocs=result.documents.filter(d=>d.mime_type!=="application/pdf");
+    let worker=null;
+    if(imageDocs.length)worker=await loadTesseractIdentitas();
     for(let i=0;i<result.documents.length;i++){
       const doc=result.documents[i];
-      const file=doc.jenis_dokumen==="KK"?kk:ktps.shift();
-      if(doc.mime_type!=="application/pdf"&&file){
+      const file=(fileQueue[doc.jenis_dokumen]||[]).shift();
+      if(doc.mime_type!=="application/pdf"&&file&&worker){
         try{
           const ocr=await worker.recognize(file);
           const textOcr=String(ocr?.data?.text||"").slice(0,50000);
           await api("/api/identitas/"+doc.id+"/ocr",{method:"PATCH",body:JSON.stringify({ocr_text:textOcr})});
-          const niks=[...new Set(textOcr.match(/\b\d{16}\b/g)||[])];
+          const niks=[...new Set(textOcr.match(/\\b\\d{16}\\b/g)||[])];
           progress.textContent="OCR "+(i+1)+"/"+result.documents.length+" selesai · kandidat NIK: "+niks.length+". Periksa hasilnya di arsip.";
         }catch(ocrError){
           progress.textContent="Dokumen tersimpan; OCR satu file gagal. Dokumen tetap bisa dicetak.";
         }
-      }else{
-        if(doc.jenis_dokumen==="KTP")ktps.shift();
       }
     }
-    await worker.terminate();
+    if(worker)await worker.terminate();
     document.getElementById("identitasKK").value="";
     document.getElementById("identitasKTP").value="";
     await muatArsipIdentitas();
