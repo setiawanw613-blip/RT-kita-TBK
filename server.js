@@ -2113,6 +2113,81 @@ app.post("/api/identitas/keluarga", requireAdmin, async (req, res) => {
 });
 
 
+app.post("/api/identitas/keluarga-otomatis", requireAdmin, async (req,res) => {
+  try {
+    const no_kk=String(req.body?.no_kk||"").replace(/\D/g,"");
+    const kepala_keluarga=String(req.body?.kepala_keluarga||"").trim().slice(0,120);
+    const alamat=String(req.body?.alamat||"").trim().slice(0,500);
+    const rt=String(req.body?.rt||"004").trim().slice(0,8);
+    const rw=String(req.body?.rw||"01").trim().slice(0,8);
+    if(!/^\d{16}$/.test(no_kk)) return res.status(400).json({ok:false,message:"Nomor KK belum terbaca jelas. Foto ulang bagian nomor KK agar sistem dapat membuat data keluarga otomatis."});
+    const existing=await supabaseRequest("keluarga",{query:"select=id,no_kk,kepala_keluarga,alamat,rt,rw&no_kk=eq."+encodeURIComponent(no_kk)+"&limit=1"});
+    let family=Array.isArray(existing)?existing[0]:null;
+    if(family){
+      const patch={};
+      if(kepala_keluarga&&!family.kepala_keluarga)patch.kepala_keluarga=kepala_keluarga;
+      if(alamat&&!family.alamat)patch.alamat=alamat;
+      if(rt&&!family.rt)patch.rt=rt;
+      if(rw&&!family.rw)patch.rw=rw;
+      if(Object.keys(patch).length){
+        const updated=await supabaseRequest("keluarga",{method:"PATCH",query:"id=eq."+encodeURIComponent(String(family.id)),body:patch});
+        family=Array.isArray(updated)?updated[0]:updated||{...family,...patch};
+      }
+      return res.json({ok:true,existing:true,family,message:"Data keluarga dengan nomor KK ini sudah ada; arsip akan ditambahkan ke keluarga yang sama."});
+    }
+    const inserted=await supabaseRequest("keluarga",{method:"POST",body:{no_kk,kepala_keluarga:kepala_keluarga||null,alamat:alamat||null,rt:rt||"004",rw:rw||"01"}});
+    family=Array.isArray(inserted)?inserted[0]:inserted;
+    if(!family?.id)throw new Error("ID keluarga tidak dikembalikan database.");
+    res.status(201).json({ok:true,existing:false,family,message:"Data keluarga berhasil dibuat otomatis dari foto KK."});
+  } catch(error) {
+    console.error("AUTO CREATE FAMILY FROM KK ERROR:",error);
+    res.status(500).json({ok:false,message:"Gagal membuat data keluarga otomatis dari KK."});
+  }
+});
+
+app.post("/api/identitas/:id/anggota-otomatis", requireAdmin, async(req,res)=>{
+  try{
+    const docId=String(req.params.id||"");
+    const nama=String(req.body?.nama_lengkap||"").trim().slice(0,120);
+    const nik=String(req.body?.nik||"").replace(/\D/g,"");
+    const jenisKelamin=String(req.body?.jenis_kelamin||"");
+    const tempatLahir=String(req.body?.tempat_lahir||"").trim().slice(0,100);
+    const tanggalLahir=String(req.body?.tanggal_lahir||"").trim();
+    const hubungan=String(req.body?.hubungan_keluarga||"Anggota Keluarga").trim().slice(0,50);
+    if(!/^\d+$/.test(docId)||nama.length<2||!/^\d{16}$/.test(nik))
+      return res.status(400).json({ok:false,message:"Nama atau NIK KTP belum terbaca jelas; dokumen tetap tersimpan untuk diperiksa."});
+    if(jenisKelamin&&!["Laki-laki","Perempuan"].includes(jenisKelamin))
+      return res.status(400).json({ok:false,message:"Jenis kelamin hasil OCR tidak valid."});
+    if(tanggalLahir&&!/^\d{4}-\d{2}-\d{2}$/.test(tanggalLahir))
+      return res.status(400).json({ok:false,message:"Tanggal lahir hasil OCR tidak valid."});
+    const docs=await supabaseRequest("dokumen_identitas",{query:"select=id,keluarga_id,jenis_dokumen,warga_id&id=eq."+encodeURIComponent(docId)+"&limit=1"});
+    const doc=Array.isArray(docs)?docs[0]:null;
+    if(!doc||doc.jenis_dokumen!=="KTP")return res.status(404).json({ok:false,message:"Arsip KTP tidak ditemukan."});
+    const familyRows=await supabaseRequest("keluarga",{query:"select=id,no_kk,alamat,rt,rw&id=eq."+encodeURIComponent(String(doc.keluarga_id))+"&limit=1"});
+    const family=Array.isArray(familyRows)?familyRows[0]:null;
+    if(!family)return res.status(404).json({ok:false,message:"Data keluarga hasil pembacaan KK tidak ditemukan."});
+    const existing=await supabaseRequest("warga",{query:"select=id,keluarga_id,nama_lengkap,nik&nik=eq."+encodeURIComponent(nik)+"&limit=1"});
+    let warga=Array.isArray(existing)?existing[0]:null;
+    if(warga&&String(warga.keluarga_id)!==String(doc.keluarga_id))
+      return res.status(409).json({ok:false,message:"NIK sudah terdaftar pada keluarga lain. Dokumen disimpan tetapi tidak dibuat sebagai warga ganda."});
+    if(!warga){
+      const inserted=await supabaseRequest("warga",{method:"POST",body:{
+        nama_lengkap:nama,nik,no_kk:family.no_kk,jenis_kelamin:jenisKelamin||null,
+        tempat_lahir:tempatLahir||null,tanggal_lahir:tanggalLahir||null,
+        alamat:family.alamat||"",rt:family.rt||"004",rw:family.rw||"01",
+        hubungan_keluarga:hubungan,keluarga_id:doc.keluarga_id,
+        status_warga:"menunggu_verifikasi"
+      }});
+      warga=Array.isArray(inserted)?inserted[0]:inserted;
+    }
+    await supabaseRequest("dokumen_identitas",{method:"PATCH",query:"id=eq."+encodeURIComponent(docId),body:{warga_id:warga.id}});
+    res.status(200).json({ok:true,created:true,message:"Data anggota keluarga dibuat otomatis dari KTP dan menunggu pemeriksaan Ketua RT.",warga:{id:warga.id,nama_lengkap:warga.nama_lengkap,nik:warga.nik}});
+  }catch(error){
+    console.error("AUTO REGISTER KTP ERROR:",error);
+    res.status(500).json({ok:false,message:"Gagal mencatat data KTP otomatis. Dokumen asli tetap tersimpan."});
+  }
+});
+
 app.post("/api/identitas/upload-url", requireAdmin, async (req,res) => {
   try {
     const keluargaId=String(req.body?.keluarga_id||"").trim();
