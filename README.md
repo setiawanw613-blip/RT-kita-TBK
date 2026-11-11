@@ -38,3 +38,16 @@ Aplikasi membutuhkan koneksi Supabase dan variabel lingkungan yang disebutkan di
 ## Pemeriksaan kode
 
 GitHub Actions memeriksa sintaks file JavaScript, konfigurasi, dan pengujian otomatis setiap kali ada perubahan pada repository atau pull request.
+
+
+## Arsip KK dan KTP (fitur baru)
+
+- Menu Ketua RT: **Arsip KK & KTP**.
+- Satu keluarga dapat menyimpan satu scan KK dan beberapa scan KTP anggota keluarga.
+- Dokumen disimpan di bucket Supabase Storage **private** `dokumen-identitas`; browser tidak menerima service-role key.
+- Unggahan memakai signed upload URL langsung ke Supabase Storage agar file tidak melewati batas ukuran request serverless Vercel.
+- File yang didukung: JPG, PNG, WebP, PDF; maksimal 8 MB per file; maksimal 20 file KTP per pengiriman.
+- Gambar dapat dibaca OCR di browser menggunakan Tesseract.js Bahasa Indonesia + Inggris. PDF disimpan dan dapat dicetak, tetapi OCR otomatis PDF belum diaktifkan.
+- OCR hanya menghasilkan teks/kandidat NIK. Ketua RT wajib mencocokkan data dengan dokumen asli; sistem tidak melakukan validasi Dukcapil dan tidak otomatis membuat/mengubah data warga.
+- Tombol **Lihat / Cetak** membuka dokumen asli melalui tautan bertanda tangan yang berlaku 5 menit. Setelah terbuka, gunakan fitur cetak browser/perangkat.
+- Migrasi: `supabase/migrations/202611110001_create_private_resident_identity_documents.sql`.
