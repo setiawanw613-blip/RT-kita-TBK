@@ -2187,10 +2187,16 @@ app.patch("/api/identitas/:id/ocr", requireAdmin, async (req,res) => {
     const id=String(req.params.id||"");
     const textOcr=String(req.body?.ocr_text||"").slice(0,50000);
     const nikCandidates=[...new Set(textOcr.match(/\b\d{16}\b/g)||[])];
+    const lines=textOcr.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+    let namaCandidate="";
+    for(let i=0;i<lines.length;i++){
+      const match=lines[i].match(/^NAMA\s*[:：]?\s*(.*)$/i);
+      if(match){namaCandidate=(match[1]||lines[i+1]||"").trim().slice(0,120);break;}
+    }
     if (!/^\d+$/.test(id) || !textOcr.trim()) return res.status(400).json({ok:false,message:"Hasil OCR tidak valid."});
     const updated=await supabaseRequest("dokumen_identitas",{
       method:"PATCH",query:"id=eq."+encodeURIComponent(id),
-      body:{ocr_text:textOcr,ocr_data:{nik_candidates:nikCandidates,ocr_engine:"tesseract.js-browser",review_required:true}}
+      body:{ocr_text:textOcr,ocr_data:{nik_candidates:nikCandidates,nama_candidate:namaCandidate,ocr_engine:"tesseract.js-browser",review_required:true}}
     });
     const row=Array.isArray(updated)?updated[0]:updated;
     if(!row)return res.status(404).json({ok:false,message:"Dokumen tidak ditemukan."});
@@ -2217,6 +2223,55 @@ app.patch("/api/identitas/:id/verify", requireAdmin, async (req,res) => {
   }catch(error){
     console.error("VERIFIKASI DOKUMEN ERROR:",error);
     res.status(500).json({ok:false,message:"Gagal memperbarui status dokumen."});
+  }
+});
+
+
+app.post("/api/identitas/:id/anggota", requireAdmin, async(req,res)=>{
+  try{
+    const docId=String(req.params.id||"");
+    const nama=String(req.body?.nama_lengkap||"").trim().slice(0,120);
+    const nik=String(req.body?.nik||"").replace(/\D/g,"");
+    const jenisKelamin=String(req.body?.jenis_kelamin||"");
+    const tempatLahir=String(req.body?.tempat_lahir||"").trim().slice(0,100);
+    const tanggalLahir=String(req.body?.tanggal_lahir||"").trim();
+    const hubungan=String(req.body?.hubungan_keluarga||"").trim();
+    if(!/^[0-9]+$/.test(docId)||nama.length<2||! /^\d{16}$/.test(nik)||
+      !["Laki-laki","Perempuan"].includes(jenisKelamin)||
+      !["Kepala Keluarga","Istri","Suami","Anak","Orang Tua","Lainnya"].includes(hubungan)||
+      (tanggalLahir&&!/^\d{4}-\d{2}-\d{2}$/.test(tanggalLahir))){
+      return res.status(400).json({ok:false,message:"Periksa nama, NIK 16 digit, jenis kelamin, tanggal lahir, dan hubungan keluarga."});
+    }
+    const docs=await supabaseRequest("dokumen_identitas",{query:"select=id,keluarga_id,jenis_dokumen,warga_id&id=eq."+encodeURIComponent(docId)+"&limit=1"});
+    const doc=Array.isArray(docs)?docs[0]:null;
+    if(!doc||doc.jenis_dokumen!=="KTP")return res.status(404).json({ok:false,message:"Arsip KTP tidak ditemukan."});
+    const familyRows=await supabaseRequest("keluarga",{query:"select=id,no_kk,alamat,rt,rw&id=eq."+encodeURIComponent(doc.keluarga_id)+"&limit=1"});
+    const family=Array.isArray(familyRows)?familyRows[0]:null;
+    if(!family)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
+    const existing=await supabaseRequest("warga",{query:"select=id,keluarga_id,nama_lengkap,nik&nik=eq."+encodeURIComponent(nik)+"&limit=1"});
+    let warga=Array.isArray(existing)?existing[0]:null;
+    if(warga&&String(warga.keluarga_id)!==String(doc.keluarga_id))
+      return res.status(409).json({ok:false,message:"NIK ini sudah terdaftar pada keluarga lain. Periksa kemungkinan data ganda."});
+    if(!warga){
+      const inserted=await supabaseRequest("warga",{
+        method:"POST",
+        body:{
+          nama_lengkap:nama,nik,no_kk:family.no_kk,jenis_kelamin:jenisKelamin,
+          tempat_lahir:tempatLahir||null,tanggal_lahir:tanggalLahir||null,
+          alamat:family.alamat||"",rt:family.rt||"04",rw:family.rw||"01",
+          hubungan_keluarga:hubungan,keluarga_id:doc.keluarga_id,
+          status_warga:"menunggu_verifikasi"
+        }
+      });
+      warga=Array.isArray(inserted)?inserted[0]:inserted;
+    }
+    await supabaseRequest("dokumen_identitas",{
+      method:"PATCH",query:"id=eq."+encodeURIComponent(docId),body:{warga_id:warga.id}
+    });
+    res.status(201).json({ok:true,message:"Anggota keluarga berhasil dicatat dan menunggu verifikasi Ketua RT.",warga:{id:warga.id,nama_lengkap:warga.nama_lengkap,nik:warga.nik}});
+  }catch(error){
+    console.error("DAFTARKAN ANGGOTA DARI KTP ERROR:",error);
+    res.status(500).json({ok:false,message:"Gagal mencatat anggota keluarga. Periksa kemungkinan NIK sudah terdaftar."});
   }
 });
 
