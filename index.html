@@ -1658,14 +1658,24 @@ function tanggalOcrKeIso(value){
 }
 function parseKkDariOcr(text){
   const source=String(text||"").replace(/\r/g,"");
-  let no_kk=ambilFieldOcr(source,[/(?:NO(?:MOR)?\s*\.?\s*KK|NOMOR\s*KARTU\s*KELUARGA)\s*[:：]?\s*([0-9\s.-]{16,25})/i]);
-  no_kk=(no_kk.match(/\d/g)||[]).join("");
-  if(!/^\d{16}$/.test(no_kk)){
-    const lines=source.split("\n");
-    const at=lines.findIndex(line=>/NO(?:MOR)?\s*\.?\s*KK|KARTU KELUARGA/i.test(line));
-    if(at>=0)no_kk=((lines.slice(at,at+3).join(" ").match(/\d[\d\s.-]{14,22}/)||[""])[0].match(/\d/g)||[]).join("").slice(0,16);
+  const lines=source.split("\n");
+  let no_kk="";
+  // OCR sering salah membaca label "NO. KK"; cari angka pada baris label
+  // dan dua baris sesudahnya, bukan mengambil NIK anggota secara acak.
+  const labelAt=lines.findIndex(line=>/(?:NO\s*\.?\s*(?:KK|K[KK])|NOMOR\s*(?:KK|KARTU)|KARTU\s*KELUARGA)/i.test(line));
+  if(labelAt>=0){
+    const near=lines.slice(labelAt,Math.min(lines.length,labelAt+3)).join(" ");
+    const candidates=near.match(/[0-9OQIlSBZ][0-9OQIlSBZ\s.-]{14,24}/g)||[];
+    for(const candidate of candidates){
+      const digits=candidate.toUpperCase().replace(/[OQ]/g,"0").replace(/[I|L]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2").replace(/\D/g,"");
+      if(digits.length===16){no_kk=digits;break;}
+    }
   }
-
+  if(!no_kk){
+    const direct=ambilFieldOcr(source,[/(?:NO(?:MOR)?\s*\.?\s*KK|NOMOR\s*KARTU\s*KELUARGA)\s*[:：]?\s*([0-9\s.-]{16,25})/i]);
+    const digits=(direct.match(/\d/g)||[]).join("");
+    if(digits.length===16)no_kk=digits;
+  }
   const kepala_keluarga=ambilFieldOcr(source,[
     /NAMA\s+KEPALA\s+KELUARGA\s*[:：]?\s*([^\n]+)/i,
     /KEPALA\s+KELUARGA\s*[:：]?\s*([^\n]+)/i
@@ -1709,7 +1719,7 @@ async function uploadArsipIdentitas(){
     const scanned=[];
     for(let i=0;i<selected.length;i++){
       progress.textContent="Membaca tulisan "+selected[i].kind+" "+(i+1)+"/"+selected.length+"...";
-      const result=await worker.recognize(selected[i].file);
+      progress.textContent="Mengoptimalkan foto "+selected[i].kind+" "+(i+1)+"/"+selected.length+"...";\n      const ocrImage=await siapkanGambarOcr(selected[i].file);\n      const result=await worker.recognize(ocrImage);
       scanned.push({...selected[i],ocrText:String(result?.data?.text||"").slice(0,50000)});
     }
     const parsedKk=parseKkDariOcr(scanned[0].ocrText);
@@ -1768,6 +1778,20 @@ async function uploadArsipIdentitas(){
   }
 }
 
+async function siapkanGambarOcr(file){
+  // OCR bekerja pada salinan gambar yang diperkecil; arsip tetap memakai foto asli.
+  const bitmap=await createImageBitmap(file);
+  const maxSide=2000,scale=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
+  if(scale===1){bitmap.close?.();return file;}
+  const canvas=document.createElement("canvas");
+  canvas.width=Math.max(1,Math.round(bitmap.width*scale));
+  canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+  const ctx=canvas.getContext("2d",{willReadFrequently:false});
+  ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+  bitmap.close?.();
+  return await new Promise(resolve=>canvas.toBlob(blob=>resolve(blob||file),"image/jpeg",0.88));
+}
+
 async function loadTesseractIdentitas(){
   if(!window.Tesseract){
     await new Promise((resolve,reject)=>{
@@ -1777,7 +1801,7 @@ async function loadTesseractIdentitas(){
       document.head.appendChild(script);
     });
   }
-  return window.Tesseract.createWorker("ind+eng",1,{
+  return window.Tesseract.createWorker("ind",1,{
     langPath:"https://tessdata.projectnaptha.com/4.0.0",
     logger:m=>{if(m.status==="recognizing text")console.log("OCR progress",Math.round((m.progress||0)*100)+"%");}
   });
