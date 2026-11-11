@@ -1669,6 +1669,36 @@ function parseKkDariOcr(text){
   const parts=rtRw.split(/[\/|]/).map(x=>x.trim());
   return {no_kk,kepala_keluarga,alamat,rt:parts[0]||"004",rw:parts[1]||"01"};
 }
+function parseAnggotaKkDariOcr(text){
+  const lines=String(text||"").replace(/\r/g,"").split("\n").map(x=>x.trim()).filter(Boolean);
+  const out=[],seen=new Set();
+  const normalizeDigits=s=>String(s||"").toUpperCase().replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
+  const cleanName=s=>String(s||"").replace(/^\s*\d{1,2}[.)-]?\s*/,"").replace(/[^A-ZÀ-ÿ .'’-]/gi," ").replace(/\s+/g," ").trim();
+  // NIK pada hasil OCR kadang dipisah spasi atau tanda baca oleh kolom tabel.
+  const nikPattern=/(?<![A-Z0-9])[0-9OQILSBZ](?:[ \t.-]*[0-9OQILSBZ]){15}(?![A-Z0-9])/gi;
+  for(const line of lines){
+    let match;
+    while((match=nikPattern.exec(line))){
+      const rawNik=match[0].toUpperCase();
+      const digitCount=(rawNik.match(/\d/g)||[]).length;
+      const nik=normalizeDigits(rawNik).replace(/\D/g,"");
+      if(digitCount<14||!/^\d{16}$/.test(nik)||seen.has(nik))continue;
+      const nama=cleanName(line.slice(0,match.index));
+      if(nama.length<3||nama.split(" ").length<2||/^(NAMA|NIK|PROVINSI|KABUPATEN|KECAMATAN|KELURAHAN)$/i.test(nama))continue;
+      const afterNik=line.slice(match.index+match[0].length).toLowerCase();
+      let hubungan="Lainnya";
+      if(/kepala keluarga/.test(afterNik))hubungan="Kepala Keluarga";
+      else if(/istri/.test(afterNik))hubungan="Istri";
+      else if(/suami/.test(afterNik))hubungan="Suami";
+      else if(/anak/.test(afterNik))hubungan="Anak";
+      else if(/orang tua|ayah|ibu/.test(afterNik))hubungan="Orang Tua";
+      const jenis_kelamin=/perempuan|wanita/.test(afterNik)?"Perempuan":/laki-laki|laki laki|pria/.test(afterNik)?"Laki-laki":"";
+      out.push({nik,nama_lengkap:nama,hubungan_keluarga:hubungan,jenis_kelamin});
+      seen.add(nik);
+    }
+  }
+  return out;
+}
 function parseKtpDariOcr(text){
   const source=String(text||"").replace(/\r/g,"");
   let nik=ambilFieldOcr(source,[/NIK\s*[:：]?\s*([0-9\s.-]{16,24})/i]);
@@ -1690,7 +1720,7 @@ function parseKtpDariOcr(text){
 async function uploadArsipIdentitas(){
   const kk=window._identitasKkFile||document.getElementById("identitasKK")?.files?.[0];
   const ktps=Array.from(window._identitasKtpCameraFiles||[]);
-  if(!kk||!ktps.length){alert("Ambil foto satu KK dan minimal satu KTP anggota keluarga.");return;}
+  if(!kk){alert("Ambil foto satu Kartu Keluarga terlebih dahulu.");return;}
   const all=[kk,...ktps];
   if(all.some(f=>f.size>8*1024*1024)){alert("Setiap file maksimal 8 MB.");return;}
   if(ktps.length>20){alert("Maksimal 20 foto KTP.");return;}
@@ -1740,6 +1770,13 @@ async function uploadArsipIdentitas(){
     progress.textContent="Membuat/mencocokkan data keluarga dari nomor KK yang sudah diperiksa...";
     const familyResult=await api("/api/identitas/keluarga-otomatis",{method:"POST",body:JSON.stringify(parsedKk)});
     const familyId=String(familyResult.family.id);
+    const anggotaDariKk=parseAnggotaKkDariOcr(scanned[0].ocrText);
+    let anggotaKkCount=0;
+    if(anggotaDariKk.length){
+      progress.textContent="Mencatat "+anggotaDariKk.length+" kandidat anggota dari KK...";
+      const saved=await api("/api/identitas/keluarga/"+encodeURIComponent(familyId)+"/anggota-kk",{method:"POST",body:JSON.stringify({anggota:anggotaDariKk})});
+      anggotaKkCount=Number(saved.created||0);
+    }
     let autoCount=0,unreadable=0,duplicates=0;
     for(let i=0;i<scanned.length;i++){
       const item=scanned[i],file=item.file;
@@ -1779,7 +1816,7 @@ async function uploadArsipIdentitas(){
     document.getElementById("identitasKTPStatus").textContent="Belum ada foto KTP.";
     await muatArsipIdentitas();
     progress.textContent="Selesai. "+autoCount+" KTP terbaca jelas dan dicatat otomatis; "+unreadable+" KTP menunggu input manual; "+duplicates+" NIK perlu pemeriksaan duplikasi.";
-    alert("Selesai! Nomor KK sudah diperiksa Ketua RT. "+autoCount+" KTP dengan hasil OCR jelas dicatat otomatis. "+unreadable+" KTP perlu diperiksa dan diisi manual pada formulir di bagian Arsip tersimpan. "+duplicates+" NIK perlu pemeriksaan duplikasi. Semua data baru menunggu verifikasi Ketua RT.");
+    alert("Selesai! Nomor KK sudah diperiksa. "+anggotaKkCount+" anggota terdeteksi dari KK dan dicatat menunggu verifikasi. "+autoCount+" KTP dicocokkan otomatis. "+unreadable+" KTP perlu pemeriksaan manual. "+duplicates+" NIK perlu pemeriksaan duplikasi. Periksa kembali nama dan hubungan keluarga sebelum mengaktifkan data.");
   }catch(e){
     progress.textContent="";
     alert(e.message||"Pendataan otomatis gagal. Dokumen belum seluruhnya diproses.");
