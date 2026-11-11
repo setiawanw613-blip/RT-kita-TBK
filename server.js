@@ -2120,7 +2120,7 @@ app.post("/api/identitas/upload", requireAdmin, uploadDokumenIdentitas.fields([
   try {
     const keluargaId = String(req.body?.keluarga_id || "").trim();
     if (!/^\d+$/.test(keluargaId)) return res.status(400).json({ok:false,message:"Pilih keluarga terlebih dahulu."});
-    const familyRows = await supabaseRequest("keluarga", {query:"select=id& id=eq.".replace(" ","")+encodeURIComponent(keluargaId)+"&limit=1"});
+    const familyRows = await supabaseRequest("keluarga", {query:"select=id&id=eq."+encodeURIComponent(keluargaId)+"&limit=1"});
     if (!Array.isArray(familyRows) || !familyRows.length) return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
     const kkFiles = req.files?.kk || [];
     const ktpFiles = req.files?.ktp || [];
