@@ -1801,80 +1801,38 @@ app.get("/api/residents/export", requireAdmin, async (req, res) => {
   try {
     const data = await supabaseRequest("warga", {
       query:
-        "select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_warga,created_at&order=nama_lengkap.asc"
+        "select=id,nik,no_kk,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,alamat,rt,rw,status_perkawinan,pekerjaan,no_hp,status_warga,hubungan_keluarga,keluarga_id,created_at&order=no_kk.asc,nama_lengkap.asc"
     });
 
     const rows = Array.isArray(data) ? data : [];
-
     const header = [
-      "No",
-      "NIK",
-      "No KK",
-      "Nama Lengkap",
-      "Jenis Kelamin",
-      "Tempat Lahir",
-      "Tanggal Lahir",
-      "Alamat",
-      "RT",
-      "RW",
-      "Status Perkawinan",
-      "Pekerjaan",
-      "No HP",
-      "Status Warga",
-      "Tanggal Terdaftar"
+      "No", "No KK", "Hubungan dalam Keluarga", "Nama Lengkap", "NIK",
+      "Jenis Kelamin", "Tempat Lahir", "Tanggal Lahir", "Status Perkawinan",
+      "Pekerjaan", "No HP", "Alamat", "RT", "RW", "Status Warga",
+      "ID Keluarga", "Tanggal Terdaftar"
     ];
-
     const csvRows = rows.map((row, index) => [
-      index + 1,
-      row.nik || "",
-      row.no_kk || "",
-      row.nama_lengkap || "",
-      row.jenis_kelamin || "",
-      row.tempat_lahir || "",
-      row.tanggal_lahir || "",
-      row.alamat || "",
-      row.rt || "",
-      row.rw || "",
-      row.status_perkawinan || "",
-      row.pekerjaan || "",
-      row.no_hp || "",
-      row.status_warga || "",
-      row.created_at || ""
+      index + 1, row.no_kk || "", row.hubungan_keluarga || "",
+      row.nama_lengkap || "", row.nik || "", row.jenis_kelamin || "",
+      row.tempat_lahir || "", row.tanggal_lahir || "",
+      row.status_perkawinan || "", row.pekerjaan || "", row.no_hp || "",
+      row.alamat || "", row.rt || "", row.rw || "",
+      row.status_warga || "", row.keluarga_id || "", row.created_at || ""
     ]);
-
-const csv = [
-  header,
-  ...csvRows
-]
-
-
-      .map(row =>
-        row.map(value =>
-          csvCell(value)
-        ).join(",")
-      )
+    const csv = [header, ...csvRows]
+      .map(row => row.map(value => csvCell(value)).join(","))
       .join("\r\n");
-    res.setHeader(
-      "Content-Type",
-      "text/csv; charset=utf-8"
-    );
 
-    res.setHeader(
-      "Content-Disposition",
-      'attachment; filename="data-warga-rt-kita.csv"'
-    );
-
-    res.send("﻿" + csv);
-
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", 'attachment; filename="data-warga-rt-tbk.csv"');
+    res.send("\uFEFF" + csv);
   } catch (error) {
     console.error("EXPORT WARGA ERROR:", error);
-
-    res.status(500).json({
-      ok: false,
-      message: "Gagal export data warga"
-    });
+    res.status(500).json({ ok: false, message: "Gagal export data warga" });
   }
 });
+
 /* TAMBAH WARGA */
 app.post("/api/residents", requireAdmin, async (req, res) => {
   try {
