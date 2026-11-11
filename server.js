@@ -941,197 +941,103 @@ function keteranganKasRapi(row, info) {
   return `Iuran ${kategori} ${info.periode_label} - dari ${info.nama_warga || "warga"}`;
 }
 
-/* DAFTAR WARGA */
+/* DAFTAR AKUN WARGA: cocokkan NIK + No. KK dengan data yang sudah dimasukkan Ketua RT. */
 app.post("/api/register-warga", async (req, res) => {
   try {
-   const {
-  no_hp,
-  password,
-  nama_lengkap,
-  nik,
-  no_kk,
-  alamat,
-  hubungan_keluarga
-} = req.body;
+    const nik = String(req.body?.nik || "").replace(/\D/g, "");
+    const no_kk = String(req.body?.no_kk || "").replace(/\D/g, "");
+    const no_hp = String(req.body?.no_hp || "").trim().replace(/[\s-]/g, "");
+    const password = req.body?.password;
+
+    if (!/^\d{16}$/.test(nik) || !/^\d{16}$/.test(no_kk)) {
+      return res.status(400).json({ok:false,message:"NIK dan nomor KK harus masing-masing 16 digit."});
+    }
+    if (!/^\+?\d{9,18}$/.test(no_hp)) {
+      return res.status(400).json({ok:false,message:"Nomor HP tidak valid. Gunakan nomor HP aktif."});
+    }
     if (!isValidNewResidentPassword(password)) {
-  return res.status(400).json({
-    ok: false,
-    message: "Password minimal 8 karakter."
-  });
-}
+      return res.status(400).json({ok:false,message:"Password minimal 8 karakter."});
+    }
 
-    if (
-  typeof no_hp !== "string" ||
-  !no_hp.trim() ||
-  no_hp.length > 30 ||
-  typeof nama_lengkap !== "string" ||
-  !nama_lengkap.trim() ||
-  nama_lengkap.length > 120 ||
-  typeof no_kk !== "string" ||
-  !no_kk.trim() ||
-  no_kk.length > 32 ||
-  typeof alamat !== "string" ||
-  !alamat.trim() ||
-  alamat.length > 500 ||
-  typeof hubungan_keluarga !== "string" ||
-  !hubungan_keluarga.trim() ||
-  hubungan_keluarga.length > 50 ||
-  (nik != null && typeof nik !== "string")
-) {
-  return res.status(400).json({
-    ok: false,
-    message: "Semua data wajib diisi"
-  });
-}
+    const sessionSecret = process.env.SESSION_SECRET;
+    if (typeof sessionSecret !== "string" || Buffer.byteLength(sessionSecret, "utf8") < 32) {
+      console.error("REGISTER CONFIG ERROR: SESSION_SECRET is missing or too short");
+      return res.status(503).json({ok:false,message:"Layanan pendaftaran sedang tidak siap. Silakan coba kembali nanti."});
+    }
 
-if (
-  hubungan_keluarga !== "Anak" &&
-  !nik
-) {
-  return res.status(400).json({
-    ok: false,
-    message: "NIK wajib diisi untuk hubungan ini"
-  });
-}
-
-// Batasi percobaan pendaftaran per nomor HP dengan pencatatan persisten.
-const sessionSecret = process.env.SESSION_SECRET;
-if (typeof sessionSecret !== "string" || Buffer.byteLength(sessionSecret, "utf8") < 32) {
-  console.error("REGISTER CONFIG ERROR: SESSION_SECRET is missing or too short");
-  return res.status(503).json({ ok: false, message: "Layanan pendaftaran sedang tidak siap. Silakan coba kembali nanti." });
-}
-const registrationRateLimitKey = createRateLimitKey(sessionSecret, "register", no_hp);
-const registrationRateLimitRows = await supabaseRequest("rpc/consume_login_rate_limit", {
-  method: "POST",
-  body: { p_key_hash: registrationRateLimitKey, p_window_seconds: 900, p_max_attempts: 5 }
-});
-const registrationRateLimit = Array.isArray(registrationRateLimitRows) ? registrationRateLimitRows[0] : registrationRateLimitRows;
-if (!registrationRateLimit || typeof registrationRateLimit.allowed !== "boolean") {
-  throw new Error("Respons pembatasan pendaftaran tidak valid");
-}
-if (!registrationRateLimit.allowed) {
-  const retryAfter = Math.max(1, Number(registrationRateLimit.retry_after_seconds) || 900);
-  res.setHeader("Retry-After", String(retryAfter));
-  return res.status(429).json({ ok: false, message: "Terlalu banyak percobaan pendaftaran untuk nomor HP ini. Silakan coba lagi beberapa menit kemudian." });
-}
-
-    const existing = await supabaseRequest("warga", {
-      query:
-        `select=id` +
-        `&no_hp=eq.${encodeURIComponent(no_hp)}` +
-        `&limit=1`
+    const registrationRateLimitKey = createRateLimitKey(sessionSecret, "register", no_hp);
+    const registrationRateLimitRows = await supabaseRequest("rpc/consume_login_rate_limit", {
+      method:"POST",
+      body:{p_key_hash:registrationRateLimitKey,p_window_seconds:900,p_max_attempts:5}
     });
+    const registrationRateLimit = Array.isArray(registrationRateLimitRows) ? registrationRateLimitRows[0] : registrationRateLimitRows;
+    if (!registrationRateLimit || typeof registrationRateLimit.allowed !== "boolean") {
+      throw new Error("Respons pembatasan pendaftaran tidak valid");
+    }
+    if (!registrationRateLimit.allowed) {
+      const retryAfter = Math.max(1, Number(registrationRateLimit.retry_after_seconds) || 900);
+      res.setHeader("Retry-After", String(retryAfter));
+      return res.status(429).json({ok:false,message:"Terlalu banyak percobaan pendaftaran. Silakan coba lagi beberapa menit kemudian."});
+    }
 
-    if (Array.isArray(existing) && existing.length) {
-      return res.status(409).json({
-        ok: false,
-        message: "Nomor HP sudah terdaftar"
+    const phoneRows = await supabaseRequest("warga", {
+      query:"select=id&no_hp=eq." + encodeURIComponent(no_hp) + "&limit=1"
+    });
+    if (Array.isArray(phoneRows) && phoneRows.length) {
+      return res.status(409).json({ok:false,message:"Nomor HP sudah digunakan oleh akun warga lain."});
+    }
+
+    const identityRows = await supabaseRequest("warga", {
+      query:"select=id,nama_lengkap,nik,no_kk,keluarga_id,no_hp,status_warga&nik=eq." + encodeURIComponent(nik) + "&limit=2"
+    });
+    if (!Array.isArray(identityRows) || identityRows.length === 0) {
+      return res.status(404).json({ok:false,message:"Data NIK belum ditemukan. Pastikan Ketua RT sudah memasukkan KK dan KTP Anda."});
+    }
+    if (identityRows.length > 1) {
+      return res.status(409).json({ok:false,message:"Data NIK tercatat lebih dari satu kali. Hubungi Ketua RT untuk pemeriksaan."});
+    }
+
+    const resident = identityRows[0];
+    let registeredFamilyNumber = String(resident.no_kk || "").replace(/\D/g, "");
+    if (!registeredFamilyNumber && resident.keluarga_id) {
+      const familyRows = await supabaseRequest("keluarga", {
+        query:"select=no_kk&id=eq." + encodeURIComponent(String(resident.keluarga_id)) + "&limit=1"
       });
+      const family = Array.isArray(familyRows) ? familyRows[0] : null;
+      registeredFamilyNumber = String(family?.no_kk || "").replace(/\D/g, "");
     }
-    const nikExisting = await supabaseRequest("warga", {
-  query:
-    `select=id` +
-    `&nik=eq.${encodeURIComponent(nik)}` +
-    `&limit=1`
-});
-
-if (nik && Array.isArray(nikExisting) && nikExisting.length) {
-  return res.status(409).json({
-    ok: false,
-    message: "NIK sudah terdaftar sebagai warga"
-  });
-}
-const keluargaExisting = await supabaseRequest("keluarga", {
-  query:
-    `select=id,kepala_keluarga` +
-    `&no_kk=eq.${encodeURIComponent(no_kk)}` +
-    `&limit=1`
-});
-
-let keluarga_id = null;
-
-if (Array.isArray(keluargaExisting) && keluargaExisting.length) {
-  if (hubungan_keluarga === "Kepala Keluarga") {
-    return res.status(400).json({
-      ok: false,
-      message: "No. KK tersebut sudah memiliki Kepala Keluarga"
-    });
-  }
-
-  keluarga_id = keluargaExisting[0].id;
-} else {
-  if (hubungan_keluarga !== "Kepala Keluarga") {
-    return res.status(400).json({
-      ok: false,
-      message: "Untuk No. KK baru, pendaftar pertama harus menjadi Kepala Keluarga"
-    });
-  }
-
-  const keluargaBaru = await supabaseRequest("keluarga", {
-    method: "POST",
-    body: {
-      no_kk,
-      kepala_keluarga: nama_lengkap,
-      alamat,
-      rt: "04",
-      rw: "01"
+    if (registeredFamilyNumber !== no_kk) {
+      return res.status(400).json({ok:false,message:"NIK ditemukan, tetapi tidak cocok dengan nomor KK. Periksa kembali atau hubungi Ketua RT."});
     }
-  });
-
-  const keluargaRow = Array.isArray(keluargaBaru)
-    ? keluargaBaru[0]
-    : keluargaBaru;
-
-  keluarga_id = keluargaRow.id;
-}
-    const data = await supabaseRequest("warga", {
-      method: "POST",
-    body: {
-  no_hp,
-  password: hashPassword(password),
-  nama_lengkap,
-  nik: nik || null,
-  no_kk,
-  alamat,
-  hubungan_keluarga,
-   keluarga_id,
-  status_warga: "menunggu_verifikasi"
-}
-    });
-
-    const wargaBaru = Array.isArray(data) ? data[0] : data;
-
-    if (!wargaBaru || typeof wargaBaru !== "object") {
-      throw new Error("Data warga baru tidak dikembalikan oleh database");
+    if (resident.no_hp) {
+      return res.status(409).json({ok:false,message:"Data warga ini sudah memiliki akun/nomor HP. Jika lupa akses, hubungi Ketua RT."});
     }
 
-    // Never return the database row: it contains the stored password hash.
-    return res.json({
-      ok: true,
-      message: "Pendaftaran warga berhasil",
-      user: {
-        id: wargaBaru?.id ?? null,
-        nama_lengkap,
+    const updatedRows = await supabaseRequest("warga", {
+      method:"PATCH",
+      query:"id=eq." + encodeURIComponent(String(resident.id)),
+      body:{
         no_hp,
-        status_warga: "menunggu_verifikasi"
+        password:hashPassword(password),
+        status_warga:"menunggu_verifikasi"
       }
+    });
+    const updated = Array.isArray(updatedRows) ? updatedRows[0] : updatedRows;
+    if (!updated || !updated.id) {
+      throw new Error("Pembaruan akun warga tidak dikonfirmasi oleh database");
+    }
+
+    return res.status(201).json({
+      ok:true,
+      message:"Pendaftaran akun berhasil dan menunggu verifikasi Ketua RT.",
+      user:{id:resident.id,nama_lengkap:resident.nama_lengkap,no_hp,status_warga:"menunggu_verifikasi"}
     });
   } catch (error) {
     console.error("REGISTER WARGA ERROR:", error?.message || error);
-
-    // Database unique indexes are the final protection against simultaneous
-    // registrations using the same phone number, NIK, or family card number.
     if (getSupabaseErrorCode(error) === "23505") {
-      return res.status(409).json({
-        ok: false,
-        message: "Nomor HP, NIK, atau No. KK sudah terdaftar. Periksa kembali data pendaftaran."
-      });
+      return res.status(409).json({ok:false,message:"Nomor HP atau identitas sudah digunakan. Periksa kembali data pendaftaran."});
     }
-
-    return res.status(500).json({
-      ok: false,
-      message: "Gagal mendaftarkan warga"
-    });
+    return res.status(500).json({ok:false,message:"Gagal mendaftarkan akun warga. Silakan coba kembali."});
   }
 });
 /* LOGIN */
