@@ -2115,12 +2115,12 @@ app.post("/api/identitas/keluarga", requireAdmin, async (req, res) => {
 
 app.post("/api/identitas/keluarga-otomatis", requireAdmin, async (req,res) => {
   try {
-    const no_kk=String(req.body?.no_kk||"").replace(/\\D/g,"");
+    const no_kk=String(req.body?.no_kk||"").replace(/\D/g,"");
     const kepala_keluarga=String(req.body?.kepala_keluarga||"").trim().slice(0,120);
     const alamat=String(req.body?.alamat||"").trim().slice(0,500);
     const rt=String(req.body?.rt||"004").trim().slice(0,8);
     const rw=String(req.body?.rw||"01").trim().slice(0,8);
-    if(!/^\\d{16}$/.test(no_kk)) return res.status(400).json({ok:false,message:"Nomor KK belum terbaca jelas. Foto ulang bagian nomor KK agar sistem dapat membuat data keluarga otomatis."});
+    if(!/^\d{16}$/.test(no_kk)) return res.status(400).json({ok:false,message:"Nomor KK belum terbaca jelas. Foto ulang bagian nomor KK agar sistem dapat membuat data keluarga otomatis."});
     const existing=await supabaseRequest("keluarga",{query:"select=id,no_kk,kepala_keluarga,alamat,rt,rw&no_kk=eq."+encodeURIComponent(no_kk)+"&limit=1"});
     let family=Array.isArray(existing)?existing[0]:null;
     if(family){
@@ -2149,16 +2149,16 @@ app.post("/api/identitas/:id/anggota-otomatis", requireAdmin, async(req,res)=>{
   try{
     const docId=String(req.params.id||"");
     const nama=String(req.body?.nama_lengkap||"").trim().slice(0,120);
-    const nik=String(req.body?.nik||"").replace(/\\D/g,"");
+    const nik=String(req.body?.nik||"").replace(/\D/g,"");
     const jenisKelamin=String(req.body?.jenis_kelamin||"");
     const tempatLahir=String(req.body?.tempat_lahir||"").trim().slice(0,100);
     const tanggalLahir=String(req.body?.tanggal_lahir||"").trim();
     const hubungan=String(req.body?.hubungan_keluarga||"Anggota Keluarga").trim().slice(0,50);
-    if(!/^\\d+$/.test(docId)||nama.length<2||!/^\\d{16}$/.test(nik))
+    if(!/^\d+$/.test(docId)||nama.length<2||!/^\d{16}$/.test(nik))
       return res.status(400).json({ok:false,message:"Nama atau NIK KTP belum terbaca jelas; dokumen tetap tersimpan untuk diperiksa."});
     if(jenisKelamin&&!["Laki-laki","Perempuan"].includes(jenisKelamin))
       return res.status(400).json({ok:false,message:"Jenis kelamin hasil OCR tidak valid."});
-    if(tanggalLahir&&!/^\\d{4}-\\d{2}-\\d{2}$/.test(tanggalLahir))
+    if(tanggalLahir&&!/^\d{4}-\d{2}-\d{2}$/.test(tanggalLahir))
       return res.status(400).json({ok:false,message:"Tanggal lahir hasil OCR tidak valid."});
     const docs=await supabaseRequest("dokumen_identitas",{query:"select=id,keluarga_id,jenis_dokumen,warga_id&id=eq."+encodeURIComponent(docId)+"&limit=1"});
     const doc=Array.isArray(docs)?docs[0]:null;
