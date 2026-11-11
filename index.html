@@ -1636,7 +1636,7 @@ async function uploadArsipIdentitas(){
     document.getElementById("identitasKTP").value="";
     await muatArsipIdentitas();
     progress.textContent="Selesai. Dokumen asli tersimpan privat; hasil OCR menunggu pemeriksaan Ketua RT.";
-    alert(result.message+" Periksa hasil OCR dan cocokkan dengan dokumen asli sebelum verifikasi.");
+    alert("Dokumen KK dan KTP berhasil diarsipkan. Periksa hasil OCR dan cocokkan dengan dokumen asli sebelum verifikasi.");
   }catch(e){
     progress.textContent="";
     alert(e.message);
