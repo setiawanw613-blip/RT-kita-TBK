@@ -518,6 +518,16 @@ const uploadFoto = multer({
 
 
 
+
+const uploadDokumenIdentitas = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 21, fields: 8, parts: 30 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "application/pdf"];
+    cb(allowed.includes(file.mimetype) ? null : new Error("Dokumen harus JPG, PNG, WebP, atau PDF."), allowed.includes(file.mimetype));
+  }
+});
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -1995,6 +2005,349 @@ app.post(
     }
   }
 );
+
+
+/* ARSIP KK/KTP — KHUSUS KETUA RT. File disimpan di bucket privat. */
+const IDENTITAS_BUCKET = "dokumen-identitas";
+
+function validasiDokumenIdentitas(file) {
+  if (!file?.buffer || !Buffer.isBuffer(file.buffer)) return null;
+  if (file.mimetype === "application/pdf" && file.buffer.subarray(0,5).toString("ascii") === "%PDF-") {
+    return { mime: "application/pdf", ext: "pdf" };
+  }
+  const image = detectImageType(file.buffer);
+  if (!image || image.mime !== file.mimetype || !["image/jpeg","image/png","image/webp"].includes(image.mime)) return null;
+  return { mime: image.mime, ext: image.ext };
+}
+
+async function uploadDokumenIdentitasPrivat(pathObject, buffer, contentType) {
+  const encoded = pathObject.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(
+    `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(IDENTITAS_BUCKET)}/${encoded}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization: `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": contentType,
+        "x-upsert": "false"
+      },
+      body: buffer,
+      signal: AbortSignal.timeout(30000)
+    }
+  );
+  if (!response.ok) {
+    console.error("ARSIP IDENTITAS STORAGE ERROR:", response.status, await response.text());
+    throw new Error("Gagal menyimpan dokumen ke penyimpanan privat.");
+  }
+}
+
+async function hapusDokumenIdentitasPrivat(pathObject) {
+  const encoded = pathObject.split("/").map(encodeURIComponent).join("/");
+  await fetch(`${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(IDENTITAS_BUCKET)}/${encoded}`, {
+    method: "DELETE",
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` }
+  }).catch(() => {});
+}
+
+async function buatSignedUrlIdentitas(pathObject) {
+  const encoded = pathObject.split("/").map(encodeURIComponent).join("/");
+  const response = await fetch(
+    `${SUPABASE_URL}/storage/v1/object/sign/${encodeURIComponent(IDENTITAS_BUCKET)}/${encoded}`,
+    {
+      method: "POST",
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ expiresIn: 300 }),
+      signal: AbortSignal.timeout(10000)
+    }
+  );
+  if (!response.ok) throw new Error("Tautan dokumen privat gagal dibuat.");
+  const data = await response.json();
+  if (!data.signedURL) throw new Error("Tautan dokumen tidak tersedia.");
+  return data.signedURL.startsWith("http")
+    ? data.signedURL
+    : `${SUPABASE_URL}/storage/v1${data.signedURL.startsWith("/") ? "" : "/"}${data.signedURL}`;
+}
+
+app.get("/api/identitas", requireAdmin, async (req, res) => {
+  try {
+    const [families, docs] = await Promise.all([
+      supabaseRequest("keluarga", { query: "select=id,no_kk,kepala_keluarga,alamat,rt,rw&order=created_at.desc&limit=2000" }),
+      supabaseRequest("dokumen_identitas", { query: "select=id,keluarga_id,warga_id,jenis_dokumen,nama_file,mime_type,ukuran_bytes,ocr_text,ocr_data,status_verifikasi,uploaded_at&order=uploaded_at.desc&limit=5000" })
+    ]);
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      families: Array.isArray(families) ? families : [],
+      documents: Array.isArray(docs) ? docs : []
+    });
+  } catch (error) {
+    console.error("ARSIP IDENTITAS LIST ERROR:", error);
+    res.status(503).json({ ok:false, message:"Arsip belum siap. Pastikan migrasi database sudah diterapkan." });
+  }
+});
+
+app.post("/api/identitas/keluarga", requireAdmin, async (req, res) => {
+  try {
+    const no_kk = String(req.body?.no_kk || "").replace(/\D/g, "");
+    const kepala_keluarga = String(req.body?.kepala_keluarga || "").trim().slice(0,120);
+    const alamat = String(req.body?.alamat || "").trim().slice(0,500);
+    const rt = String(req.body?.rt || "04").trim().slice(0,8);
+    const rw = String(req.body?.rw || "01").trim().slice(0,8);
+    if (!/^\d{16}$/.test(no_kk) || kepala_keluarga.length < 2 || !alamat) {
+      return res.status(400).json({ok:false,message:"Nomor KK harus 16 digit, nama kepala keluarga dan alamat wajib diisi."});
+    }
+    const existing = await supabaseRequest("keluarga", { query: "select=id,no_kk,kepala_keluarga,alamat,rt,rw&no_kk=eq."+encodeURIComponent(no_kk)+"&limit=1" });
+    if (Array.isArray(existing) && existing.length) {
+      return res.json({ok:true,existing:true,family:existing[0],message:"Keluarga dengan nomor KK tersebut sudah terdaftar."});
+    }
+    const created = await supabaseRequest("keluarga", {
+      method:"POST",
+      body:{no_kk,kepala_keluarga,alamat,rt,rw}
+    });
+    const family = Array.isArray(created) ? created[0] : created;
+    res.status(201).json({ok:true,existing:false,family});
+  } catch (error) {
+    console.error("ARSIP CREATE FAMILY ERROR:",error);
+    res.status(500).json({ok:false,message:"Gagal membuat data keluarga."});
+  }
+});
+
+
+app.post("/api/identitas/upload-url", requireAdmin, async (req,res) => {
+  try {
+    const keluargaId=String(req.body?.keluarga_id||"").trim();
+    const kind=String(req.body?.jenis_dokumen||"");
+    const mime=String(req.body?.mime_type||"").toLowerCase();
+    const size=Number(req.body?.ukuran_bytes);
+    const originalName=String(req.body?.nama_file||"dokumen").slice(0,180);
+    const allowed=["image/jpeg","image/png","image/webp","application/pdf"];
+    if(!/^[0-9]+$/.test(keluargaId)||!["KK","KTP"].includes(kind)||!allowed.includes(mime)||!Number.isSafeInteger(size)||size<1||size>8388608)
+      return res.status(400).json({ok:false,message:"Data file tidak valid. Maksimal 8 MB per dokumen."});
+    const familyRows=await supabaseRequest("keluarga",{query:"select=id&id=eq."+encodeURIComponent(keluargaId)+"&limit=1"});
+    if(!Array.isArray(familyRows)||!familyRows.length)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
+    const safeName=originalName.normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-90)||"dokumen";
+    const ext=mime==="application/pdf"?"pdf":mime==="image/jpeg"?"jpg":mime==="image/png"?"png":"webp";
+    const storagePath=String(keluargaId)+"/"+crypto.randomUUID()+"-"+safeName;
+    const encoded=storagePath.split("/").map(encodeURIComponent).join("/");
+    const signedResponse=await fetch(
+      `${SUPABASE_URL}/storage/v1/object/upload/sign/${encodeURIComponent(IDENTITAS_BUCKET)}/${encoded}`,
+      {method:"POST",headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({}),signal:AbortSignal.timeout(10000)}
+    );
+    const signedData=await signedResponse.json().catch(()=>({}));
+    if(!signedResponse.ok||!signedData.url){
+      console.error("CREATE SIGNED IDENTITY UPLOAD ERROR:",signedResponse.status,signedData);
+      return res.status(502).json({ok:false,message:"Tidak dapat menyiapkan unggahan aman."});
+    }
+    const uploadUrl=String(signedData.url).startsWith("http")?signedData.url:
+      `${SUPABASE_URL}/storage/v1${String(signedData.url).startsWith("/")?"":"/"}${signedData.url}`;
+    res.setHeader("Cache-Control","no-store");
+    res.json({ok:true,upload_url:uploadUrl,storage_path:storagePath,jenis_dokumen:kind,mime_type:mime,ukuran_bytes:size,nama_file:safeName});
+  }catch(error){
+    console.error("PREPARE IDENTITY UPLOAD ERROR:",error);
+    res.status(500).json({ok:false,message:"Gagal menyiapkan unggahan dokumen."});
+  }
+});
+
+app.post("/api/identitas/register-upload", requireAdmin, async(req,res)=>{
+  try{
+    const keluargaId=String(req.body?.keluarga_id||"").trim();
+    const storagePath=String(req.body?.storage_path||"");
+    const kind=String(req.body?.jenis_dokumen||"");
+    const mime=String(req.body?.mime_type||"").toLowerCase();
+    const size=Number(req.body?.ukuran_bytes);
+    const name=String(req.body?.nama_file||"dokumen").slice(0,180);
+    if(!/^[0-9]+$/.test(keluargaId)||!storagePath.startsWith(keluargaId+"/")||!(new RegExp("^"+keluargaId+"/[0-9a-f-]{36}-[a-zA-Z0-9._-]{1,90}$","i")).test(storagePath)||
+      !["KK","KTP"].includes(kind)||!["image/jpeg","image/png","image/webp","application/pdf"].includes(mime)||
+      !Number.isSafeInteger(size)||size<1||size>8388608)
+      return res.status(400).json({ok:false,message:"Metadata dokumen tidak valid."});
+    const encoded=storagePath.split("/").map(encodeURIComponent).join("/");
+    const head=await fetch(`${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(IDENTITAS_BUCKET)}/${encoded}`,{
+      method:"HEAD",headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`},signal:AbortSignal.timeout(10000)
+    });
+    if(!head.ok)return res.status(409).json({ok:false,message:"File belum berhasil masuk ke penyimpanan."});
+    const actualType=String(head.headers.get("content-type")||"").split(";")[0].toLowerCase();
+    if(actualType&&actualType!==mime)return res.status(400).json({ok:false,message:"Jenis file yang tersimpan tidak cocok."});
+    const inserted=await supabaseRequest("dokumen_identitas",{
+      method:"POST",
+      body:{keluarga_id:Number(keluargaId),jenis_dokumen:kind,storage_path:storagePath,nama_file:name,mime_type:mime,
+        ukuran_bytes:size,uploaded_by:String(req.session?.nama||req.session?.username||"Ketua RT").slice(0,120),
+        status_verifikasi:"menunggu_verifikasi"}
+    });
+    const row=Array.isArray(inserted)?inserted[0]:inserted;
+    res.status(201).json({ok:true,document:{id:row.id,keluarga_id:row.keluarga_id,jenis_dokumen:row.jenis_dokumen,
+      nama_file:row.nama_file,mime_type:row.mime_type,ukuran_bytes:row.ukuran_bytes,status_verifikasi:row.status_verifikasi}});
+  }catch(error){
+    console.error("REGISTER IDENTITY UPLOAD ERROR:",error);
+    res.status(500).json({ok:false,message:"File sudah diunggah, tetapi pencatatan arsip gagal. Hubungi pengelola."});
+  }
+});
+
+app.patch("/api/identitas/:id/ocr", requireAdmin, async (req,res) => {
+  try {
+    const id=String(req.params.id||"");
+    const textOcr=String(req.body?.ocr_text||"").slice(0,50000);
+    const nikCandidates=[...new Set(textOcr.match(/\b\d{16}\b/g)||[])];
+    const lines=textOcr.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+    let namaCandidate="";
+    for(let i=0;i<lines.length;i++){
+      const match=lines[i].match(/^NAMA\s*[:：]?\s*(.*)$/i);
+      if(match){namaCandidate=(match[1]||lines[i+1]||"").trim().slice(0,120);break;}
+    }
+    if (!/^\d+$/.test(id) || !textOcr.trim()) return res.status(400).json({ok:false,message:"Hasil OCR tidak valid."});
+    const updated=await supabaseRequest("dokumen_identitas",{
+      method:"PATCH",query:"id=eq."+encodeURIComponent(id),
+      body:{ocr_text:textOcr,ocr_data:{nik_candidates:nikCandidates,nama_candidate:namaCandidate,ocr_engine:"tesseract.js-browser",review_required:true}}
+    });
+    const row=Array.isArray(updated)?updated[0]:updated;
+    if(!row)return res.status(404).json({ok:false,message:"Dokumen tidak ditemukan."});
+    res.json({ok:true,nik_candidates:nikCandidates});
+  }catch(error){
+    console.error("SIMPAN OCR IDENTITAS ERROR:",error);
+    res.status(500).json({ok:false,message:"Gagal menyimpan hasil OCR."});
+  }
+});
+
+app.patch("/api/identitas/:id/verify", requireAdmin, async (req,res) => {
+  try{
+    const id=String(req.params.id||"");
+    const status=String(req.body?.status_verifikasi||"");
+    if(!/^\d+$/.test(id)||!["terverifikasi","perlu_perbaikan","menunggu_verifikasi"].includes(status))
+      return res.status(400).json({ok:false,message:"Status verifikasi tidak valid."});
+    const updated=await supabaseRequest("dokumen_identitas",{
+      method:"PATCH",query:"id=eq."+encodeURIComponent(id),
+      body:{status_verifikasi:status}
+    });
+    const row=Array.isArray(updated)?updated[0]:updated;
+    if(!row)return res.status(404).json({ok:false,message:"Dokumen tidak ditemukan."});
+    res.json({ok:true});
+  }catch(error){
+    console.error("VERIFIKASI DOKUMEN ERROR:",error);
+    res.status(500).json({ok:false,message:"Gagal memperbarui status dokumen."});
+  }
+});
+
+
+app.post("/api/identitas/:id/anggota", requireAdmin, async(req,res)=>{
+  try{
+    const docId=String(req.params.id||"");
+    const nama=String(req.body?.nama_lengkap||"").trim().slice(0,120);
+    const nik=String(req.body?.nik||"").replace(/\D/g,"");
+    const jenisKelamin=String(req.body?.jenis_kelamin||"");
+    const tempatLahir=String(req.body?.tempat_lahir||"").trim().slice(0,100);
+    const tanggalLahir=String(req.body?.tanggal_lahir||"").trim();
+    const hubungan=String(req.body?.hubungan_keluarga||"").trim();
+    if(!/^[0-9]+$/.test(docId)||nama.length<2||! /^\d{16}$/.test(nik)||
+      !["Laki-laki","Perempuan"].includes(jenisKelamin)||
+      !["Kepala Keluarga","Istri","Suami","Anak","Orang Tua","Lainnya"].includes(hubungan)||
+      (tanggalLahir&&!/^\d{4}-\d{2}-\d{2}$/.test(tanggalLahir))){
+      return res.status(400).json({ok:false,message:"Periksa nama, NIK 16 digit, jenis kelamin, tanggal lahir, dan hubungan keluarga."});
+    }
+    const docs=await supabaseRequest("dokumen_identitas",{query:"select=id,keluarga_id,jenis_dokumen,warga_id&id=eq."+encodeURIComponent(docId)+"&limit=1"});
+    const doc=Array.isArray(docs)?docs[0]:null;
+    if(!doc||doc.jenis_dokumen!=="KTP")return res.status(404).json({ok:false,message:"Arsip KTP tidak ditemukan."});
+    const familyRows=await supabaseRequest("keluarga",{query:"select=id,no_kk,alamat,rt,rw&id=eq."+encodeURIComponent(doc.keluarga_id)+"&limit=1"});
+    const family=Array.isArray(familyRows)?familyRows[0]:null;
+    if(!family)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
+    const existing=await supabaseRequest("warga",{query:"select=id,keluarga_id,nama_lengkap,nik&nik=eq."+encodeURIComponent(nik)+"&limit=1"});
+    let warga=Array.isArray(existing)?existing[0]:null;
+    if(doc.warga_id&&(!warga||String(warga.id)!==String(doc.warga_id)))
+      return res.status(409).json({ok:false,message:"Dokumen KTP ini sudah terhubung ke anggota keluarga lain."});
+    if(warga&&String(warga.keluarga_id)!==String(doc.keluarga_id))
+      return res.status(409).json({ok:false,message:"NIK ini sudah terdaftar pada keluarga lain. Periksa kemungkinan data ganda."});
+    if(!warga){
+      const inserted=await supabaseRequest("warga",{
+        method:"POST",
+        body:{
+          nama_lengkap:nama,nik,no_kk:family.no_kk,jenis_kelamin:jenisKelamin,
+          tempat_lahir:tempatLahir||null,tanggal_lahir:tanggalLahir||null,
+          alamat:family.alamat||"",rt:family.rt||"04",rw:family.rw||"01",
+          hubungan_keluarga:hubungan,keluarga_id:doc.keluarga_id,
+          status_warga:"menunggu_verifikasi"
+        }
+      });
+      warga=Array.isArray(inserted)?inserted[0]:inserted;
+    }
+    await supabaseRequest("dokumen_identitas",{
+      method:"PATCH",query:"id=eq."+encodeURIComponent(docId),body:{warga_id:warga.id}
+    });
+    res.status(201).json({ok:true,message:"Anggota keluarga berhasil dicatat dan menunggu verifikasi Ketua RT.",warga:{id:warga.id,nama_lengkap:warga.nama_lengkap,nik:warga.nik}});
+  }catch(error){
+    console.error("DAFTARKAN ANGGOTA DARI KTP ERROR:",error);
+    res.status(500).json({ok:false,message:"Gagal mencatat anggota keluarga. Periksa kemungkinan NIK sudah terdaftar."});
+  }
+});
+
+
+app.get("/api/identitas/keluarga/:id/salinan", requireAdmin, async(req,res)=>{
+  try{
+    const id=String(req.params.id||"");
+    if(!/^[0-9]+$/.test(id))return res.status(400).json({ok:false,message:"ID keluarga tidak valid."});
+    const familyRows=await supabaseRequest("keluarga",{query:"select=id,no_kk,kepala_keluarga,alamat,rt,rw,created_at&id=eq."+encodeURIComponent(id)+"&limit=1"});
+    const family=Array.isArray(familyRows)?familyRows[0]:null;
+    if(!family)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
+    const members=await supabaseRequest("warga",{
+      query:"select=nik,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,hubungan_keluarga,status_warga&keluarga_id=eq."+encodeURIComponent(id)+"&order=created_at.asc"
+    });
+    const rows=Array.isArray(members)?members:[];
+    res.setHeader("Content-Type","application/pdf");
+    res.setHeader("Content-Disposition",`inline; filename="salinan-data-keluarga-${id}.pdf"`);
+    res.setHeader("Cache-Control","private, no-store, max-age=0");
+    const pdf=new PDFDocument({size:"A4",margin:48,bufferPages:true});
+    pdf.pipe(res);
+    pdf.fontSize(17).font("Helvetica-Bold").text("RT TBK — DATA WARGA", {align:"center"});
+    pdf.moveDown(0.3);
+    pdf.fontSize(13).text("SALINAN DATA KELUARGA", {align:"center"});
+    pdf.moveDown(0.5);
+    pdf.fontSize(9).font("Helvetica").fillColor("#7c2d12")
+      .text("SALINAN ADMINISTRATIF — BUKAN DOKUMEN IDENTITAS RESMI", {align:"center"});
+    pdf.fillColor("#111827").moveDown(1);
+    pdf.fontSize(10).font("Helvetica-Bold").text("Identitas Keluarga");
+    pdf.moveDown(0.4);
+    pdf.font("Helvetica").text("Nomor KK: "+(family.no_kk||"-"));
+    pdf.text("Kepala Keluarga: "+(family.kepala_keluarga||"-"));
+    pdf.text("Alamat: "+(family.alamat||"-"));
+    pdf.text("RT/RW: "+(family.rt||"-")+" / "+(family.rw||"-"));
+    pdf.moveDown(1);
+    pdf.font("Helvetica-Bold").fontSize(10).text("Daftar Anggota Keluarga ("+rows.length+")");
+    pdf.moveDown(0.4);
+    rows.forEach((w,index)=>{
+      if(pdf.y>700)pdf.addPage();
+      pdf.font("Helvetica-Bold").fontSize(9).text((index+1)+". "+(w.nama_lengkap||"-"));
+      pdf.font("Helvetica").fontSize(8)
+        .text("NIK: "+(w.nik||"-")+"   |   Hubungan: "+(w.hubungan_keluarga||"-"))
+        .text("Jenis kelamin: "+(w.jenis_kelamin||"-")+"   |   Tempat/tanggal lahir: "+(w.tempat_lahir||"-")+" / "+(w.tanggal_lahir||"-"))
+        .text("Status pendataan: "+(w.status_warga||"-"));
+      pdf.moveDown(0.5);
+    });
+    pdf.moveDown(1);
+    pdf.fontSize(8).fillColor("#64748b")
+      .text("Dicetak melalui aplikasi RT TBK. Data bersumber dari database administrasi RT dan harus diperiksa kembali oleh petugas.",{align:"left"});
+    pdf.end();
+  }catch(error){
+    console.error("CETAK SALINAN DATA KELUARGA ERROR:",error);
+    if(!res.headersSent)res.status(500).json({ok:false,message:"Gagal membuat salinan data keluarga."});
+    else res.end();
+  }
+});
+
+app.get("/api/identitas/:id/file", requireAdmin, async (req,res) => {
+  try{
+    const id=String(req.params.id||"");
+    if(!/^\d+$/.test(id))return res.status(400).json({ok:false,message:"ID dokumen tidak valid."});
+    const rows=await supabaseRequest("dokumen_identitas",{
+      query:"select=id,storage_path,nama_file,mime_type&id=eq."+encodeURIComponent(id)+"&limit=1"
+    });
+    const row=Array.isArray(rows)?rows[0]:null;
+    if(!row)return res.status(404).json({ok:false,message:"Dokumen tidak ditemukan."});
+    const signed=await buatSignedUrlIdentitas(row.storage_path);
+    res.setHeader("Cache-Control","private, no-store, max-age=0");
+    res.redirect(302,signed);
+  }catch(error){
+    console.error("BUKA DOKUMEN IDENTITAS ERROR:",error);
+    res.status(503).json({ok:false,message:"Dokumen belum dapat dibuka."});
+  }
+});
+
 
 /* DATA SAYA + ANGGOTA KELUARGA - WARGA */
 app.get("/api/my-data", requireWarga, async (req, res) => {
