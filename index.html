@@ -1623,12 +1623,12 @@ window._identitasKkFile = window._identitasKkFile || null;
 function tampilkanFotoKamera(jenis,input){
   const file=input?.files?.[0];
   if(!file)return;
-  if(!/^image\/(jpeg|png|webp)$/.test(file.type)){alert("Gunakan foto JPG, PNG, atau WebP dari kamera.");input.value="";return;}
+  if(!/^image\\/(jpeg|png|webp)$/.test(file.type)){alert("Gunakan foto JPG, PNG, atau WebP dari kamera.");input.value="";return;}
   if(file.size>8*1024*1024){alert("Ukuran foto maksimal 8 MB.");input.value="";return;}
+  window._identitasKkFile=file;
   const status=document.getElementById("identitasKKStatus");
-  if(status)status.textContent="✓ Foto KK siap disimpan: "+file.name;
+  if(status)status.textContent="✓ Foto KK siap diproses otomatis: "+file.name;
 }
-
 function tambahFotoKtpKamera(input){
   const file=input?.files?.[0];
   if(!file)return;
