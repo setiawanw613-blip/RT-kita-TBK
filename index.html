@@ -1672,28 +1672,24 @@ function parseKkDariOcr(text){
 function parseAnggotaKkDariOcr(text){
   const lines=String(text||"").replace(/\r/g,"").split("\n").map(x=>x.trim()).filter(Boolean);
   const out=[],seen=new Set();
-  const rels=["Kepala Keluarga","Istri","Suami","Anak","Orang Tua","Lainnya"];
   const cleanName=s=>String(s||"").replace(/[^A-ZÀ-ÿ .'’-]/gi," ").replace(/\s+/g," ").trim();
-  for(let i=0;i<lines.length;i++){
-    const line=lines[i], normalized=line.toUpperCase().replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
+  for(const line of lines){
+    const normalized=line.toUpperCase().replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
     const nikMatch=normalized.match(/\b\d{16}\b/);
     if(!nikMatch||seen.has(nikMatch[0]))continue;
-    const context=lines.slice(Math.max(0,i-2),Math.min(lines.length,i+3)).join(" ");
-    let namePart=line.replace(nikMatch[0]," ").replace(/\b\d+\b/g," ").trim();
-    if(namePart.length<3){
-      for(let j=i-1;j>=Math.max(0,i-2);j--){const candidate=cleanName(lines[j]);if(candidate.length>=3&&!/NIK|NAMA|KARTU|KELUARGA|ALAMAT|PROVINSI|KABUPATEN|KECAMATAN/i.test(candidate)){namePart=candidate;break;}}
-    }
-    const nama=cleanName(namePart);
-    if(nama.length<3||/^(NAMA|NIK|PROVINSI|KABUPATEN|KECAMATAN|KELURAHAN)$/i.test(nama))continue;
-    const relText=context.toLowerCase();
+    // Format tabel KK umumnya: nomor urut, nama lengkap, NIK, lalu kolom identitas.
+    let beforeNik=line.slice(0,line.toUpperCase().indexOf(nikMatch[0])).replace(/^\s*\d{1,2}[.)-]?\s*/,"").trim();
+    const nama=cleanName(beforeNik);
+    if(nama.length<3||/^(NAMA|NIK|PROVINSI|KABUPATEN|KECAMATAN|KELURAHAN)$/i.test(nama)||nama.split(" ").length<2)continue;
+    const afterNik=line.slice(line.toUpperCase().indexOf(nikMatch[0])+16).toLowerCase();
     let hubungan="Lainnya";
-    if(/kepala keluarga/.test(relText))hubungan="Kepala Keluarga";
-    else if(/istri/.test(relText))hubungan="Istri";
-    else if(/suami/.test(relText))hubungan="Suami";
-    else if(/anak/.test(relText))hubungan="Anak";
-    else if(/orang tua|ayah|ibu/.test(relText))hubungan="Orang Tua";
-    const jk=/perempuan|wanita/.test(relText)?"Perempuan":/laki-laki|laki laki|pria/.test(relText)?"Laki-laki":"";
-    out.push({nik:nikMatch[0],nama_lengkap:nama,hubungan_keluarga:hubungan,jenis_kelamin:jk});
+    if(/kepala keluarga/.test(afterNik))hubungan="Kepala Keluarga";
+    else if(/istri/.test(afterNik))hubungan="Istri";
+    else if(/suami/.test(afterNik))hubungan="Suami";
+    else if(/anak/.test(afterNik))hubungan="Anak";
+    else if(/orang tua|ayah|ibu/.test(afterNik))hubungan="Orang Tua";
+    const jenis_kelamin=/perempuan|wanita/.test(afterNik)?"Perempuan":/laki-laki|laki laki|pria/.test(afterNik)?"Laki-laki":"";
+    out.push({nik:nikMatch[0],nama_lengkap:nama,hubungan_keluarga:hubungan,jenis_kelamin});
     seen.add(nikMatch[0]);
   }
   return out;
