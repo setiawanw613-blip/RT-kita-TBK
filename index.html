@@ -1703,7 +1703,6 @@ async function uploadArsipIdentitas(){
     const selected=[{file:kk,kind:"KK"},...ktps.map(file=>({file,kind:"KTP"}))];
     const scanned=[];
     for(let i=0;i<selected.length;i++){
-      progress.textContent="Membaca tulisan "+selected[i].kind+" "+(i+1)+"/"+selected.length+"...";
       progress.textContent="Mengoptimalkan foto "+selected[i].kind+" "+(i+1)+"/"+selected.length+"...";
       const ocrImage=await siapkanGambarOcr(selected[i].file);
       // Baca screenshot dengan tata letak blok terlebih dahulu, lalu simpan teks hasil OCR.
@@ -1785,7 +1784,8 @@ async function uploadArsipIdentitas(){
     progress.textContent="";
     alert(e.message||"Pendataan otomatis gagal. Dokumen belum seluruhnya diproses.");
   }finally{
-    if(worker)await worker.terminate();
+    // Worker OCR sengaja dipertahankan selama halaman aktif untuk menghindari
+    // inisialisasi mesin dan unduhan bahasa berulang pada percobaan berikutnya.
     btn.disabled=false;btn.textContent="⬆️ Upload & Catat Otomatis KK + KTP";
   }
 }
@@ -1795,7 +1795,8 @@ async function siapkanGambarOcr(file){
   // hanya pada salinan OCR. File asli tetap diarsipkan tanpa perubahan.
   const bitmap=await createImageBitmap(file);
   const longest=Math.max(bitmap.width,bitmap.height);
-  const scale=Math.min(1.5,2800/longest);
+  // Batasi ukuran kerja OCR agar lebih ringan di HP tanpa mengubah file arsip asli.
+  const scale=Math.min(1.25,2400/longest);
   const canvas=document.createElement("canvas");
   canvas.width=Math.max(1,Math.round(bitmap.width*scale));
   canvas.height=Math.max(1,Math.round(bitmap.height*scale));
@@ -1812,7 +1813,7 @@ async function siapkanGambarOcr(file){
     }
     ctx.putImageData(image,0,0);
   }catch(e){console.warn("Peningkatan kontras OCR dilewati",e);}
-  return await new Promise(resolve=>canvas.toBlob(blob=>resolve(blob||file),"image/jpeg",0.94));
+  return await new Promise(resolve=>canvas.toBlob(blob=>resolve(blob||file),"image/jpeg",0.90));
 }
 
 async function siapkanPotonganHeaderKk(file){
@@ -1839,17 +1840,59 @@ async function siapkanPotonganHeaderKk(file){
 }
 
 async function loadTesseractIdentitas(){
+  // Simpan pustaka dan worker OCR selama halaman aplikasi masih terbuka.
+  // Pemindaian berikutnya tidak perlu mengunduh/menyiapkan mesin bahasa Indonesia lagi.
   if(!window.Tesseract){
-    await new Promise((resolve,reject)=>{
-      const script=document.createElement("script");
-      script.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
-      script.onload=resolve;script.onerror=()=>reject(new Error("Pustaka OCR tidak dapat dimuat. Periksa koneksi internet."));
-      document.head.appendChild(script);
+    if(!window._rtTesseractScriptPromise){
+      window._rtTesseractScriptPromise=new Promise((resolve,reject)=>{
+        const script=document.createElement("script");
+        script.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+        script.onload=resolve;
+        script.onerror=()=>reject(new Error("Pustaka OCR tidak dapat dimuat. Periksa koneksi internet."));
+        document.head.appendChild(script);
+      }).catch(error=>{
+        window._rtTesseractScriptPromise=null;
+        throw error;
+      });
+    }
+    await window._rtTesseractScriptPromise;
+  }
+
+  if(window._rtIdentitasOcrWorker) return window._rtIdentitasOcrWorker;
+  if(!window._rtIdentitasOcrWorkerPromise){
+    window._rtIdentitasOcrWorkerPromise=window.Tesseract.createWorker("ind",1,{
+      langPath:"https://tessdata.projectnaptha.com/4.0.0",
+      logger:m=>{
+        const progress=document.getElementById("identitasProgress");
+        const percent=Math.round((m.progress||0)*100);
+        if(progress&&m.status==="recognizing text"){
+          progress.textContent="Membaca tulisan... "+percent+"%";
+        }else if(progress&&m.status==="loading language traineddata"){
+          progress.textContent="Menyiapkan OCR bahasa Indonesia... "+percent+"%";
+        }else if(progress&&m.status==="loading tesseract core"){
+          progress.textContent="Menyiapkan mesin OCR... "+percent+"%";
+        }
+      }
+    }).then(worker=>{
+      window._rtIdentitasOcrWorker=worker;
+      return worker;
+    }).catch(error=>{
+      window._rtIdentitasOcrWorkerPromise=null;
+      window._rtIdentitasOcrWorker=null;
+      throw error;
     });
   }
-  return window.Tesseract.createWorker("ind",1,{
-    langPath:"https://tessdata.projectnaptha.com/4.0.0",
-    logger:m=>{if(m.status==="recognizing text")console.log("OCR progress",Math.round((m.progress||0)*100)+"%");}
+  return window._rtIdentitasOcrWorkerPromise;
+}
+
+// Lepaskan worker hanya ketika halaman benar-benar ditinggalkan.
+if(!window._rtTesseractCleanupBound){
+  window._rtTesseractCleanupBound=true;
+  window.addEventListener("pagehide",()=>{
+    const worker=window._rtIdentitasOcrWorker;
+    window._rtIdentitasOcrWorker=null;
+    window._rtIdentitasOcrWorkerPromise=null;
+    if(worker) worker.terminate().catch(()=>{});
   });
 }
 
@@ -1868,7 +1911,7 @@ async function jalankanOcrIdentitas(id){
       await muatArsipIdentitas();
       alert("OCR selesai. Periksa hasil pembacaan dengan dokumen asli.");
     }catch(e){alert("OCR gagal: "+e.message);}
-    finally{if(worker)await worker.terminate();}
+    finally{ /* Worker OCR dipakai ulang agar pemindaian berikutnya lebih cepat. */ }
   };
   input.click();
 }
