@@ -1756,12 +1756,18 @@ async function uploadArsipIdentitas(){
         }finally{headerImage?.close?.();}
         await worker.setParameters({tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",tessedit_char_whitelist:""});
       }else{
-        // KTP dipindai satu kali; pembacaan ulang tersedia dari tombol OCR di arsip.
+        // Setiap KTP diproses mandiri. Foto kedua dan seterusnya tidak boleh
+        // hanya mendapat satu pola OCR karena posisi/kemiringan teks bisa berbeda.
         const ocrImage=await siapkanGambarOcr(selected[i].file);
         try{
-          await worker.setParameters({tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",tessedit_char_whitelist:""});
-          result=await worker.recognize(ocrImage);
-          recognizedText=String(result?.data?.text||"");
+          for(const mode of ["6","11","12","3"]){
+            await worker.setParameters({tessedit_pageseg_mode:mode,preserve_interword_spaces:"1",tessedit_char_whitelist:""});
+            result=await worker.recognize(ocrImage);
+            const passText=String(result?.data?.text||"");
+            recognizedText+=(recognizedText?"\n":"")+passText;
+            const parsedKtp=parseKtpDariOcr(recognizedText);
+            if(parsedKtp.nik&&parsedKtp.nama_lengkap.length>=3)break;
+          }
         }finally{ocrImage?.close?.();}
       }
       scanned.push({...selected[i],ocrText:recognizedText.slice(0,50000),ocrConfidence:Number(result?.data?.confidence||0)});
