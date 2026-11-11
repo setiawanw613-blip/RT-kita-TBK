@@ -1665,10 +1665,7 @@ function parseKkDariOcr(text){
     const at=lines.findIndex(line=>/NO(?:MOR)?\s*\.?\s*KK|KARTU KELUARGA/i.test(line));
     if(at>=0)no_kk=((lines.slice(at,at+3).join(" ").match(/\d[\d\s.-]{14,22}/)||[""])[0].match(/\d/g)||[]).join("").slice(0,16);
   }
-  if(!/^\d{16}$/.test(no_kk)){
-    const candidates=[...source.matchAll(/\b\d{16}\b/g)].map(m=>m[0]);
-    no_kk=candidates[0]||"";
-  }
+
   const kepala_keluarga=ambilFieldOcr(source,[
     /NAMA\s+KEPALA\s+KELUARGA\s*[:：]?\s*([^\n]+)/i,
     /KEPALA\s+KELUARGA\s*[:：]?\s*([^\n]+)/i
