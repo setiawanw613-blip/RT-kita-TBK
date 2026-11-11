@@ -1503,16 +1503,24 @@ async function arsipIdentitasAdmin(){
       </details>
     </div>
     <div class="card">
-      <b style="display:block;margin-bottom:8px">📷 Foto dokumen langsung dari kamera HP</b>
+      <b style="display:block;margin-bottom:8px">📷 Ambil dari kamera HP atau pilih file/galeri</b>
       <label>Foto Kartu Keluarga (KK)</label>
       <input id="identitasKK" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none" onchange="tampilkanFotoKamera('KK',this)">
-      <button class="btn secondary" type="button" style="width:100%;margin:7px 0 14px" onclick="document.getElementById('identitasKK').click()">📷 Ambil Foto KK</button>
+      <input id="identitasKKFile" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="tampilkanFotoKamera('KK',this)">
+      <div style="display:flex;gap:8px;margin:7px 0 14px">
+        <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKK').click()">📷 Kamera KK</button>
+        <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKKFile').click()">📁 File / Galeri KK</button>
+      </div>
       <div id="identitasKKStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KK.</div>
       <label>Foto KTP anggota keluarga (maks. 20 KTP)</label>
       <input id="identitasKTP" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none" onchange="tambahFotoKtpKamera(this)">
-      <button class="btn secondary" type="button" style="width:100%;margin:7px 0 8px" onclick="document.getElementById('identitasKTP').click()">📷 Ambil Foto KTP Anggota</button>
+      <input id="identitasKTPFile" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="tambahFotoKtpKamera(this)">
+      <div style="display:flex;gap:8px;margin:7px 0 8px">
+        <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTP').click()">📷 Kamera KTP</button>
+        <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTPFile').click()">📁 File / Galeri KTP</button>
+      </div>
       <div id="identitasKTPStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KTP.</div>
-      <p class="muted" style="font-size:11px">Foto satu KTP, lalu tekan tombol lagi untuk memotret anggota berikutnya. Gunakan foto terang, utuh, dan tidak buram. Tidak perlu memilih file dari galeri.</p>
+      <p class="muted" style="font-size:11px">Bisa memotret langsung atau memilih foto yang sudah tersimpan. Ulangi untuk setiap KTP anggota keluarga.</p>
       <button id="btnUploadIdentitas" class="btn" type="button" onclick="uploadArsipIdentitas()">⬆️ Simpan Foto KK dan KTP</button>
       <div id="identitasProgress" class="muted" style="font-size:12px;margin-top:8px"></div>
     </div>
@@ -1641,7 +1649,7 @@ async function buatKeluargaIdentitas(){
   }catch(e){alert(e.message);}
 }
 
-window._identitasKtpCameraFiles = window._identitasKtpCameraFiles || [];
+window._identitasKtpCameraFiles = window._identitasKtpCameraFiles || [];\nwindow._identitasKkFile = window._identitasKkFile || null;
 
 function tampilkanFotoKamera(jenis,input){
   const file=input?.files?.[0];
@@ -1666,7 +1674,7 @@ function tambahFotoKtpKamera(input){
 
 async function uploadArsipIdentitas(){
   const familyId=document.getElementById("identitasFamily")?.value;
-  const kk=document.getElementById("identitasKK")?.files?.[0];
+  const kk=window._identitasKkFile || document.getElementById("identitasKK")?.files?.[0];
   const ktps=Array.from(window._identitasKtpCameraFiles||[]);
   if(!familyId){alert("Pilih atau buat data keluarga terlebih dahulu.");return;}
   if(!kk||!ktps.length){alert("Wajib unggah satu KK dan minimal satu KTP.");return;}
