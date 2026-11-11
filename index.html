@@ -1589,6 +1589,7 @@ function renderArsipIdentitas(){
       <div class="muted" style="font-size:11px;margin:3px 0 8px">No. KK: •••• ${esc(String(f.no_kk||"").slice(-4))} · ${esc(f.alamat||"")}</div>
       <b style="font-size:12px">Kartu Keluarga (${kk.length})</b>${kk.map(docCard).join("")||'<p class="muted" style="font-size:12px">KK belum diunggah.</p>'}
       <b style="font-size:12px;display:block;margin-top:10px">KTP Anggota (${ktp.length})</b>${ktp.map(docCard).join("")||'<p class="muted" style="font-size:12px">KTP belum diunggah.</p>'}
+      <button class="btn secondary" style="width:100%;margin:8px 0 0;font-size:12px" onclick="cetakSalinanDataKeluarga(${Number(f.id)})">📄 Cetak Salinan Data Keluarga</button>
     </div>`;
   }).join("")||'<p class="muted">Tidak ada arsip keluarga.</p>';
 }
@@ -1718,6 +1719,11 @@ async function jalankanOcrIdentitas(id){
     finally{if(worker)await worker.terminate();}
   };
   input.click();
+}
+
+function cetakSalinanDataKeluarga(id){
+  const win=window.open("/api/identitas/keluarga/"+encodeURIComponent(id)+"/salinan","_blank","noopener");
+  if(!win)alert("Izinkan pop-up untuk membuka salinan data.");
 }
 
 function bukaCetakIdentitas(id){
