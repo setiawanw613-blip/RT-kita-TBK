@@ -1719,7 +1719,9 @@ async function uploadArsipIdentitas(){
     const scanned=[];
     for(let i=0;i<selected.length;i++){
       progress.textContent="Membaca tulisan "+selected[i].kind+" "+(i+1)+"/"+selected.length+"...";
-      progress.textContent="Mengoptimalkan foto "+selected[i].kind+" "+(i+1)+"/"+selected.length+"...";\n      const ocrImage=await siapkanGambarOcr(selected[i].file);\n      const result=await worker.recognize(ocrImage);
+      progress.textContent="Mengoptimalkan foto "+selected[i].kind+" "+(i+1)+"/"+selected.length+"...";
+      const ocrImage=await siapkanGambarOcr(selected[i].file);
+      const result=await worker.recognize(ocrImage);
       scanned.push({...selected[i],ocrText:String(result?.data?.text||"").slice(0,50000)});
     }
     const parsedKk=parseKkDariOcr(scanned[0].ocrText);
