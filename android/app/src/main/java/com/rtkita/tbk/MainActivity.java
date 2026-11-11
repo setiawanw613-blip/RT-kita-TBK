@@ -4,8 +4,14 @@ import android.app.Activity;
 import android.app.DownloadManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
+import android.content.ClipData;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.Build;
+import android.webkit.MimeTypeMap;
+import androidx.core.content.FileProvider;
+import java.io.File;
+import java.io.IOException;
 import android.os.Bundle;
 import android.os.Environment;
 import android.webkit.CookieManager;
@@ -25,6 +31,8 @@ public class MainActivity extends Activity {
     private static final int FILE_CHOOSER_REQUEST = 4102;
     private WebView webView;
     private ValueCallback<Uri[]> fileCallback;
+    private Uri pendingCameraUri;
+    private File pendingCameraFile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -115,14 +123,40 @@ public class MainActivity extends Activity {
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
+        clearPendingCamera();
                 fileCallback = callback;
                 try {
+                    // WebView params.createIntent() membuka pemilih galeri dan mengabaikan
+                    // atribut HTML capture="environment". Tangani capture secara native.
+                    if (params.isCaptureEnabled() && acceptsImage(params.getAcceptTypes())) {
+                        Intent camera = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+                        if (camera.resolveActivity(getPackageManager()) != null) {
+                            File pictures = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
+                            if (pictures == null) throw new IOException("Folder kamera tidak tersedia");
+                            if (!pictures.exists() && !pictures.mkdirs()) {
+                                throw new IOException("Folder kamera tidak dapat dibuat");
+                            }
+                            pendingCameraFile = File.createTempFile("RTTBK_KAMERA_", ".jpg", pictures);
+                            pendingCameraUri = FileProvider.getUriForFile(
+                                    MainActivity.this,
+                                    getPackageName() + ".fileprovider",
+                                    pendingCameraFile
+                            );
+                            camera.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, pendingCameraUri);
+                            camera.setClipData(ClipData.newRawUri("Foto dokumen RT TBK", pendingCameraUri));
+                            camera.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
+                                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            startActivityForResult(camera, FILE_CHOOSER_REQUEST);
+                            return true;
+                        }
+                    }
                     Intent intent = params.createIntent();
                     startActivityForResult(intent, FILE_CHOOSER_REQUEST);
                     return true;
-                } catch (ActivityNotFoundException e) {
+                } catch (ActivityNotFoundException | IOException e) {
+                    clearPendingCamera();
                     fileCallback = null;
-                    Toast.makeText(MainActivity.this, "Tidak dapat membuka pemilih berkas", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(MainActivity.this, "Kamera tidak dapat dibuka. Silakan coba lagi.", Toast.LENGTH_LONG).show();
                     return false;
                 }
             }
@@ -130,6 +164,21 @@ public class MainActivity extends Activity {
 
         if (savedInstanceState == null) webView.loadUrl(HOME);
         else webView.restoreState(savedInstanceState);
+    }
+
+    private boolean acceptsImage(String[] types) {
+        if (types == null || types.length == 0) return false;
+        for (String type : types) {
+            if (type != null && (type.equalsIgnoreCase("image/*")
+                    || type.toLowerCase().startsWith("image/"))) return true;
+        }
+        return false;
+    }
+
+    private void clearPendingCamera() {
+        if (pendingCameraFile != null && pendingCameraFile.exists()) pendingCameraFile.delete();
+        pendingCameraFile = null;
+        pendingCameraUri = null;
     }
 
     private void openExternal(Uri uri) {
@@ -143,7 +192,18 @@ public class MainActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode == FILE_CHOOSER_REQUEST && fileCallback != null) {
-            Uri[] result = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+            Uri[] result;
+            if (pendingCameraUri != null) {
+                if (resultCode == RESULT_OK && pendingCameraFile != null
+                        && pendingCameraFile.exists() && pendingCameraFile.length() > 0) {
+                    result = new Uri[]{pendingCameraUri};
+                } else {
+                    result = null;
+                    clearPendingCamera();
+                }
+            } else {
+                result = WebChromeClient.FileChooserParams.parseResult(resultCode, data);
+            }
             fileCallback.onReceiveValue(result);
             fileCallback = null;
         }
