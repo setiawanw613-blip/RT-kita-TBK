@@ -1504,7 +1504,7 @@ async function arsipIdentitasAdmin(){
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTPFile').click()">📁 File / Galeri KTP</button>
       </div>
       <div id="identitasKTPStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KTP.</div>
-      <p class="muted" style="font-size:11px">Bisa memotret langsung atau memilih foto yang sudah tersimpan. Ulangi untuk setiap KTP anggota keluarga.</p>
+      <p class="muted" style="font-size:11px">Jika dokumen berbentuk PDF: buka PDF, screenshot satu halaman KK penuh dan setiap KTP, lalu pilih screenshot dari Galeri. Pastikan nomor dan tulisan jelas, tidak terpotong, dan tidak buram. Ulangi untuk setiap KTP anggota keluarga.</p>
       <button id="btnUploadIdentitas" class="btn" type="button" onclick="uploadArsipIdentitas()">⬆️ Upload & Catat Otomatis KK + KTP</button>
       <div id="identitasProgress" class="muted" style="font-size:12px;margin-top:8px"></div>
     </div>
@@ -1672,9 +1672,19 @@ function parseKkDariOcr(text){
     }
   }
   if(!no_kk){
-    const direct=ambilFieldOcr(source,[/(?:NO(?:MOR)?\s*\.?\s*KK|NOMOR\s*KARTU\s*KELUARGA)\s*[:：]?\s*([0-9\s.-]{16,25})/i]);
-    const digits=(direct.match(/\d/g)||[]).join("");
+    const direct=ambilFieldOcr(source,[/(?:NO(?:MOR)?\s*\.?\s*KK|NOMOR\s*KARTU\s*KELUARGA)\s*[:：]?\s*([0-9OQIlSBZ\s.-]{16,30})/i]);
+    const digits=direct.toUpperCase().replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2").replace(/\D/g,"");
     if(digits.length===16)no_kk=digits;
+  }
+  // Cadangan untuk hasil screenshot PDF: beberapa OCR menghilangkan label "No. KK".
+  // Cari nomor 16 digit di bagian paling atas KK terlebih dahulu (sebelum daftar NIK anggota).
+  if(!no_kk){
+    const topText=lines.slice(0,12).join(" ").slice(0,1800).toUpperCase();
+    const candidates=topText.match(/[0-9OQIlSBZ][0-9OQIlSBZ\s.-]{14,25}/g)||[];
+    for(const candidate of candidates){
+      const digits=candidate.replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2").replace(/\D/g,"");
+      if(digits.length===16){no_kk=digits;break;}
+    }
   }
   const kepala_keluarga=ambilFieldOcr(source,[
     /NAMA\s+KEPALA\s+KELUARGA\s*[:：]?\s*([^\n]+)/i,
@@ -1690,7 +1700,8 @@ function parseKtpDariOcr(text){
   let nik=ambilFieldOcr(source,[/NIK\s*[:：]?\s*([0-9\s.-]{16,24})/i]);
   nik=(nik.match(/\d/g)||[]).join("");
   if(!/^\d{16}$/.test(nik)){
-    const m=source.match(/\b\d{16}\b/);nik=m?m[0]:"";
+    const normalized=source.toUpperCase().replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
+    const m=normalized.match(/\b\d{16}\b/);nik=m?m[0]:"";
   }
   const nama=ambilFieldOcr(source,[/NAMA\s*[:：]?\s*([^\n]+)/i]);
   const jkText=ambilFieldOcr(source,[/JENIS\s*KELAMIN\s*[:：]?\s*([^\n]+)/i]);
@@ -1721,8 +1732,18 @@ async function uploadArsipIdentitas(){
       progress.textContent="Membaca tulisan "+selected[i].kind+" "+(i+1)+"/"+selected.length+"...";
       progress.textContent="Mengoptimalkan foto "+selected[i].kind+" "+(i+1)+"/"+selected.length+"...";
       const ocrImage=await siapkanGambarOcr(selected[i].file);
-      const result=await worker.recognize(ocrImage);
-      scanned.push({...selected[i],ocrText:String(result?.data?.text||"").slice(0,50000)});
+      // Baca screenshot dengan tata letak blok terlebih dahulu, lalu simpan teks hasil OCR.
+      await worker.setParameters({tessedit_pageseg_mode:"6",preserve_interword_spaces:"1"});
+      let result=await worker.recognize(ocrImage);
+      let recognizedText=String(result?.data?.text||"");
+      // Jika nomor KK belum tampak, coba mode sparse text yang lebih toleran pada screenshot.
+      if(selected[i].kind==="KK"&&!/^\d{16}$/.test(parseKkDariOcr(recognizedText).no_kk)){
+        await worker.setParameters({tessedit_pageseg_mode:"11",preserve_interword_spaces:"1"});
+        result=await worker.recognize(ocrImage);
+        const alternateText=String(result?.data?.text||"");
+        if(alternateText.length>recognizedText.length)recognizedText=alternateText;
+      }
+      scanned.push({...selected[i],ocrText:recognizedText.slice(0,50000)});
     }
     const parsedKk=parseKkDariOcr(scanned[0].ocrText);
     if(!/^\d{16}$/.test(parsedKk.no_kk)){
@@ -1781,17 +1802,28 @@ async function uploadArsipIdentitas(){
 }
 
 async function siapkanGambarOcr(file){
-  // OCR bekerja pada salinan gambar yang diperkecil; arsip tetap memakai foto asli.
+  // Screenshot PDF sering beresolusi sedang; besarkan bila kecil dan tingkatkan kontras
+  // hanya pada salinan OCR. File asli tetap diarsipkan tanpa perubahan.
   const bitmap=await createImageBitmap(file);
-  const maxSide=2000,scale=Math.min(1,maxSide/Math.max(bitmap.width,bitmap.height));
-  if(scale===1){bitmap.close?.();return file;}
+  const longest=Math.max(bitmap.width,bitmap.height);
+  const scale=Math.min(1.5,2800/longest);
   const canvas=document.createElement("canvas");
   canvas.width=Math.max(1,Math.round(bitmap.width*scale));
   canvas.height=Math.max(1,Math.round(bitmap.height*scale));
-  const ctx=canvas.getContext("2d",{willReadFrequently:false});
+  const ctx=canvas.getContext("2d",{willReadFrequently:true});
   ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
   bitmap.close?.();
-  return await new Promise(resolve=>canvas.toBlob(blob=>resolve(blob||file),"image/jpeg",0.88));
+  try{
+    const image=ctx.getImageData(0,0,canvas.width,canvas.height);
+    const pixels=image.data;
+    for(let i=0;i<pixels.length;i+=4){
+      const gray=0.299*pixels[i]+0.587*pixels[i+1]+0.114*pixels[i+2];
+      const enhanced=Math.max(0,Math.min(255,(gray-128)*1.22+128));
+      pixels[i]=pixels[i+1]=pixels[i+2]=enhanced;
+    }
+    ctx.putImageData(image,0,0);
+  }catch(e){console.warn("Peningkatan kontras OCR dilewati",e);}
+  return await new Promise(resolve=>canvas.toBlob(blob=>resolve(blob||file),"image/jpeg",0.94));
 }
 
 async function loadTesseractIdentitas(){
