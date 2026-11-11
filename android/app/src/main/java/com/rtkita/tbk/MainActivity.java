@@ -7,8 +7,6 @@ import android.content.Context;
 import android.content.ClipData;
 import android.content.Intent;
 import android.net.Uri;
-import android.os.Build;
-import android.webkit.MimeTypeMap;
 import androidx.core.content.FileProvider;
 import java.io.File;
 import java.io.IOException;
@@ -123,7 +121,7 @@ public class MainActivity extends Activity {
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
-        clearPendingCamera();
+                clearPendingCamera();
                 fileCallback = callback;
                 try {
                     // WebView params.createIntent() membuka pemilih galeri dan mengabaikan
@@ -224,6 +222,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         if (fileCallback != null) fileCallback.onReceiveValue(null);
+        clearPendingCamera();
         if (webView != null) webView.destroy();
         super.onDestroy();
     }
