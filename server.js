@@ -2069,7 +2069,7 @@ app.post("/api/identitas/:id/anggota-otomatis", requireAdmin, async(req,res)=>{
     if(warga&&String(warga.keluarga_id)!==String(doc.keluarga_id))
       return res.status(409).json({ok:false,message:"NIK sudah terdaftar pada keluarga lain. Dokumen disimpan tetapi tidak dibuat sebagai warga ganda."});
     if(!warga){
-      const namaNormal=s=>String(s||"").normalize("NFKD").replace(/[\\u0300-\\u036f]/g,"").toUpperCase().replace(/[^A-Z0-9]/g,"");
+      const namaNormal=s=>String(s||"").normalize("NFKD").toUpperCase().replace(/[^A-Z0-9]/g,"");
       const relasiAman=family.kepala_keluarga&&namaNormal(nama)===namaNormal(family.kepala_keluarga)
         ? "Kepala Keluarga"
         : (["Istri","Suami","Anak","Orang Tua","Lainnya","Anggota Keluarga"].includes(hubungan)?hubungan:"Anggota Keluarga");
