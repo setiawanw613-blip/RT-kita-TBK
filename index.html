@@ -1603,28 +1603,29 @@ async function uploadArsipIdentitas(){
   const progress=document.getElementById("identitasProgress");
   btn.disabled=true;btn.textContent="Mengunggah...";
   try{
-    const form=new FormData();
-    form.append("keluarga_id",familyId);
-    form.append("kk",kk);
-    ktps.forEach(f=>form.append("ktp",f));
-    const result=await api("/api/identitas/upload",{method:"POST",body:form});
-    progress.textContent="Dokumen tersimpan. OCR gambar sedang diproses di perangkat ini...";
-    const fileQueue={KK:[kk],KTP:Array.from(document.getElementById("identitasKTP")?.files||[])};
-    const imageDocs=result.documents.filter(d=>d.mime_type!=="application/pdf");
-    let worker=null;
-    if(imageDocs.length)worker=await loadTesseractIdentitas();
-    for(let i=0;i<result.documents.length;i++){
-      const doc=result.documents[i];
-      const file=(fileQueue[doc.jenis_dokumen]||[]).shift();
-      if(doc.mime_type!=="application/pdf"&&file&&worker){
+    const selected=[{file:kk,kind:"KK"},...ktps.map(file=>({file,kind:"KTP"}))];
+    const worker=selected.some(x=>x.file.type!=="application/pdf")?await loadTesseractIdentitas():null;
+    for(let i=0;i<selected.length;i++){
+      const item=selected[i],file=item.file;
+      progress.textContent="Menyiapkan "+item.kind+" "+(i+1)+"/"+selected.length+"...";
+      const signed=await api("/api/identitas/upload-url",{method:"POST",body:JSON.stringify({
+        keluarga_id:familyId,jenis_dokumen:item.kind,mime_type:file.type,ukuran_bytes:file.size,nama_file:file.name
+      })});
+      const uploaded=await fetch(signed.upload_url,{method:"PUT",headers:{"Content-Type":file.type,"x-upsert":"false"},body:file});
+      if(!uploaded.ok)throw new Error("Gagal mengunggah "+file.name+". Periksa koneksi dan coba lagi.");
+      const registered=await api("/api/identitas/register-upload",{method:"POST",body:JSON.stringify({
+        keluarga_id:familyId,storage_path:signed.storage_path,jenis_dokumen:item.kind,mime_type:file.type,
+        ukuran_bytes:file.size,nama_file:file.name
+      })});
+      const doc=registered.document;
+      if(file.type!=="application/pdf"&&worker){
         try{
+          progress.textContent="Membaca teks "+item.kind+" "+(i+1)+"/"+selected.length+"...";
           const ocr=await worker.recognize(file);
           const textOcr=String(ocr?.data?.text||"").slice(0,50000);
           await api("/api/identitas/"+doc.id+"/ocr",{method:"PATCH",body:JSON.stringify({ocr_text:textOcr})});
-          const niks=[...new Set(textOcr.match(/\b\d{16}\b/g)||[])];
-          progress.textContent="OCR "+(i+1)+"/"+result.documents.length+" selesai · kandidat NIK: "+niks.length+". Periksa hasilnya di arsip.";
         }catch(ocrError){
-          progress.textContent="Dokumen tersimpan; OCR satu file gagal. Dokumen tetap bisa dicetak.";
+          progress.textContent="Dokumen tersimpan; OCR gagal pada "+file.name+". Dokumen tetap dapat dicetak.";
         }
       }
     }
