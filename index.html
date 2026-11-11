@@ -1503,12 +1503,17 @@ async function arsipIdentitasAdmin(){
       </details>
     </div>
     <div class="card">
-      <label>Upload satu KK (JPG/PNG/WebP/PDF, maks. 8 MB)</label>
-      <input id="identitasKK" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" style="width:100%;margin:7px 0 14px">
-      <label>Upload KTP semua anggota keluarga (maks. 20 file, masing-masing 8 MB)</label>
-      <input id="identitasKTP" type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf" style="width:100%;margin:7px 0 12px">
-      <p class="muted" style="font-size:11px">Satu file untuk satu KTP. Gunakan foto yang terang, utuh, dan tidak buram.</p>
-      <button id="btnUploadIdentitas" class="btn" type="button" onclick="uploadArsipIdentitas()">⬆️ Upload KK dan KTP</button>
+      <b style="display:block;margin-bottom:8px">📷 Foto dokumen langsung dari kamera HP</b>
+      <label>Foto Kartu Keluarga (KK)</label>
+      <input id="identitasKK" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none" onchange="tampilkanFotoKamera('KK',this)">
+      <button class="btn secondary" type="button" style="width:100%;margin:7px 0 14px" onclick="document.getElementById('identitasKK').click()">📷 Ambil Foto KK</button>
+      <div id="identitasKKStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KK.</div>
+      <label>Foto KTP anggota keluarga (maks. 20 KTP)</label>
+      <input id="identitasKTP" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none" onchange="tambahFotoKtpKamera(this)">
+      <button class="btn secondary" type="button" style="width:100%;margin:7px 0 8px" onclick="document.getElementById('identitasKTP').click()">📷 Ambil Foto KTP Anggota</button>
+      <div id="identitasKTPStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KTP.</div>
+      <p class="muted" style="font-size:11px">Foto satu KTP, lalu tekan tombol lagi untuk memotret anggota berikutnya. Gunakan foto terang, utuh, dan tidak buram. Tidak perlu memilih file dari galeri.</p>
+      <button id="btnUploadIdentitas" class="btn" type="button" onclick="uploadArsipIdentitas()">⬆️ Simpan Foto KK dan KTP</button>
       <div id="identitasProgress" class="muted" style="font-size:12px;margin-top:8px"></div>
     </div>
     <div class="card">
@@ -1636,10 +1641,33 @@ async function buatKeluargaIdentitas(){
   }catch(e){alert(e.message);}
 }
 
+window._identitasKtpCameraFiles = window._identitasKtpCameraFiles || [];
+
+function tampilkanFotoKamera(jenis,input){
+  const file=input?.files?.[0];
+  if(!file)return;
+  if(!/^image\\/(jpeg|png|webp)$/.test(file.type)){alert("Gunakan foto JPG, PNG, atau WebP dari kamera.");input.value="";return;}
+  if(file.size>8*1024*1024){alert("Ukuran foto maksimal 8 MB.");input.value="";return;}
+  const status=document.getElementById("identitasKKStatus");
+  if(status)status.textContent="✓ Foto KK siap disimpan: "+file.name;
+}
+
+function tambahFotoKtpKamera(input){
+  const file=input?.files?.[0];
+  if(!file)return;
+  if(!/^image\\/(jpeg|png|webp)$/.test(file.type)){alert("Gunakan foto JPG, PNG, atau WebP dari kamera.");input.value="";return;}
+  if(file.size>8*1024*1024){alert("Ukuran foto maksimal 8 MB.");input.value="";return;}
+  if(window._identitasKtpCameraFiles.length>=20){alert("Maksimal 20 foto KTP untuk satu keluarga.");input.value="";return;}
+  window._identitasKtpCameraFiles.push(file);
+  const status=document.getElementById("identitasKTPStatus");
+  if(status)status.textContent="✓ "+window._identitasKtpCameraFiles.length+" foto KTP siap disimpan: "+window._identitasKtpCameraFiles.map((f,i)=>(i+1)+". "+f.name).join(" · ");
+  input.value="";
+}
+
 async function uploadArsipIdentitas(){
   const familyId=document.getElementById("identitasFamily")?.value;
   const kk=document.getElementById("identitasKK")?.files?.[0];
-  const ktps=Array.from(document.getElementById("identitasKTP")?.files||[]);
+  const ktps=Array.from(window._identitasKtpCameraFiles||[]);
   if(!familyId){alert("Pilih atau buat data keluarga terlebih dahulu.");return;}
   if(!kk||!ktps.length){alert("Wajib unggah satu KK dan minimal satu KTP.");return;}
   if(ktps.length>20){alert("Maksimal 20 file KTP dalam satu kali unggah.");return;}
@@ -1679,6 +1707,9 @@ async function uploadArsipIdentitas(){
     if(worker){await worker.terminate();worker=null;}
     document.getElementById("identitasKK").value="";
     document.getElementById("identitasKTP").value="";
+    window._identitasKtpCameraFiles=[];
+    document.getElementById("identitasKKStatus").textContent="Belum ada foto KK.";
+    document.getElementById("identitasKTPStatus").textContent="Belum ada foto KTP.";
     await muatArsipIdentitas();
     progress.textContent="Selesai. Dokumen asli tersimpan privat; hasil OCR menunggu pemeriksaan Ketua RT.";
     alert("Dokumen KK dan KTP berhasil diarsipkan. Periksa hasil OCR dan cocokkan dengan dokumen asli sebelum verifikasi.");
@@ -1708,7 +1739,7 @@ async function loadTesseractIdentitas(){
 
 async function jalankanOcrIdentitas(id){
   const input=document.createElement("input");
-  input.type="file";input.accept="image/jpeg,image/png,image/webp";
+  input.type="file";input.accept="image/jpeg,image/png,image/webp";input.capture="environment";
   input.onchange=async()=>{
     const file=input.files?.[0];if(!file)return;
     if(file.size>8*1024*1024){alert("Ukuran gambar maksimal 8 MB.");return;}
