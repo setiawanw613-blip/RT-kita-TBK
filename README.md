@@ -49,5 +49,5 @@ GitHub Actions memeriksa sintaks file JavaScript, konfigurasi, dan pengujian oto
 - File yang didukung: JPG, PNG, WebP, PDF; maksimal 8 MB per file; maksimal 20 file KTP per pengiriman.
 - Gambar dapat dibaca OCR di browser menggunakan Tesseract.js Bahasa Indonesia + Inggris. PDF disimpan dan dapat dicetak, tetapi OCR otomatis PDF belum diaktifkan.
 - OCR hanya menghasilkan teks/kandidat NIK. Ketua RT wajib mencocokkan data dengan dokumen asli; sistem tidak melakukan validasi Dukcapil dan tidak otomatis membuat/mengubah data warga.
-- Tombol **Lihat / Cetak** membuka dokumen asli melalui tautan bertanda tangan yang berlaku 5 menit. Setelah terbuka, gunakan fitur cetak browser/perangkat.
+- Tombol **Lihat / Cetak** membuka dokumen asli melalui tautan bertanda tangan yang berlaku 5 menit. Tombol **Cetak Salinan Data Keluarga** membuat PDF administratif dari database warga, bukan dokumen identitas resmi.
 - Migrasi: `supabase/migrations/20261111063759_create_private_resident_identity_documents.sql`.
