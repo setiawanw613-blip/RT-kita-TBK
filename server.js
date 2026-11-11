@@ -2250,6 +2250,8 @@ app.post("/api/identitas/:id/anggota", requireAdmin, async(req,res)=>{
     if(!family)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
     const existing=await supabaseRequest("warga",{query:"select=id,keluarga_id,nama_lengkap,nik&nik=eq."+encodeURIComponent(nik)+"&limit=1"});
     let warga=Array.isArray(existing)?existing[0]:null;
+    if(doc.warga_id&&(!warga||String(warga.id)!==String(doc.warga_id)))
+      return res.status(409).json({ok:false,message:"Dokumen KTP ini sudah terhubung ke anggota keluarga lain."});
     if(warga&&String(warga.keluarga_id)!==String(doc.keluarga_id))
       return res.status(409).json({ok:false,message:"NIK ini sudah terdaftar pada keluarga lain. Periksa kemungkinan data ganda."});
     if(!warga){
