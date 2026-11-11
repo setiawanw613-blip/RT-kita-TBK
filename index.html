@@ -1672,25 +1672,28 @@ function parseKkDariOcr(text){
 function parseAnggotaKkDariOcr(text){
   const lines=String(text||"").replace(/\r/g,"").split("\n").map(x=>x.trim()).filter(Boolean);
   const out=[],seen=new Set();
-  const cleanName=s=>String(s||"").replace(/[^A-ZÀ-ÿ .'’-]/gi," ").replace(/\s+/g," ").trim();
+  const normalizeDigits=s=>String(s||"").toUpperCase().replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
+  const cleanName=s=>String(s||"").replace(/^\s*\d{1,2}[.)-]?\s*/,"").replace(/[^A-ZÀ-ÿ .'’-]/gi," ").replace(/\s+/g," ").trim();
+  // NIK pada hasil OCR kadang dipisah spasi atau tanda baca oleh kolom tabel.
+  const nikPattern=/[0-9OQILSBZ](?:[\s.-]*[0-9OQILSBZ]){15}/gi;
   for(const line of lines){
-    const normalized=line.toUpperCase().replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
-    const nikMatch=normalized.match(/\b\d{16}\b/);
-    if(!nikMatch||seen.has(nikMatch[0]))continue;
-    // Format tabel KK umumnya: nomor urut, nama lengkap, NIK, lalu kolom identitas.
-    let beforeNik=line.slice(0,line.toUpperCase().indexOf(nikMatch[0])).replace(/^\s*\d{1,2}[.)-]?\s*/,"").trim();
-    const nama=cleanName(beforeNik);
-    if(nama.length<3||/^(NAMA|NIK|PROVINSI|KABUPATEN|KECAMATAN|KELURAHAN)$/i.test(nama)||nama.split(" ").length<2)continue;
-    const afterNik=line.slice(line.toUpperCase().indexOf(nikMatch[0])+16).toLowerCase();
-    let hubungan="Lainnya";
-    if(/kepala keluarga/.test(afterNik))hubungan="Kepala Keluarga";
-    else if(/istri/.test(afterNik))hubungan="Istri";
-    else if(/suami/.test(afterNik))hubungan="Suami";
-    else if(/anak/.test(afterNik))hubungan="Anak";
-    else if(/orang tua|ayah|ibu/.test(afterNik))hubungan="Orang Tua";
-    const jenis_kelamin=/perempuan|wanita/.test(afterNik)?"Perempuan":/laki-laki|laki laki|pria/.test(afterNik)?"Laki-laki":"";
-    out.push({nik:nikMatch[0],nama_lengkap:nama,hubungan_keluarga:hubungan,jenis_kelamin});
-    seen.add(nikMatch[0]);
+    let match;
+    while((match=nikPattern.exec(line))){
+      const nik=normalizeDigits(match[0]).replace(/\D/g,"");
+      if(!/^\d{16}$/.test(nik)||seen.has(nik))continue;
+      const nama=cleanName(line.slice(0,match.index));
+      if(nama.length<3||nama.split(" ").length<2||/^(NAMA|NIK|PROVINSI|KABUPATEN|KECAMATAN|KELURAHAN)$/i.test(nama))continue;
+      const afterNik=line.slice(match.index+match[0].length).toLowerCase();
+      let hubungan="Lainnya";
+      if(/kepala keluarga/.test(afterNik))hubungan="Kepala Keluarga";
+      else if(/istri/.test(afterNik))hubungan="Istri";
+      else if(/suami/.test(afterNik))hubungan="Suami";
+      else if(/anak/.test(afterNik))hubungan="Anak";
+      else if(/orang tua|ayah|ibu/.test(afterNik))hubungan="Orang Tua";
+      const jenis_kelamin=/perempuan|wanita/.test(afterNik)?"Perempuan":/laki-laki|laki laki|pria/.test(afterNik)?"Laki-laki":"";
+      out.push({nik,nama_lengkap:nama,hubungan_keluarga:hubungan,jenis_kelamin});
+      seen.add(nik);
+    }
   }
   return out;
 }
@@ -1715,7 +1718,7 @@ function parseKtpDariOcr(text){
 async function uploadArsipIdentitas(){
   const kk=window._identitasKkFile||document.getElementById("identitasKK")?.files?.[0];
   const ktps=Array.from(window._identitasKtpCameraFiles||[]);
-  if(!kk||!ktps.length){alert("Ambil foto satu KK dan minimal satu KTP anggota keluarga.");return;}
+  if(!kk){alert("Ambil foto satu Kartu Keluarga terlebih dahulu.");return;}
   const all=[kk,...ktps];
   if(all.some(f=>f.size>8*1024*1024)){alert("Setiap file maksimal 8 MB.");return;}
   if(ktps.length>20){alert("Maksimal 20 foto KTP.");return;}
