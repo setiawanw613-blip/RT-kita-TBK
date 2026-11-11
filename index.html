@@ -1669,6 +1669,35 @@ function parseKkDariOcr(text){
   const parts=rtRw.split(/[\/|]/).map(x=>x.trim());
   return {no_kk,kepala_keluarga,alamat,rt:parts[0]||"004",rw:parts[1]||"01"};
 }
+function parseAnggotaKkDariOcr(text){
+  const lines=String(text||"").replace(/\r/g,"").split("\n").map(x=>x.trim()).filter(Boolean);
+  const out=[],seen=new Set();
+  const rels=["Kepala Keluarga","Istri","Suami","Anak","Orang Tua","Lainnya"];
+  const cleanName=s=>String(s||"").replace(/[^A-ZÀ-ÿ .'’-]/gi," ").replace(/\s+/g," ").trim();
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i], normalized=line.toUpperCase().replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
+    const nikMatch=normalized.match(/\b\d{16}\b/);
+    if(!nikMatch||seen.has(nikMatch[0]))continue;
+    const context=lines.slice(Math.max(0,i-2),Math.min(lines.length,i+3)).join(" ");
+    let namePart=line.replace(nikMatch[0]," ").replace(/\b\d+\b/g," ").trim();
+    if(namePart.length<3){
+      for(let j=i-1;j>=Math.max(0,i-2);j--){const candidate=cleanName(lines[j]);if(candidate.length>=3&&!/NIK|NAMA|KARTU|KELUARGA|ALAMAT|PROVINSI|KABUPATEN|KECAMATAN/i.test(candidate)){namePart=candidate;break;}}
+    }
+    const nama=cleanName(namePart);
+    if(nama.length<3||/^(NAMA|NIK|PROVINSI|KABUPATEN|KECAMATAN|KELURAHAN)$/i.test(nama))continue;
+    const relText=context.toLowerCase();
+    let hubungan="Lainnya";
+    if(/kepala keluarga/.test(relText))hubungan="Kepala Keluarga";
+    else if(/istri/.test(relText))hubungan="Istri";
+    else if(/suami/.test(relText))hubungan="Suami";
+    else if(/anak/.test(relText))hubungan="Anak";
+    else if(/orang tua|ayah|ibu/.test(relText))hubungan="Orang Tua";
+    const jk=/perempuan|wanita/.test(relText)?"Perempuan":/laki-laki|laki laki|pria/.test(relText)?"Laki-laki":"";
+    out.push({nik:nikMatch[0],nama_lengkap:nama,hubungan_keluarga:hubungan,jenis_kelamin:jk});
+    seen.add(nikMatch[0]);
+  }
+  return out;
+}
 function parseKtpDariOcr(text){
   const source=String(text||"").replace(/\r/g,"");
   let nik=ambilFieldOcr(source,[/NIK\s*[:：]?\s*([0-9\s.-]{16,24})/i]);
@@ -1740,6 +1769,13 @@ async function uploadArsipIdentitas(){
     progress.textContent="Membuat/mencocokkan data keluarga dari nomor KK yang sudah diperiksa...";
     const familyResult=await api("/api/identitas/keluarga-otomatis",{method:"POST",body:JSON.stringify(parsedKk)});
     const familyId=String(familyResult.family.id);
+    const anggotaDariKk=parseAnggotaKkDariOcr(scanned[0].ocrText);
+    let anggotaKkCount=0;
+    if(anggotaDariKk.length){
+      progress.textContent="Mencatat "+anggotaDariKk.length+" kandidat anggota dari KK...";
+      const saved=await api("/api/identitas/keluarga/"+encodeURIComponent(familyId)+"/anggota-kk",{method:"POST",body:JSON.stringify({anggota:anggotaDariKk})});
+      anggotaKkCount=Number(saved.created||0);
+    }
     let autoCount=0,unreadable=0,duplicates=0;
     for(let i=0;i<scanned.length;i++){
       const item=scanned[i],file=item.file;
@@ -1779,7 +1815,7 @@ async function uploadArsipIdentitas(){
     document.getElementById("identitasKTPStatus").textContent="Belum ada foto KTP.";
     await muatArsipIdentitas();
     progress.textContent="Selesai. "+autoCount+" KTP terbaca jelas dan dicatat otomatis; "+unreadable+" KTP menunggu input manual; "+duplicates+" NIK perlu pemeriksaan duplikasi.";
-    alert("Selesai! Nomor KK sudah diperiksa Ketua RT. "+autoCount+" KTP dengan hasil OCR jelas dicatat otomatis. "+unreadable+" KTP perlu diperiksa dan diisi manual pada formulir di bagian Arsip tersimpan. "+duplicates+" NIK perlu pemeriksaan duplikasi. Semua data baru menunggu verifikasi Ketua RT.");
+    alert("Selesai! Nomor KK sudah diperiksa. "+anggotaKkCount+" anggota terdeteksi dari KK dan dicatat menunggu verifikasi. "+autoCount+" KTP dicocokkan otomatis. "+unreadable+" KTP perlu pemeriksaan manual. "+duplicates+" NIK perlu pemeriksaan duplikasi. Periksa kembali nama dan hubungan keluarga sebelum mengaktifkan data.");
   }catch(e){
     progress.textContent="";
     alert(e.message||"Pendataan otomatis gagal. Dokumen belum seluruhnya diproses.");
