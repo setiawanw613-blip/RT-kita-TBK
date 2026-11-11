@@ -1646,7 +1646,7 @@ window._identitasKtpCameraFiles = window._identitasKtpCameraFiles || [];
 function tampilkanFotoKamera(jenis,input){
   const file=input?.files?.[0];
   if(!file)return;
-  if(!/^image\\/(jpeg|png|webp)$/.test(file.type)){alert("Gunakan foto JPG, PNG, atau WebP dari kamera.");input.value="";return;}
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type)){alert("Gunakan foto JPG, PNG, atau WebP dari kamera.");input.value="";return;}
   if(file.size>8*1024*1024){alert("Ukuran foto maksimal 8 MB.");input.value="";return;}
   const status=document.getElementById("identitasKKStatus");
   if(status)status.textContent="✓ Foto KK siap disimpan: "+file.name;
@@ -1655,7 +1655,7 @@ function tampilkanFotoKamera(jenis,input){
 function tambahFotoKtpKamera(input){
   const file=input?.files?.[0];
   if(!file)return;
-  if(!/^image\\/(jpeg|png|webp)$/.test(file.type)){alert("Gunakan foto JPG, PNG, atau WebP dari kamera.");input.value="";return;}
+  if(!/^image\/(jpeg|png|webp)$/.test(file.type)){alert("Gunakan foto JPG, PNG, atau WebP dari kamera.");input.value="";return;}
   if(file.size>8*1024*1024){alert("Ukuran foto maksimal 8 MB.");input.value="";return;}
   if(window._identitasKtpCameraFiles.length>=20){alert("Maksimal 20 foto KTP untuk satu keluarga.");input.value="";return;}
   window._identitasKtpCameraFiles.push(file);
