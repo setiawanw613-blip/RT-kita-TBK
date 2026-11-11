@@ -2277,6 +2277,59 @@ app.post("/api/identitas/:id/anggota", requireAdmin, async(req,res)=>{
   }
 });
 
+
+app.get("/api/identitas/keluarga/:id/salinan", requireAdmin, async(req,res)=>{
+  try{
+    const id=String(req.params.id||"");
+    if(!/^[0-9]+$/.test(id))return res.status(400).json({ok:false,message:"ID keluarga tidak valid."});
+    const familyRows=await supabaseRequest("keluarga",{query:"select=id,no_kk,kepala_keluarga,alamat,rt,rw,created_at&id=eq."+encodeURIComponent(id)+"&limit=1"});
+    const family=Array.isArray(familyRows)?familyRows[0]:null;
+    if(!family)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
+    const members=await supabaseRequest("warga",{
+      query:"select=nik,nama_lengkap,jenis_kelamin,tempat_lahir,tanggal_lahir,hubungan_keluarga,status_warga&keluarga_id=eq."+encodeURIComponent(id)+"&order=created_at.asc"
+    });
+    const rows=Array.isArray(members)?members:[];
+    res.setHeader("Content-Type","application/pdf");
+    res.setHeader("Content-Disposition",`inline; filename="salinan-data-keluarga-${id}.pdf"`);
+    res.setHeader("Cache-Control","private, no-store, max-age=0");
+    const pdf=new PDFDocument({size:"A4",margin:48,bufferPages:true});
+    pdf.pipe(res);
+    pdf.fontSize(17).font("Helvetica-Bold").text("RT TBK — DATA WARGA", {align:"center"});
+    pdf.moveDown(0.3);
+    pdf.fontSize(13).text("SALINAN DATA KELUARGA", {align:"center"});
+    pdf.moveDown(0.5);
+    pdf.fontSize(9).font("Helvetica").fillColor("#7c2d12")
+      .text("SALINAN ADMINISTRATIF — BUKAN DOKUMEN IDENTITAS RESMI", {align:"center"});
+    pdf.fillColor("#111827").moveDown(1);
+    pdf.fontSize(10).font("Helvetica-Bold").text("Identitas Keluarga");
+    pdf.moveDown(0.4);
+    pdf.font("Helvetica").text("Nomor KK: "+(family.no_kk||"-"));
+    pdf.text("Kepala Keluarga: "+(family.kepala_keluarga||"-"));
+    pdf.text("Alamat: "+(family.alamat||"-"));
+    pdf.text("RT/RW: "+(family.rt||"-")+" / "+(family.rw||"-"));
+    pdf.moveDown(1);
+    pdf.font("Helvetica-Bold").fontSize(10).text("Daftar Anggota Keluarga ("+rows.length+")");
+    pdf.moveDown(0.4);
+    rows.forEach((w,index)=>{
+      if(pdf.y>700)pdf.addPage();
+      pdf.font("Helvetica-Bold").fontSize(9).text((index+1)+". "+(w.nama_lengkap||"-"));
+      pdf.font("Helvetica").fontSize(8)
+        .text("NIK: "+(w.nik||"-")+"   |   Hubungan: "+(w.hubungan_keluarga||"-"))
+        .text("Jenis kelamin: "+(w.jenis_kelamin||"-")+"   |   Tempat/tanggal lahir: "+(w.tempat_lahir||"-")+" / "+(w.tanggal_lahir||"-"))
+        .text("Status pendataan: "+(w.status_warga||"-"));
+      pdf.moveDown(0.5);
+    });
+    pdf.moveDown(1);
+    pdf.fontSize(8).fillColor("#64748b")
+      .text("Dicetak melalui aplikasi RT TBK. Data bersumber dari database administrasi RT dan harus diperiksa kembali oleh petugas.",{align:"left"});
+    pdf.end();
+  }catch(error){
+    console.error("CETAK SALINAN DATA KELUARGA ERROR:",error);
+    if(!res.headersSent)res.status(500).json({ok:false,message:"Gagal membuat salinan data keluarga."});
+    else res.end();
+  }
+});
+
 app.get("/api/identitas/:id/file", requireAdmin, async (req,res) => {
   try{
     const id=String(req.params.id||"");
