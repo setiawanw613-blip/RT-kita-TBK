@@ -1825,53 +1825,89 @@ async function uploadArsipIdentitas(){
   }
 }
 
-async function siapkanGambarOcr(file){
-  // Screenshot PDF sering beresolusi sedang; besarkan bila kecil dan tingkatkan kontras
-  // hanya pada salinan OCR. File asli tetap diarsipkan tanpa perubahan.
-  const bitmap=await createImageBitmap(file);
-  const longest=Math.max(bitmap.width,bitmap.height);
-  // Batasi ukuran kerja OCR agar lebih ringan di HP tanpa mengubah file arsip asli.
-  const scale=Math.min(1.25,2400/longest);
-  const canvas=document.createElement("canvas");
-  canvas.width=Math.max(1,Math.round(bitmap.width*scale));
-  canvas.height=Math.max(1,Math.round(bitmap.height*scale));
-  const ctx=canvas.getContext("2d",{willReadFrequently:true});
-  ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
-  bitmap.close?.();
+async function bukaGambarUntukOcr(file){
+  // Android WebView tertentu gagal pada createImageBitmap untuk foto dari kamera.
+  // Coba jalur Image + object URL sebagai fallback sebelum menyatakan file rusak.
   try{
+    if(typeof createImageBitmap==="function"){
+      const bitmap=await createImageBitmap(file);
+      return {image:bitmap,cleanup:()=>bitmap.close?.()};
+    }
+  }catch(bitmapError){
+    console.warn("createImageBitmap gagal, mencoba decoder browser",bitmapError);
+  }
+  const objectUrl=URL.createObjectURL(file);
+  try{
+    const image=await new Promise((resolve,reject)=>{
+      const el=new Image();
+      el.onload=()=>resolve(el);
+      el.onerror=()=>reject(new Error("Browser tidak dapat membaca format foto "+(file.name||"yang dipilih")+". Gunakan JPG atau PNG."));
+      el.src=objectUrl;
+    });
+    return {image,cleanup:()=>URL.revokeObjectURL(objectUrl)};
+  }catch(error){
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+}
+
+async function siapkanGambarOcr(file){
+  // Optimalkan salinan OCR saja; file asli tetap dipakai untuk arsip.
+  const decoded=await bukaGambarUntukOcr(file);
+  const source=decoded.image;
+  try{
+    const longest=Math.max(source.width,source.height);
+    if(!longest)throw new Error("Ukuran foto tidak valid: "+(file.name||"foto"));
+    const scale=Math.min(1.25,2400/longest);
+    const canvas=document.createElement("canvas");
+    canvas.width=Math.max(1,Math.round(source.width*scale));
+    canvas.height=Math.max(1,Math.round(source.height*scale));
+    const ctx=canvas.getContext("2d",{willReadFrequently:true});
+    if(!ctx)throw new Error("Browser tidak dapat menyiapkan gambar untuk OCR.");
+    ctx.drawImage(source,0,0,canvas.width,canvas.height);
+    try{
+      const image=ctx.getImageData(0,0,canvas.width,canvas.height);
+      const pixels=image.data;
+      for(let i=0;i<pixels.length;i+=4){
+        const gray=0.299*pixels[i]+0.587*pixels[i+1]+0.114*pixels[i+2];
+        const enhanced=Math.max(0,Math.min(255,(gray-128)*1.22+128));
+        pixels[i]=pixels[i+1]=pixels[i+2]=enhanced;
+      }
+      ctx.putImageData(image,0,0);
+    }catch(e){console.warn("Peningkatan kontras OCR dilewati",e);}
+    const blob=await new Promise((resolve,reject)=>canvas.toBlob(
+      result=>result?resolve(result):reject(new Error("Gagal mengubah foto "+(file.name||"dokumen")+" menjadi JPEG untuk OCR.")),
+      "image/jpeg",0.90
+    ));
+    return blob;
+  }finally{decoded.cleanup();}
+}
+
+async function siapkanPotonganHeaderKk(file){
+  const decoded=await bukaGambarUntukOcr(file);
+  const source=decoded.image;
+  try{
+    const cropHeight=Math.max(1,Math.round(source.height*0.46));
+    const scale=Math.min(2.2,3200/source.width,1800/cropHeight);
+    const canvas=document.createElement("canvas");
+    canvas.width=Math.max(1,Math.round(source.width*scale));
+    canvas.height=Math.max(1,Math.round(cropHeight*scale));
+    const ctx=canvas.getContext("2d",{willReadFrequently:true});
+    if(!ctx)throw new Error("Browser tidak dapat menyiapkan bagian nomor KK.");
+    ctx.drawImage(source,0,0,source.width,cropHeight,0,0,canvas.width,canvas.height);
     const image=ctx.getImageData(0,0,canvas.width,canvas.height);
     const pixels=image.data;
     for(let i=0;i<pixels.length;i+=4){
       const gray=0.299*pixels[i]+0.587*pixels[i+1]+0.114*pixels[i+2];
-      const enhanced=Math.max(0,Math.min(255,(gray-128)*1.22+128));
+      const enhanced=Math.max(0,Math.min(255,(gray-128)*1.5+128));
       pixels[i]=pixels[i+1]=pixels[i+2]=enhanced;
     }
     ctx.putImageData(image,0,0);
-  }catch(e){console.warn("Peningkatan kontras OCR dilewati",e);}
-  return await new Promise(resolve=>canvas.toBlob(blob=>resolve(blob||file),"image/jpeg",0.90));
-}
-
-async function siapkanPotonganHeaderKk(file){
-  const bitmap=await createImageBitmap(file);
-  // Nomor KK umumnya berada di area kepala dokumen; baca area itu terpisah
-  // dengan pembesaran agar angka tidak kalah oleh tabel anggota keluarga.
-  const cropHeight=Math.max(1,Math.round(bitmap.height*0.46));
-  const scale=Math.min(2.2,3200/bitmap.width,1800/cropHeight);
-  const canvas=document.createElement("canvas");
-  canvas.width=Math.max(1,Math.round(bitmap.width*scale));
-  canvas.height=Math.max(1,Math.round(cropHeight*scale));
-  const ctx=canvas.getContext("2d",{willReadFrequently:true});
-  ctx.drawImage(bitmap,0,0,bitmap.width,cropHeight,0,0,canvas.width,canvas.height);
-  bitmap.close?.();
-  const image=ctx.getImageData(0,0,canvas.width,canvas.height);
-  const pixels=image.data;
-  for(let i=0;i<pixels.length;i+=4){
-    const gray=0.299*pixels[i]+0.587*pixels[i+1]+0.114*pixels[i+2];
-    const enhanced=Math.max(0,Math.min(255,(gray-128)*1.5+128));
-    pixels[i]=pixels[i+1]=pixels[i+2]=enhanced;
-  }
-  ctx.putImageData(image,0,0);
-  return await new Promise(resolve=>canvas.toBlob(blob=>resolve(blob||file),"image/png"));
+    return await new Promise((resolve,reject)=>canvas.toBlob(
+      blob=>blob?resolve(blob):reject(new Error("Gagal menyiapkan potongan foto KK.")),
+      "image/png"
+    ));
+  }finally{decoded.cleanup();}
 }
 
 async function loadTesseractIdentitas(){
