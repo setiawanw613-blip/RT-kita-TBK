@@ -2112,63 +2112,73 @@ app.post("/api/identitas/keluarga", requireAdmin, async (req, res) => {
   }
 });
 
-app.post("/api/identitas/upload", requireAdmin, uploadDokumenIdentitas.fields([
-  {name:"kk",maxCount:1},
-  {name:"ktp",maxCount:20}
-]), async (req,res) => {
-  const uploadedPaths = [];
+
+app.post("/api/identitas/upload-url", requireAdmin, async (req,res) => {
   try {
-    const keluargaId = String(req.body?.keluarga_id || "").trim();
-    if (!/^\d+$/.test(keluargaId)) return res.status(400).json({ok:false,message:"Pilih keluarga terlebih dahulu."});
-    const familyRows = await supabaseRequest("keluarga", {query:"select=id&id=eq."+encodeURIComponent(keluargaId)+"&limit=1"});
-    if (!Array.isArray(familyRows) || !familyRows.length) return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
-    const kkFiles = req.files?.kk || [];
-    const ktpFiles = req.files?.ktp || [];
-    if (kkFiles.length !== 1 || ktpFiles.length < 1) {
-      return res.status(400).json({ok:false,message:"Unggah tepat satu KK dan minimal satu KTP anggota keluarga."});
+    const keluargaId=String(req.body?.keluarga_id||"").trim();
+    const kind=String(req.body?.jenis_dokumen||"");
+    const mime=String(req.body?.mime_type||"").toLowerCase();
+    const size=Number(req.body?.ukuran_bytes);
+    const originalName=String(req.body?.nama_file||"dokumen").slice(0,180);
+    const allowed=["image/jpeg","image/png","image/webp","application/pdf"];
+    if(!/^\\d+$/.test(keluargaId)||!["KK","KTP"].includes(kind)||!allowed.includes(mime)||!Number.isSafeInteger(size)||size<1||size>8388608)
+      return res.status(400).json({ok:false,message:"Data file tidak valid. Maksimal 8 MB per dokumen."});
+    const familyRows=await supabaseRequest("keluarga",{query:"select=id&id=eq."+encodeURIComponent(keluargaId)+"&limit=1"});
+    if(!Array.isArray(familyRows)||!familyRows.length)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
+    const safeName=originalName.normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-90)||"dokumen";
+    const ext=mime==="application/pdf"?"pdf":mime==="image/jpeg"?"jpg":mime==="image/png"?"png":"webp";
+    const storagePath=String(keluargaId)+"/"+crypto.randomUUID()+"-"+safeName;
+    const encoded=storagePath.split("/").map(encodeURIComponent).join("/");
+    const signedResponse=await fetch(
+      `${SUPABASE_URL}/storage/v1/object/upload/sign/${encodeURIComponent(IDENTITAS_BUCKET)}/${encoded}`,
+      {method:"POST",headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({}),signal:AbortSignal.timeout(10000)}
+    );
+    const signedData=await signedResponse.json().catch(()=>({}));
+    if(!signedResponse.ok||!signedData.url){
+      console.error("CREATE SIGNED IDENTITY UPLOAD ERROR:",signedResponse.status,signedData);
+      return res.status(502).json({ok:false,message:"Tidak dapat menyiapkan unggahan aman."});
     }
-    const files = [
-      ...kkFiles.map(f=>({file:f,kind:"KK"})),
-      ...ktpFiles.map(f=>({file:f,kind:"KTP"}))
-    ];
-    const saved = [];
-    for (const item of files) {
-      const valid = validasiDokumenIdentitas(item.file);
-      if (!valid) throw new Error("Isi file "+item.file.originalname+" tidak sesuai format atau rusak.");
-      const safeName = String(item.file.originalname || "dokumen")
-        .normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-90);
-      const objectPath = `${keluargaId}/${crypto.randomUUID()}-${safeName || "dokumen."+valid.ext}`;
-      await uploadDokumenIdentitasPrivat(objectPath,item.file.buffer,valid.mime);
-      uploadedPaths.push(objectPath);
-      const inserted = await supabaseRequest("dokumen_identitas", {
-        method:"POST",
-        body:{
-          keluarga_id:Number(keluargaId),
-          jenis_dokumen:item.kind,
-          storage_path:objectPath,
-          nama_file:safeName || "dokumen."+valid.ext,
-          mime_type:valid.mime,
-          ukuran_bytes:item.file.size,
-          uploaded_by:String(req.session?.nama || req.session?.username || "Ketua RT").slice(0,120),
-          status_verifikasi:"menunggu_verifikasi"
-        }
-      });
-      const row = Array.isArray(inserted) ? inserted[0] : inserted;
-      saved.push({
-        id:row.id,
-        keluarga_id:row.keluarga_id,
-        jenis_dokumen:row.jenis_dokumen,
-        nama_file:row.nama_file,
-        mime_type:row.mime_type,
-        ukuran_bytes:row.ukuran_bytes,
-        status_verifikasi:row.status_verifikasi
-      });
-    }
-    res.status(201).json({ok:true,message:"Dokumen berhasil diarsipkan secara privat.",documents:saved});
-  } catch (error) {
-    for (const pathObject of uploadedPaths) await hapusDokumenIdentitasPrivat(pathObject);
-    console.error("ARSIP IDENTITAS UPLOAD ERROR:",error);
-    res.status(400).json({ok:false,message:error.message || "Gagal mengunggah dokumen."});
+    const uploadUrl=String(signedData.url).startsWith("http")?signedData.url:
+      `${SUPABASE_URL}/storage/v1${String(signedData.url).startsWith("/")?"":"/"}${signedData.url}`;
+    res.setHeader("Cache-Control","no-store");
+    res.json({ok:true,upload_url:uploadUrl,storage_path:storagePath,jenis_dokumen:kind,mime_type:mime,ukuran_bytes:size,nama_file:safeName});
+  }catch(error){
+    console.error("PREPARE IDENTITY UPLOAD ERROR:",error);
+    res.status(500).json({ok:false,message:"Gagal menyiapkan unggahan dokumen."});
+  }
+});
+
+app.post("/api/identitas/register-upload", requireAdmin, async(req,res)=>{
+  try{
+    const keluargaId=String(req.body?.keluarga_id||"").trim();
+    const storagePath=String(req.body?.storage_path||"");
+    const kind=String(req.body?.jenis_dokumen||"");
+    const mime=String(req.body?.mime_type||"").toLowerCase();
+    const size=Number(req.body?.ukuran_bytes);
+    const name=String(req.body?.nama_file||"dokumen").slice(0,180);
+    if(!/^\\d+$/.test(keluargaId)||!storagePath.startsWith(keluargaId+"/")||!/^\\d+\\/[0-9a-f-]{36}-[a-zA-Z0-9._-]{1,90}$/i.test(storagePath)||
+      !["KK","KTP"].includes(kind)||!["image/jpeg","image/png","image/webp","application/pdf"].includes(mime)||
+      !Number.isSafeInteger(size)||size<1||size>8388608)
+      return res.status(400).json({ok:false,message:"Metadata dokumen tidak valid."});
+    const encoded=storagePath.split("/").map(encodeURIComponent).join("/");
+    const head=await fetch(`${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(IDENTITAS_BUCKET)}/${encoded}`,{
+      method:"HEAD",headers:{apikey:SUPABASE_KEY,Authorization:`Bearer ${SUPABASE_KEY}`},signal:AbortSignal.timeout(10000)
+    });
+    if(!head.ok)return res.status(409).json({ok:false,message:"File belum berhasil masuk ke penyimpanan."});
+    const actualType=String(head.headers.get("content-type")||"").split(";")[0].toLowerCase();
+    if(actualType&&actualType!==mime)return res.status(400).json({ok:false,message:"Jenis file yang tersimpan tidak cocok."});
+    const inserted=await supabaseRequest("dokumen_identitas",{
+      method:"POST",
+      body:{keluarga_id:Number(keluargaId),jenis_dokumen:kind,storage_path:storagePath,nama_file:name,mime_type:mime,
+        ukuran_bytes:size,uploaded_by:String(req.session?.nama||req.session?.username||"Ketua RT").slice(0,120),
+        status_verifikasi:"menunggu_verifikasi"}
+    });
+    const row=Array.isArray(inserted)?inserted[0]:inserted;
+    res.status(201).json({ok:true,document:{id:row.id,keluarga_id:row.keluarga_id,jenis_dokumen:row.jenis_dokumen,
+      nama_file:row.nama_file,mime_type:row.mime_type,ukuran_bytes:row.ukuran_bytes,status_verifikasi:row.status_verifikasi}});
+  }catch(error){
+    console.error("REGISTER IDENTITY UPLOAD ERROR:",error);
+    res.status(500).json({ok:false,message:"File sudah diunggah, tetapi pencatatan arsip gagal. Hubungi pengelola."});
   }
 });
 
