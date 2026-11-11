@@ -1675,12 +1675,14 @@ function parseAnggotaKkDariOcr(text){
   const normalizeDigits=s=>String(s||"").toUpperCase().replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
   const cleanName=s=>String(s||"").replace(/^\s*\d{1,2}[.)-]?\s*/,"").replace(/[^A-ZÀ-ÿ .'’-]/gi," ").replace(/\s+/g," ").trim();
   // NIK pada hasil OCR kadang dipisah spasi atau tanda baca oleh kolom tabel.
-  const nikPattern=/[0-9OQILSBZ](?:[\s.-]*[0-9OQILSBZ]){15}/gi;
+  const nikPattern=/(?<![A-Z0-9])[0-9OQILSBZ](?:[ \t.-]*[0-9OQILSBZ]){15}(?![A-Z0-9])/gi;
   for(const line of lines){
     let match;
     while((match=nikPattern.exec(line))){
-      const nik=normalizeDigits(match[0]).replace(/\D/g,"");
-      if(!/^\d{16}$/.test(nik)||seen.has(nik))continue;
+      const rawNik=match[0].toUpperCase();
+      const digitCount=(rawNik.match(/\d/g)||[]).length;
+      const nik=normalizeDigits(rawNik).replace(/\D/g,"");
+      if(digitCount<14||!/^\d{16}$/.test(nik)||seen.has(nik))continue;
       const nama=cleanName(line.slice(0,match.index));
       if(nama.length<3||nama.split(" ").length<2||/^(NAMA|NIK|PROVINSI|KABUPATEN|KECAMATAN|KELURAHAN)$/i.test(nama))continue;
       const afterNik=line.slice(match.index+match[0].length).toLowerCase();
