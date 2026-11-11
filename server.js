@@ -2059,19 +2059,25 @@ app.post("/api/identitas/:id/anggota-otomatis", requireAdmin, async(req,res)=>{
     const docs=await supabaseRequest("dokumen_identitas",{query:"select=id,keluarga_id,jenis_dokumen,warga_id&id=eq."+encodeURIComponent(docId)+"&limit=1"});
     const doc=Array.isArray(docs)?docs[0]:null;
     if(!doc||doc.jenis_dokumen!=="KTP")return res.status(404).json({ok:false,message:"Arsip KTP tidak ditemukan."});
-    const familyRows=await supabaseRequest("keluarga",{query:"select=id,no_kk,alamat,rt,rw&id=eq."+encodeURIComponent(String(doc.keluarga_id))+"&limit=1"});
+    const familyRows=await supabaseRequest("keluarga",{query:"select=id,no_kk,kepala_keluarga,alamat,rt,rw&id=eq."+encodeURIComponent(String(doc.keluarga_id))+"&limit=1"});
     const family=Array.isArray(familyRows)?familyRows[0]:null;
     if(!family)return res.status(404).json({ok:false,message:"Data keluarga hasil pembacaan KK tidak ditemukan."});
     const existing=await supabaseRequest("warga",{query:"select=id,keluarga_id,nama_lengkap,nik&nik=eq."+encodeURIComponent(nik)+"&limit=1"});
     let warga=Array.isArray(existing)?existing[0]:null;
+    if(doc.warga_id&&(!warga||String(warga.id)!==String(doc.warga_id)))
+      return res.status(409).json({ok:false,message:"Foto KTP ini sudah tertaut ke anggota lain. Periksa arsip sebelum mengubahnya."});
     if(warga&&String(warga.keluarga_id)!==String(doc.keluarga_id))
       return res.status(409).json({ok:false,message:"NIK sudah terdaftar pada keluarga lain. Dokumen disimpan tetapi tidak dibuat sebagai warga ganda."});
     if(!warga){
+      const namaNormal=s=>String(s||"").normalize("NFKD").toUpperCase().replace(/[^A-Z0-9]/g,"");
+      const relasiAman=family.kepala_keluarga&&namaNormal(nama)===namaNormal(family.kepala_keluarga)
+        ? "Kepala Keluarga"
+        : (["Istri","Suami","Anak","Orang Tua","Lainnya","Anggota Keluarga"].includes(hubungan)?hubungan:"Anggota Keluarga");
       const inserted=await supabaseRequest("warga",{method:"POST",body:{
         nama_lengkap:nama,nik,no_kk:family.no_kk,jenis_kelamin:jenisKelamin||null,
         tempat_lahir:tempatLahir||null,tanggal_lahir:tanggalLahir||null,
         alamat:family.alamat||"",rt:family.rt||"004",rw:family.rw||"01",
-        hubungan_keluarga:hubungan,keluarga_id:doc.keluarga_id,
+        hubungan_keluarga:relasiAman,keluarga_id:doc.keluarga_id,
         status_warga:"menunggu_verifikasi"
       }});
       warga=Array.isArray(inserted)?inserted[0]:inserted;

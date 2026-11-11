@@ -1767,16 +1767,14 @@ async function uploadArsipIdentitas(){
     if(nomorKkDiperiksa===null)throw new Error("Pendataan dibatalkan. Belum ada data keluarga yang dibuat.");
     parsedKk.no_kk=String(nomorKkDiperiksa).replace(/\D/g,"");
     if(!/^\d{16}$/.test(parsedKk.no_kk))throw new Error("Nomor KK harus tepat 16 digit. Periksa foto KK dan masukkan nomor yang benar.");
-    progress.textContent="Membuat/mencocokkan data keluarga dari nomor KK yang sudah diperiksa...";
+    // Jangan menebak kepala keluarga atau membuat anggota dari tabel OCR KK.
+    // OCR tabel dapat menggeser kolom sehingga anak pernah terbaca sebagai kepala keluarga.
+    const namaKepalaDikonfirmasi=prompt("Ketik nama KEPALA KELUARGA persis seperti pada KK. Kosongkan jika belum yakin:", "");
+    if(namaKepalaDikonfirmasi===null)throw new Error("Pendataan dibatalkan sebelum data keluarga dibuat.");
+    parsedKk.kepala_keluarga=namaKepalaDikonfirmasi.trim().slice(0,120);
+    progress.textContent="Membuat/mencocokkan data keluarga. Anggota hanya dicatat dari KTP masing-masing...";
     const familyResult=await api("/api/identitas/keluarga-otomatis",{method:"POST",body:JSON.stringify(parsedKk)});
     const familyId=String(familyResult.family.id);
-    const anggotaDariKk=parseAnggotaKkDariOcr(scanned[0].ocrText);
-    let anggotaKkCount=0;
-    if(anggotaDariKk.length){
-      progress.textContent="Mencatat "+anggotaDariKk.length+" kandidat anggota dari KK...";
-      const saved=await api("/api/identitas/keluarga/"+encodeURIComponent(familyId)+"/anggota-kk",{method:"POST",body:JSON.stringify({anggota:anggotaDariKk})});
-      anggotaKkCount=Number(saved.created||0);
-    }
     let autoCount=0,unreadable=0,duplicates=0;
     for(let i=0;i<scanned.length;i++){
       const item=scanned[i],file=item.file;
@@ -1794,7 +1792,7 @@ async function uploadArsipIdentitas(){
       await api("/api/identitas/"+doc.id+"/ocr",{method:"PATCH",body:JSON.stringify({ocr_text:item.ocrText})});
       if(item.kind==="KTP"){
         const parsed=parseKtpDariOcr(item.ocrText);
-        if(parsed.nik&&parsed.nama_lengkap.length>=2&&Number(item.ocrConfidence||0)>=85){
+        if(parsed.nik&&parsed.nama_lengkap.length>=2){
           try{
             await api("/api/identitas/"+doc.id+"/anggota-otomatis",{method:"POST",body:JSON.stringify(parsed)});
             autoCount++;
@@ -1816,7 +1814,7 @@ async function uploadArsipIdentitas(){
     document.getElementById("identitasKTPStatus").textContent="Belum ada foto KTP.";
     await muatArsipIdentitas();
     progress.textContent="Selesai. "+autoCount+" KTP terbaca jelas dan dicatat otomatis; "+unreadable+" KTP menunggu input manual; "+duplicates+" NIK perlu pemeriksaan duplikasi.";
-    alert("Selesai! Nomor KK sudah diperiksa. "+anggotaKkCount+" anggota terdeteksi dari KK dan dicatat menunggu verifikasi. "+autoCount+" KTP dicocokkan otomatis. "+unreadable+" KTP perlu pemeriksaan manual. "+duplicates+" NIK perlu pemeriksaan duplikasi. Periksa kembali nama dan hubungan keluarga sebelum mengaktifkan data.");
+    alert("Selesai! "+autoCount+" foto KTP berhasil dicocokkan dan dicatat. "+unreadable+" foto KTP tersimpan di arsip tetapi perlu pemeriksaan manual karena nama/NIK belum terbaca. "+duplicates+" NIK perlu pemeriksaan duplikasi. Data warga tetap menunggu verifikasi Ketua RT.");
   }catch(e){
     progress.textContent="";
     alert(e.message||"Pendataan otomatis gagal. Dokumen belum seluruhnya diproses.");
