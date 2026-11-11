@@ -1547,7 +1547,13 @@ function renderArsipIdentitas(){
   const docs=window._identitasDocuments||[];
   const families=window._identitasFamilies||[];
   if(!docs.length){box.innerHTML='<p class="muted">Belum ada dokumen yang diarsipkan.</p>';return;}
-  box.innerHTML=families.map(f=>{
+  const linked=docs.filter(d=>d.warga_id).length;
+  const pending=docs.filter(d=>d.status_verifikasi!=="terverifikasi").length;
+  box.innerHTML=`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-bottom:12px">
+    <div style="background:#eff6ff;border-radius:9px;padding:9px;text-align:center"><b>${families.length}</b><div style="font-size:10px;color:#64748b">Keluarga</div></div>
+    <div style="background:#f0fdf4;border-radius:9px;padding:9px;text-align:center"><b>${linked}</b><div style="font-size:10px;color:#64748b">KTP terhubung</div></div>
+    <div style="background:#fff7ed;border-radius:9px;padding:9px;text-align:center"><b>${pending}</b><div style="font-size:10px;color:#64748b">Perlu verifikasi</div></div>
+  </div>`+families.map(f=>{
     const list=docs.filter(d=>String(d.keluarga_id)===String(f.id));
     if(!list.length)return "";
     const kk=list.filter(d=>d.jenis_dokumen==="KK");
@@ -1560,6 +1566,17 @@ function renderArsipIdentitas(){
         <div style="font-size:11px;color:#64748b;margin:4px 0">${Math.max(1,Math.round(Number(d.ukuran_bytes||0)/1024))} KB · <span style="background:${statusColor};padding:2px 6px;border-radius:10px">${status}</span></div>
         ${Array.isArray(d.ocr_data?.nik_candidates)&&d.ocr_data.nik_candidates.length?'<div style="font-size:11px;color:#475569;margin-top:5px">Kandidat NIK: '+d.ocr_data.nik_candidates.map(esc).join(', ')+' · wajib dicocokkan</div>':''}
         ${d.ocr_text?'<details><summary style="font-size:12px;cursor:pointer">Lihat hasil OCR</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto">'+esc(d.ocr_text)+'</pre></details>':''}
+        ${d.jenis_dokumen==="KTP"&&!d.warga_id?`<details style="margin-top:8px"><summary style="font-size:12px;font-weight:700;cursor:pointer;color:#174a82">＋ Catat sebagai anggota keluarga</summary>
+          <div style="padding-top:8px">
+            <label>Nama lengkap</label><input id="anggotaNama_${Number(d.id)}" value="${esc(d.ocr_data?.nama_candidate||"")}" maxlength="120">
+            <label>NIK (16 digit)</label><input id="anggotaNik_${Number(d.id)}" inputmode="numeric" maxlength="16" value="${esc(d.ocr_data?.nik_candidates?.[0]||"")}">
+            <label>Jenis kelamin</label><select id="anggotaJK_${Number(d.id)}"><option value="">Pilih</option><option>Laki-laki</option><option>Perempuan</option></select>
+            <label>Tempat lahir</label><input id="anggotaTempat_${Number(d.id)}">
+            <label>Tanggal lahir</label><input id="anggotaTanggal_${Number(d.id)}" type="date">
+            <label>Hubungan keluarga</label><select id="anggotaHubungan_${Number(d.id)}"><option value="">Pilih</option><option>Kepala Keluarga</option><option>Istri</option><option>Suami</option><option>Anak</option><option>Orang Tua</option><option>Lainnya</option></select>
+            <button class="btn" style="margin:8px 0 0;padding:8px 10px;font-size:12px" onclick="simpanAnggotaDariKtp(${Number(d.id)})">Simpan anggota ke database</button>
+          </div>
+        </details>`:d.warga_id?'<div style="font-size:11px;color:#166534;margin-top:6px">✓ Terhubung dengan database anggota keluarga</div>':''}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
           <button class="btn" style="margin:0;padding:7px 10px;font-size:12px" onclick="bukaCetakIdentitas(${Number(d.id)})">🖨️ Lihat / Cetak</button>
           ${d.mime_type!=="application/pdf"&&!d.ocr_text?'<button class="btn secondary" style="margin:0;padding:7px 10px;font-size:12px" onclick="jalankanOcrIdentitas('+Number(d.id)+')">🔎 OCR</button>':''}
@@ -1574,6 +1591,28 @@ function renderArsipIdentitas(){
       <b style="font-size:12px;display:block;margin-top:10px">KTP Anggota (${ktp.length})</b>${ktp.map(docCard).join("")||'<p class="muted" style="font-size:12px">KTP belum diunggah.</p>'}
     </div>`;
   }).join("")||'<p class="muted">Tidak ada arsip keluarga.</p>';
+}
+
+
+async function simpanAnggotaDariKtp(id){
+  const get=suffix=>document.getElementById(suffix+"_"+id)?.value?.trim()||"";
+  const data={
+    nama_lengkap:get("anggotaNama"),
+    nik:get("anggotaNik"),
+    jenis_kelamin:get("anggotaJK"),
+    tempat_lahir:get("anggotaTempat"),
+    tanggal_lahir:get("anggotaTanggal"),
+    hubungan_keluarga:get("anggotaHubungan")
+  };
+  if(!data.nama_lengkap||!data.nik||!data.jenis_kelamin||!data.hubungan_keluarga){
+    alert("Nama, NIK, jenis kelamin, dan hubungan keluarga wajib diisi.");return;
+  }
+  if(!/^\\d{16}$/.test(data.nik)){alert("NIK harus tepat 16 digit.");return;}
+  try{
+    const result=await api("/api/identitas/"+id+"/anggota",{method:"POST",body:JSON.stringify(data)});
+    alert(result.message||"Anggota keluarga tersimpan.");
+    await muatArsipIdentitas();
+  }catch(e){alert(e.message);}
 }
 
 async function buatKeluargaIdentitas(){
