@@ -1547,7 +1547,6 @@ function renderArsipIdentitas(){
   if(!box)return;
   const docs=window._identitasDocuments||[];
   const families=window._identitasFamilies||[];
-  if(!docs.length){box.innerHTML='<p class="muted">Belum ada dokumen yang diarsipkan.</p>';return;}
   const linked=docs.filter(d=>d.warga_id).length;
   const pending=docs.filter(d=>d.status_verifikasi!=="terverifikasi").length;
   const residents=window._identitasResidents||[];
@@ -1597,7 +1596,7 @@ function renderArsipIdentitas(){
       <b style="font-size:12px;display:block;margin-top:10px">KTP Anggota (${ktp.length})</b>${ktp.map(docCard).join("")||'<p class="muted" style="font-size:12px">KTP belum diunggah.</p>'}
       <button class="btn secondary" style="width:100%;margin:8px 0 0;font-size:12px" onclick="cetakSalinanDataKeluarga(${Number(f.id)})">📄 Cetak Salinan Data Keluarga</button>
     </div>`;
-  }).join("")||'<p class="muted">Tidak ada arsip keluarga.</p>';
+  }).join("")||(docs.length?'<p class="muted">Tidak ada arsip keluarga.</p>':'<p class="muted">Belum ada dokumen yang diarsipkan.</p>');
 }
 
 
