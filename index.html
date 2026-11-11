@@ -1484,7 +1484,7 @@ async function arsipIdentitasAdmin(){
     <div class="card">
       <h3 style="margin-top:0">Pendataan dokumen keluarga</h3>
       <p class="muted" style="font-size:12px">Khusus Ketua RT. Unggah satu KK dan beberapa KTP. File disimpan privat dan hanya dapat dibuka petugas berwenang.</p>
-      <p class="muted" style="font-size:12px;margin:6px 0 0">Tidak perlu memilih atau membuat keluarga. Sistem akan membaca nomor KK, membuat/mencocokkan data keluarga, lalu memasukkan data setiap KTP secara otomatis.</p>
+      <p class="muted" style="font-size:12px;margin:6px 0 0">Sistem membaca KK dan KTP secara otomatis. Ketua RT wajib memeriksa nomor KK; bila buram atau hasil OCR salah, nomor dapat diketik manual. KTP yang tidak terbaca jelas akan menampilkan formulir input manual.</p>
     </div>
     <div class="card">
       <b style="display:block;margin-bottom:8px">📷 Ambil dari kamera HP atau pilih file/galeri</b>
@@ -1557,12 +1557,13 @@ function renderArsipIdentitas(){
     const docCard=d=>{
       const status=d.status_verifikasi==="terverifikasi"?"Terverifikasi":d.status_verifikasi==="perlu_perbaikan"?"Perlu perbaikan":"Menunggu verifikasi";
       const statusColor=d.status_verifikasi==="terverifikasi"?"#dcfce7":d.status_verifikasi==="perlu_perbaikan"?"#fee2e2":"#fef3c7";
+      const parsedManual=d.jenis_dokumen==="KTP"&&!d.warga_id?parseKtpDariOcr(d.ocr_text||""):{};
       return `<div style="border:1px solid #e2e8f0;border-radius:10px;padding:10px;margin:7px 0">
         <div style="font-weight:700;font-size:13px">${d.jenis_dokumen==="KK"?"📄 KK":"🪪 KTP"} — ${esc(d.nama_file)}</div>
         <div style="font-size:11px;color:#64748b;margin:4px 0">${Math.max(1,Math.round(Number(d.ukuran_bytes||0)/1024))} KB · <span style="background:${statusColor};padding:2px 6px;border-radius:10px">${status}</span></div>
         ${Array.isArray(d.ocr_data?.nik_candidates)&&d.ocr_data.nik_candidates.length?'<div style="font-size:11px;color:#475569;margin-top:5px">Kandidat NIK: '+d.ocr_data.nik_candidates.map(esc).join(', ')+' · wajib dicocokkan</div>':''}
         ${d.ocr_text?'<details><summary style="font-size:12px;cursor:pointer">Lihat hasil OCR</summary><pre style="white-space:pre-wrap;font-size:11px;max-height:160px;overflow:auto">'+esc(d.ocr_text)+'</pre></details>':''}
-        ${d.jenis_dokumen==="KTP"?(d.warga_id?'<div style="font-size:11px;color:#166534;margin-top:6px">✓ Data KTP sudah dicatat otomatis ke Data Warga</div>':'<div style="font-size:11px;color:#9a3412;margin-top:6px">Belum berhasil dibaca otomatis. Perlu foto ulang agar NIK dan nama terbaca.</div>'):''}
+        ${d.jenis_dokumen==="KTP"?(d.warga_id?'<div style="font-size:11px;color:#166534;margin-top:6px">✓ Data KTP sudah tercatat di Data Warga dan menunggu verifikasi Ketua RT.</div>':`<div style="font-size:11px;color:#9a3412;margin:8px 0">Perlu input/pemeriksaan Ketua RT. Cocokkan angka dengan foto KTP asli.</div><div style="display:grid;grid-template-columns:1fr;gap:6px;background:#fff7ed;padding:9px;border-radius:9px"><label>Nama lengkap</label><input id="anggotaNama_${Number(d.id)}" value="${esc(parsedManual.nama_lengkap||"")}" placeholder="Ketik nama sesuai KTP"><label>NIK (16 digit)</label><input id="anggotaNik_${Number(d.id)}" value="${esc(parsedManual.nik||"")}" inputmode="numeric" maxlength="16" placeholder="Ketik NIK sesuai KTP"><label>Jenis kelamin</label><select id="anggotaJK_${Number(d.id)}"><option value="">Pilih</option><option value="Laki-laki" ${parsedManual.jenis_kelamin==="Laki-laki"?"selected":""}>Laki-laki</option><option value="Perempuan" ${parsedManual.jenis_kelamin==="Perempuan"?"selected":""}>Perempuan</option></select><label>Tempat lahir</label><input id="anggotaTempat_${Number(d.id)}" value="${esc(parsedManual.tempat_lahir||"")}" placeholder="Tempat lahir"><label>Tanggal lahir</label><input id="anggotaTanggal_${Number(d.id)}" type="date" value="${esc(parsedManual.tanggal_lahir||"")}"><label>Hubungan dalam keluarga</label><select id="anggotaHubungan_${Number(d.id)}"><option value="">Pilih hubungan</option><option value="Kepala Keluarga">Kepala Keluarga</option><option value="Istri">Istri</option><option value="Suami">Suami</option><option value="Anak">Anak</option><option value="Orang Tua">Orang Tua</option><option value="Lainnya" selected>Lainnya / perlu diperiksa</option></select><button class="btn" style="margin:4px 0 0" onclick="simpanAnggotaDariKtp(${Number(d.id)})">💾 Simpan data KTP ke Data Warga</button></div>`):""}
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
           <button class="btn" style="margin:0;padding:7px 10px;font-size:12px" onclick="bukaCetakIdentitas(${Number(d.id)})">🖨️ Lihat / Cetak</button>
           ${d.mime_type!=="application/pdf"&&!d.ocr_text?'<button class="btn secondary" style="margin:0;padding:7px 10px;font-size:12px" onclick="jalankanOcrIdentitas('+Number(d.id)+')">🔎 OCR</button>':''}
@@ -1761,13 +1762,14 @@ async function uploadArsipIdentitas(){
         }
         await worker.setParameters({tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",tessedit_char_whitelist:""});
       }
-      scanned.push({...selected[i],ocrText:recognizedText.slice(0,50000)});
+      scanned.push({...selected[i],ocrText:recognizedText.slice(0,50000),ocrConfidence:Number(result?.data?.confidence||0)});
     }
     const parsedKk=parseKkDariOcr(scanned[0].ocrText);
-    if(!/^\d{16}$/.test(parsedKk.no_kk)){
-      throw new Error("Nomor KK belum terbaca. Foto ulang KK dengan posisi tegak, seluruh tulisan terlihat, dan tidak buram. Data belum disimpan.");
-    }
-    progress.textContent="Membuat/mencocokkan data keluarga dari nomor KK...";
+    const nomorKkDiperiksa=prompt("PERIKSA NOMOR KK PADA FOTO ASLI. Jika OCR salah atau foto buram, ketik nomor KK yang benar (16 digit):",parsedKk.no_kk||"");
+    if(nomorKkDiperiksa===null)throw new Error("Pendataan dibatalkan. Belum ada data keluarga yang dibuat.");
+    parsedKk.no_kk=String(nomorKkDiperiksa).replace(/\D/g,"");
+    if(!/^\d{16}$/.test(parsedKk.no_kk))throw new Error("Nomor KK harus tepat 16 digit. Periksa foto KK dan masukkan nomor yang benar.");
+    progress.textContent="Membuat/mencocokkan data keluarga dari nomor KK yang sudah diperiksa...";
     const familyResult=await api("/api/identitas/keluarga-otomatis",{method:"POST",body:JSON.stringify(parsedKk)});
     const familyId=String(familyResult.family.id);
     let autoCount=0,unreadable=0,duplicates=0;
@@ -1787,7 +1789,7 @@ async function uploadArsipIdentitas(){
       await api("/api/identitas/"+doc.id+"/ocr",{method:"PATCH",body:JSON.stringify({ocr_text:item.ocrText})});
       if(item.kind==="KTP"){
         const parsed=parseKtpDariOcr(item.ocrText);
-        if(parsed.nik&&parsed.nama_lengkap.length>=2){
+        if(parsed.nik&&parsed.nama_lengkap.length>=2&&Number(item.ocrConfidence||0)>=85){
           try{
             await api("/api/identitas/"+doc.id+"/anggota-otomatis",{method:"POST",body:JSON.stringify(parsed)});
             autoCount++;
@@ -1808,8 +1810,8 @@ async function uploadArsipIdentitas(){
     document.getElementById("identitasKKStatus").textContent="Belum ada foto KK.";
     document.getElementById("identitasKTPStatus").textContent="Belum ada foto KTP.";
     await muatArsipIdentitas();
-    progress.textContent="Selesai. "+autoCount+" KTP tercatat otomatis; "+unreadable+" KTP perlu foto ulang; "+duplicates+" NIK perlu pemeriksaan duplikasi.";
-    alert("Selesai! Data keluarga dibuat/dicocokkan otomatis dari KK. "+autoCount+" anggota KTP berhasil dicatat otomatis. "+unreadable+" KTP belum terbaca sempurna dan "+duplicates+" NIK perlu pemeriksaan. Data baru berstatus menunggu verifikasi Ketua RT.");
+    progress.textContent="Selesai. "+autoCount+" KTP terbaca jelas dan dicatat otomatis; "+unreadable+" KTP menunggu input manual; "+duplicates+" NIK perlu pemeriksaan duplikasi.";
+    alert("Selesai! Nomor KK sudah diperiksa Ketua RT. "+autoCount+" KTP dengan hasil OCR jelas dicatat otomatis. "+unreadable+" KTP perlu diperiksa dan diisi manual pada formulir di bagian Arsip tersimpan. "+duplicates+" NIK perlu pemeriksaan duplikasi. Semua data baru menunggu verifikasi Ketua RT.");
   }catch(e){
     progress.textContent="";
     alert(e.message||"Pendataan otomatis gagal. Dokumen belum seluruhnya diproses.");
