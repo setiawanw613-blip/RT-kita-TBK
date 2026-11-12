@@ -2090,6 +2090,37 @@ app.post("/api/identitas/:id/anggota-otomatis", requireAdmin, async(req,res)=>{
   }
 });
 
+app.post("/api/identitas/upload", requireAdmin, uploadDokumenIdentitas.single("file"), async (req,res) => {
+  let storagePath="";
+  try {
+    const keluargaId=String(req.body?.keluarga_id||"").trim();
+    const kind=String(req.body?.jenis_dokumen||"");
+    const file=req.file;
+    if(!/^[0-9]+$/.test(keluargaId)||!["KK","KTP"].includes(kind)||!file)
+      return res.status(400).json({ok:false,message:"Data keluarga, jenis dokumen, atau file tidak valid."});
+    const valid=validasiDokumenIdentitas(file);
+    if(!valid) return res.status(400).json({ok:false,message:"Isi file tidak cocok dengan format JPG, PNG, WebP, atau PDF."});
+    const familyRows=await supabaseRequest("keluarga",{query:"select=id&id=eq."+encodeURIComponent(keluargaId)+"&limit=1"});
+    if(!Array.isArray(familyRows)||!familyRows.length)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
+    const safeName=String(file.originalname||"dokumen").normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-90)||"dokumen";
+    storagePath=keluargaId+"/"+crypto.randomUUID()+"-"+safeName;
+    await uploadDokumenIdentitasPrivat(storagePath,file.buffer,valid.mime);
+    const inserted=await supabaseRequest("dokumen_identitas",{method:"POST",body:{
+      keluarga_id:Number(keluargaId),jenis_dokumen:kind,storage_path:storagePath,nama_file:String(file.originalname||safeName).slice(0,180),
+      mime_type:valid.mime,ukuran_bytes:file.size,uploaded_by:String(req.session?.nama||req.session?.username||"Ketua RT").slice(0,120),
+      status_verifikasi:"menunggu_verifikasi"
+    }});
+    const row=Array.isArray(inserted)?inserted[0]:inserted;
+    if(!row?.id)throw new Error("Catatan arsip tidak berhasil dibuat.");
+    return res.status(201).json({ok:true,document:{id:row.id,keluarga_id:row.keluarga_id,jenis_dokumen:row.jenis_dokumen,
+      nama_file:row.nama_file,mime_type:row.mime_type,ukuran_bytes:row.ukuran_bytes,status_verifikasi:row.status_verifikasi}});
+  } catch(error) {
+    if(storagePath) await hapusDokumenIdentitasPrivat(storagePath);
+    console.error("IDENTITY PROXY UPLOAD ERROR:",error);
+    return res.status(500).json({ok:false,message:"Upload melalui server gagal. Dokumen belum dinyatakan tersimpan."});
+  }
+});
+
 app.post("/api/identitas/upload-url", requireAdmin, async (req,res) => {
   try {
     const keluargaId=String(req.body?.keluarga_id||"").trim();
