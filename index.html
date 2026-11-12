@@ -1814,6 +1814,7 @@ async function uploadArsipIdentitas(){
   const kk=window._identitasKkFile||document.getElementById("identitasKK")?.files?.[0];
   const ktps=Array.from(window._identitasKtpCameraFiles||[]);
   if(!kk){alert("Ambil foto satu Kartu Keluarga terlebih dahulu.");return;}
+  if(!ktps.length){alert("Foto KK sudah dipilih, tetapi belum ada foto KTP di antrean. Pilih dua foto KTP sampai status menampilkan jumlah foto yang siap, lalu tekan Upload lagi.");return;}
   const all=[kk,...ktps];
   if(all.some(f=>f.size>8*1024*1024)){alert("Setiap file maksimal 8 MB.");return;}
   if(ktps.length>20){alert("Maksimal 20 foto KTP.");return;}
@@ -1840,53 +1841,34 @@ async function uploadArsipIdentitas(){
     const familyId=String(familyResult.family.id);
     if(!/^\d+$/.test(familyId))throw new Error("ID keluarga tidak valid. Foto belum diunggah.");
 
-    // Tahap 1: unggah dan catat SEMUA file dahulu. Tiap file diverifikasi
-    // di Storage (PUT) dan database (register-upload) sebelum lanjut.
+    // Tahap 1: unggah setiap file secara terpisah. Kegagalan satu KTP
+    // tidak boleh menghentikan percobaan penyimpanan KTP berikutnya.
     const selected=[{file:kk,kind:"KK"},...ktps.map(file=>({file,kind:"KTP"}))];
+    const uploadFailures=[];
     for(let i=0;i<selected.length;i++){
       const item=selected[i],file=item.file;
-      // Jangan menyimpulkan dua foto adalah file yang sama hanya dari nama
-      // dan ukuran: kamera Android sering memberi nama/ukuran identik pada KTP
-      // berbeda. Setiap pilihan harus disimpan sebagai dokumen tersendiri.
-      progress.textContent="Menyimpan "+item.kind+" "+(item.kind==="KTP"?i:"")+"/"+selected.length+" — "+file.name;
-      let saved;
-      if(file.size<=4*1024*1024){
-        // File kecil lewat endpoint server agar tidak bergantung pada CORS
-        // browser Android ke Supabase Storage.
+      progress.textContent="Menyimpan "+item.kind+" "+(item.kind==="KTP"?(i):"")+" dari "+selected.length+" — "+(file.name||"foto");
+      try{
         const form=new FormData();
         form.append("keluarga_id",familyId);
         form.append("jenis_dokumen",item.kind);
         form.append("file",file,file.name||("dokumen-"+i));
-        saved=await api("/api/identitas/upload",{method:"POST",body:form});
-      }else{
-        // File besar melewati batas payload Vercel: unggah langsung memakai URL
-        // bertanda tangan, lalu verifikasi dan catat di server.
-        const prepared=await api("/api/identitas/upload-url",{method:"POST",body:JSON.stringify({
-          keluarga_id:familyId,jenis_dokumen:item.kind,mime_type:file.type,
-          ukuran_bytes:file.size,nama_file:file.name||("dokumen-"+i)
-        })});
-        if(!prepared?.upload_url||!prepared?.storage_path)throw new Error("Server tidak memberikan alamat penyimpanan untuk "+file.name+".");
-        let storageResponse;
-        try{
-          storageResponse=await fetch(prepared.upload_url,{
-            method:"PUT",headers:{"Content-Type":file.type},
-            body:file,credentials:"omit",cache:"no-store"
-          });
-        }catch(networkError){
-          throw new Error("Koneksi penyimpanan terputus saat mengirim "+file.name+". Foto belum dinyatakan tersimpan.");
-        }
-        if(!storageResponse.ok){
-          const storageMessage=await storageResponse.text().catch(()=>"");
-          console.error("DIRECT STORAGE UPLOAD ERROR",storageResponse.status,storageMessage);
-          throw new Error("Penyimpanan menolak "+file.name+" (HTTP "+storageResponse.status+"). Foto belum dicatat.");
-        }
-        saved=await api("/api/identitas/register-upload",{method:"POST",body:JSON.stringify({
-          keluarga_id:familyId,storage_path:prepared.storage_path,jenis_dokumen:item.kind,
-          mime_type:file.type,ukuran_bytes:file.size,nama_file:file.name||("dokumen-"+i)
-        })});
+        const saved=await api("/api/identitas/upload",{method:"POST",body:form});
+        if(!saved?.document?.id)throw new Error("Server belum mengonfirmasi penyimpanan.");
+        uploadedDocs.push({file,kind:item.kind,doc:saved.document});
+      }catch(fileError){
+        console.error("UPLOAD ARSIP "+item.kind+" GAGAL:",file.name,fileError);
+        uploadFailures.push(item.kind+" "+(file.name||("ke-"+i))+": "+(fileError.message||"gagal disimpan"));
       }
-      if(!saved?.document?.id)throw new Error("Server belum mengonfirmasi penyimpanan "+file.name+".");
-      uploadedDocs.push({file,kind:item.kind,doc:saved.document});
+    }
+    if(!uploadedDocs.some(item=>item.kind==="KK")){
+      throw new Error("Foto KK belum berhasil disimpan. "+uploadFailures.join(" | "));
+    }
+    if(!uploadedDocs.some(item=>item.kind==="KTP")){
+      await muatArsipIdentitas();
+      progress.textContent="KK tersimpan, tetapi "+ktps.length+" foto KTP gagal disimpan. "+uploadFailures.join(" | ");
+      alert("KK tersimpan. KTP belum tersimpan: "+uploadFailures.join(" | "));
+      return;
     }
 
     // Semua file sudah tersimpan. Bersihkan antrean sekarang, sebelum OCR,
@@ -2008,8 +1990,8 @@ async function uploadArsipIdentitas(){
       }
     }
     await muatArsipIdentitas();
-    progress.textContent="Selesai. "+uploadedDocs.length+" dokumen berhasil disimpan. "+autoCount+" KTP terbaca otomatis; "+unreadable+" KTP menunggu pemeriksaan manual; "+duplicates+" NIK perlu pemeriksaan duplikasi.";
-    alert("Dokumen berhasil disimpan: "+uploadedDocs.length+" file (1 KK dan "+ktps.length+" KTP). Anggota KK tercatat: "+Number(kkMemberResult.created||0)+"; duplikat: "+Number(kkMemberResult.duplicates||0)+"; perlu diperiksa: "+Number(kkMemberResult.skipped||0)+". KTP terbaca otomatis: "+autoCount+"; KTP menunggu pemeriksaan manual: "+unreadable+"; NIK perlu pemeriksaan duplikasi: "+duplicates+". Foto tetap tersimpan meskipun OCR gagal.");
+    progress.textContent="Selesai. "+uploadedDocs.length+" dokumen berhasil disimpan. "+autoCount+" KTP terbaca otomatis; "+unreadable+" KTP menunggu pemeriksaan manual; "+duplicates+" NIK perlu pemeriksaan duplikasi."+(uploadFailures.length?" Upload gagal: "+uploadFailures.join(" | "):"");
+    alert("Dokumen berhasil disimpan: "+uploadedDocs.length+" file. KTP dipilih: "+ktps.length+"; KTP berhasil diarsipkan: "+uploadedDocs.filter(x=>x.kind==="KTP").length+". Anggota KK tercatat: "+Number(kkMemberResult.created||0)+"; duplikat: "+Number(kkMemberResult.duplicates||0)+"; perlu diperiksa: "+Number(kkMemberResult.skipped||0)+". KTP terbaca otomatis: "+autoCount+"; KTP menunggu pemeriksaan manual: "+unreadable+"; NIK perlu pemeriksaan duplikasi: "+duplicates+"."+(uploadFailures.length?" Gagal: "+uploadFailures.join(" | "):"")+" Foto yang gagal OCR tetap tersedia di arsip untuk input manual.");
   }catch(e){
     console.error("ARSIP IDENTITAS UPLOAD GAGAL:",e);
     progress.textContent="Proses terhenti: "+(e.message||"kesalahan tidak diketahui");
