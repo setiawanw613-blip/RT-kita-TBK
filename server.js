@@ -2102,6 +2102,36 @@ app.post("/api/identitas/upload", requireAdmin, uploadDokumenIdentitas.single("f
     if(!valid) return res.status(400).json({ok:false,message:"Isi file tidak cocok dengan format JPG, PNG, WebP, atau PDF."});
     const familyRows=await supabaseRequest("keluarga",{query:"select=id&id=eq."+encodeURIComponent(keluargaId)+"&limit=1"});
     if(!Array.isArray(familyRows)||!familyRows.length)return res.status(404).json({ok:false,message:"Data keluarga tidak ditemukan."});
+
+    // Idempotensi: jika file yang sama sudah tercatat, kembalikan arsip lama.
+    // Bandingkan SHA-256 isi file, bukan hanya nama/ukuran, agar dua KTP berbeda
+    // yang kebetulan bernama sama tidak tertukar.
+    const incomingHash=crypto.createHash("sha256").update(file.buffer).digest("hex");
+    const candidateRows=await supabaseRequest("dokumen_identitas",{
+      query:"select=id,keluarga_id,jenis_dokumen,storage_path,nama_file,mime_type,ukuran_bytes,status_verifikasi&keluarga_id=eq."+encodeURIComponent(keluargaId)+
+        "&jenis_dokumen=eq."+encodeURIComponent(kind)+"&nama_file=eq."+encodeURIComponent(String(file.originalname||"dokumen").slice(0,180))+
+        "&ukuran_bytes=eq."+encodeURIComponent(String(file.size))+"&order=uploaded_at.desc&limit=20"
+    });
+    for(const candidate of (Array.isArray(candidateRows)?candidateRows:[])){
+      if(!candidate.storage_path)continue;
+      try{
+        const signed=await buatSignedUrlIdentitas(String(candidate.storage_path));
+        const existingResponse=await fetch(signed,{signal:AbortSignal.timeout(10000)});
+        if(!existingResponse.ok)continue;
+        const existingBuffer=Buffer.from(await existingResponse.arrayBuffer());
+        const existingHash=crypto.createHash("sha256").update(existingBuffer).digest("hex");
+        if(existingHash===incomingHash){
+          return res.status(200).json({ok:true,duplicate:true,document:{
+            id:candidate.id,keluarga_id:candidate.keluarga_id,jenis_dokumen:candidate.jenis_dokumen,
+            nama_file:candidate.nama_file,mime_type:candidate.mime_type,ukuran_bytes:candidate.ukuran_bytes,
+            status_verifikasi:candidate.status_verifikasi
+          }});
+        }
+      }catch(duplicateCheckError){
+        console.warn("IDENTITY DUPLICATE CHECK SKIPPED:",duplicateCheckError?.message||duplicateCheckError);
+      }
+    }
+
     const safeName=String(file.originalname||"dokumen").normalize("NFKD").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-90)||"dokumen";
     storagePath=keluargaId+"/"+crypto.randomUUID()+"-"+safeName;
     await uploadDokumenIdentitasPrivat(storagePath,file.buffer,valid.mime);
