@@ -1675,7 +1675,7 @@ async function tampilkanFotoKamera(jenis,input){
   }finally{if(input)input.value="";}
 }
 
-async async function tambahFotoKtpKamera(input){
+async function tambahFotoKtpKamera(input){
   // Galeri KTP mendukung pemilihan beberapa foto sekaligus; kamera tetap dapat
   // menambahkan satu foto per pengambilan. Setiap file dinormalisasi terpisah.
   const files=Array.from(input?.files||[]);
