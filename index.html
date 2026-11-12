@@ -1848,6 +1848,68 @@ async function uploadArsipIdentitas(){
       console.error("Mesin OCR tidak tersedia; dokumen tetap tersimpan:",ocrInitError);
       ocrErrors++;
     }
+    // Tahap 2a: baca juga tabel anggota pada KK. Sebelumnya alur ini terlewat,
+    // sehingga endpoint pencatatan anggota KK tidak pernah dipanggil.
+    let kkMemberResult={created:0,duplicates:0,skipped:0};
+    const kkItem=uploadedDocs.find(item=>item.kind==="KK");
+    let kkOcrText="";
+    if(worker&&kkItem){
+      try{
+        progress.textContent="Membaca tabel seluruh anggota pada KK...";
+        const kkImage=await siapkanGambarOcr(kkItem.file);
+        try{
+          for(const mode of ["6","11","12","3"]){
+            await worker.setParameters({tessedit_pageseg_mode:mode,preserve_interword_spaces:"1",tessedit_char_whitelist:""});
+            const result=await worker.recognize(kkImage);
+            kkOcrText+=(kkOcrText?"\n":"")+String(result?.data?.text||"");
+          }
+        }finally{kkImage?.close?.();}
+        if(kkOcrText.trim()){
+          await api("/api/identitas/"+kkItem.doc.id+"/ocr",{method:"PATCH",body:JSON.stringify({ocr_text:kkOcrText.slice(0,50000)})});
+          const kkParsed=parseKkDariOcr(kkOcrText);
+          if(kkParsed.alamat&&!parsedKk.alamat)parsedKk.alamat=kkParsed.alamat;
+          if(kkParsed.rt)parsedKk.rt=kkParsed.rt;
+          if(kkParsed.rw)parsedKk.rw=kkParsed.rw;
+        }
+      }catch(kkOcrError){
+        console.error("OCR tabel KK gagal; foto tetap tersimpan:",kkOcrError);
+        ocrErrors++;
+      }
+    }
+    let kkMembers=parseAnggotaKkDariOcr(kkOcrText);
+    // Nama kepala keluarga yang dikonfirmasi Ketua RT menjadi sumber kebenaran.
+    kkMembers=kkMembers.map(member=>({
+      ...member,
+      hubungan_keluarga:String(member.nama_lengkap||"").normalize("NFKD").toUpperCase().replace(/[^A-Z0-9]/g,"")===
+        String(parsedKk.kepala_keluarga||"").normalize("NFKD").toUpperCase().replace(/[^A-Z0-9]/g,"")
+        ? "Kepala Keluarga" : member.hubungan_keluarga
+    }));
+    const kkSuggested=kkMembers.map(m=>[m.nik,m.nama_lengkap,m.hubungan_keluarga,m.jenis_kelamin||""].join(" | ")).join("\n");
+    const kkReview=prompt(
+      "PERIKSA DAFTAR ANGGOTA DARI KK. Satu orang per baris dengan format: NIK | NAMA LENGKAP | HUBUNGAN | JENIS KELAMIN.\nHubungan: Kepala Keluarga, Istri, Suami, Anak, Orang Tua, atau Lainnya.\nPeriksa agar istri dan SEMUA anak tercantum. Foto KK tetap tersimpan jika bagian ini dikosongkan.",
+      kkSuggested
+    );
+    if(kkReview!==null&&kkReview.trim()){
+      const allowedRelations=["Kepala Keluarga","Istri","Suami","Anak","Orang Tua","Lainnya"];
+      const reviewedMembers=kkReview.split(/\r?\n/).map(line=>{
+        const parts=line.split("|").map(part=>part.trim());
+        if(parts.length<3)return null;
+        const nik=parts[0].replace(/\D/g,"");
+        const nama_lengkap=parts[1].slice(0,120);
+        const hubungan_keluarga=allowedRelations.find(value=>value.toLowerCase()===parts[2].toLowerCase())||"";
+        const jenis_kelamin=parts[3]==="Laki-laki"||parts[3]==="Perempuan"?parts[3]:"";
+        if(!/^\d{16}$/.test(nik)||nama_lengkap.length<3||!hubungan_keluarga)return null;
+        return {nik,nama_lengkap,hubungan_keluarga,jenis_kelamin};
+      }).filter(Boolean);
+      if(reviewedMembers.length){
+        progress.textContent="Menyimpan "+reviewedMembers.length+" anggota yang sudah diperiksa dari KK...";
+        kkMemberResult=await api("/api/identitas/keluarga/"+familyId+"/anggota-kk",{
+          method:"POST",body:JSON.stringify({anggota:reviewedMembers})
+        });
+      }
+    }
+    // KTP diproses setelah anggota dari KK dicatat, agar NIK KTP menautkan
+    // dokumen ke orang yang sama dan mempertahankan hubungan keluarga.
     for(let i=0;i<uploadedDocs.length;i++){
       const item=uploadedDocs[i];
       if(item.kind!=="KTP")continue;
@@ -1885,7 +1947,7 @@ async function uploadArsipIdentitas(){
     }
     await muatArsipIdentitas();
     progress.textContent="Selesai. "+uploadedDocs.length+" dokumen berhasil disimpan. "+autoCount+" KTP terbaca otomatis; "+unreadable+" KTP menunggu pemeriksaan manual; "+duplicates+" NIK perlu pemeriksaan duplikasi.";
-    alert("Dokumen berhasil disimpan: "+uploadedDocs.length+" file (1 KK dan "+ktps.length+" KTP). "+autoCount+" KTP terbaca otomatis; "+unreadable+" KTP tersimpan tetapi perlu pemeriksaan manual; "+duplicates+" NIK perlu pemeriksaan duplikasi. Foto tidak akan hilang meskipun OCR gagal.");
+    alert("Dokumen berhasil disimpan: "+uploadedDocs.length+" file (1 KK dan "+ktps.length+" KTP). Anggota KK tercatat: "+Number(kkMemberResult.created||0)+"; duplikat: "+Number(kkMemberResult.duplicates||0)+"; perlu diperiksa: "+Number(kkMemberResult.skipped||0)+". KTP terbaca otomatis: "+autoCount+"; KTP menunggu pemeriksaan manual: "+unreadable+"; NIK perlu pemeriksaan duplikasi: "+duplicates+". Foto tetap tersimpan meskipun OCR gagal.");
   }catch(e){
     console.error("ARSIP IDENTITAS UPLOAD GAGAL:",e);
     progress.textContent="Proses terhenti: "+(e.message||"kesalahan tidak diketahui");
