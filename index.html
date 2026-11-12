@@ -1863,7 +1863,7 @@ async function uploadArsipIdentitas(){
           for(const mode of ["6","11","12","3"]){
             await worker.setParameters({tessedit_pageseg_mode:mode,preserve_interword_spaces:"1",tessedit_char_whitelist:""});
             const result=await worker.recognize(kkImage);
-            kkOcrText+=(kkOcrText?"\\n":"")+String(result?.data?.text||"");
+            kkOcrText+=(kkOcrText?"\n":"")+String(result?.data?.text||"");
           }
         }finally{kkImage?.close?.();}
         if(kkOcrText.trim()){
@@ -1886,21 +1886,21 @@ async function uploadArsipIdentitas(){
         String(parsedKk.kepala_keluarga||"").normalize("NFKD").toUpperCase().replace(/[^A-Z0-9]/g,"")
         ? "Kepala Keluarga" : member.hubungan_keluarga
     }));
-    const kkSuggested=kkMembers.map(m=>[m.nik,m.nama_lengkap,m.hubungan_keluarga,m.jenis_kelamin||""].join(" | ")).join("\\n");
+    const kkSuggested=kkMembers.map(m=>[m.nik,m.nama_lengkap,m.hubungan_keluarga,m.jenis_kelamin||""].join(" | ")).join("\n");
     const kkReview=prompt(
-      "PERIKSA DAFTAR ANGGOTA DARI KK. Satu orang per baris dengan format: NIK | NAMA LENGKAP | HUBUNGAN | JENIS KELAMIN.\\nHubungan: Kepala Keluarga, Istri, Suami, Anak, Orang Tua, atau Lainnya.\\nPeriksa agar istri dan SEMUA anak tercantum. Foto KK tetap tersimpan jika bagian ini dikosongkan.",
+      "PERIKSA DAFTAR ANGGOTA DARI KK. Satu orang per baris dengan format: NIK | NAMA LENGKAP | HUBUNGAN | JENIS KELAMIN.\nHubungan: Kepala Keluarga, Istri, Suami, Anak, Orang Tua, atau Lainnya.\nPeriksa agar istri dan SEMUA anak tercantum. Foto KK tetap tersimpan jika bagian ini dikosongkan.",
       kkSuggested
     );
     if(kkReview!==null&&kkReview.trim()){
       const allowedRelations=["Kepala Keluarga","Istri","Suami","Anak","Orang Tua","Lainnya"];
-      const reviewedMembers=kkReview.split(/\\r?\\n/).map(line=>{
+      const reviewedMembers=kkReview.split(/\r?\n/).map(line=>{
         const parts=line.split("|").map(part=>part.trim());
         if(parts.length<3)return null;
-        const nik=parts[0].replace(/\\D/g,"");
+        const nik=parts[0].replace(/\D/g,"");
         const nama_lengkap=parts[1].slice(0,120);
         const hubungan_keluarga=allowedRelations.find(value=>value.toLowerCase()===parts[2].toLowerCase())||"";
         const jenis_kelamin=parts[3]==="Laki-laki"||parts[3]==="Perempuan"?parts[3]:"";
-        if(!/^\\d{16}$/.test(nik)||nama_lengkap.length<3||!hubungan_keluarga)return null;
+        if(!/^\d{16}$/.test(nik)||nama_lengkap.length<3||!hubungan_keluarga)return null;
         return {nik,nama_lengkap,hubungan_keluarga,jenis_kelamin};
       }).filter(Boolean);
       if(reviewedMembers.length){
