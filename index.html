@@ -1473,6 +1473,7 @@ async function arsipIdentitasAdmin(){
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTPFile').click()">📁 File / Galeri KTP</button>
       </div>
       <div id="identitasKTPStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KTP. Pilih beberapa foto sekaligus dari Galeri atau tambahkan lewat Kamera.</div>
+      <div id="identitasKTPPreview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;margin:8px 0 14px"></div>
       <p class="muted" style="font-size:11px">Jika dokumen berbentuk PDF: buka PDF, screenshot satu halaman KK penuh dan setiap KTP, lalu pilih screenshot dari Galeri. Pastikan nomor dan tulisan jelas, tidak terpotong, dan tidak buram. Di Galeri, Anda bisa memilih beberapa foto KTP sekaligus (gunakan pilihan beberapa file). Kamera menambahkan foto satu per satu. Maksimal 20 foto KTP per keluarga.</p>
       <button id="btnUploadIdentitas" class="btn" type="button" onclick="uploadArsipIdentitas()">⬆️ Simpan Arsip KK & KTP</button>
       <div id="identitasProgress" class="muted" style="font-size:12px;margin-top:8px"></div>
@@ -1675,6 +1676,41 @@ async function tampilkanFotoKamera(jenis,input){
   }finally{if(input)input.value="";}
 }
 
+function renderPratinjauFotoKtp(){
+  const box=document.getElementById("identitasKTPPreview");
+  if(!box)return;
+  (window._identitasKtpPreviewUrls||[]).forEach(url=>URL.revokeObjectURL(url));
+  window._identitasKtpPreviewUrls=[];
+  box.replaceChildren();
+  const files=Array.isArray(window._identitasKtpCameraFiles)?window._identitasKtpCameraFiles:[];
+  files.forEach((file,index)=>{
+    const card=document.createElement("div");
+    card.style.cssText="border:1px solid #d1d5db;border-radius:10px;padding:7px;background:#fff;min-width:0";
+    const img=document.createElement("img");
+    const url=URL.createObjectURL(file);
+    window._identitasKtpPreviewUrls.push(url);
+    img.src=url; img.alt="Pratinjau foto KTP "+(index+1);
+    img.style.cssText="width:100%;height:112px;object-fit:contain;background:#f3f4f6;border-radius:6px;display:block";
+    const name=document.createElement("div");
+    name.textContent=(index+1)+". "+(file.name||"Foto KTP");
+    name.style.cssText="font-size:11px;overflow-wrap:anywhere;margin:5px 0";
+    const remove=document.createElement("button");
+    remove.type="button"; remove.textContent="Hapus foto";
+    remove.className="btn secondary";
+    remove.style.cssText="width:100%;padding:5px;font-size:11px";
+    remove.addEventListener("click",()=>{
+      window._identitasKtpCameraFiles.splice(index,1);
+      const status=document.getElementById("identitasKTPStatus");
+      if(status)status.textContent=window._identitasKtpCameraFiles.length
+        ?"✓ Total "+window._identitasKtpCameraFiles.length+" foto KTP siap dipreview dan disimpan."
+        :"Belum ada foto KTP. Pilih dari Galeri atau Kamera.";
+      renderPratinjauFotoKtp();
+    });
+    card.append(img,name,remove);
+    box.appendChild(card);
+  });
+}
+
 async function tambahFotoKtpKamera(input){
   // Galeri KTP mendukung pemilihan beberapa foto sekaligus; kamera tetap dapat
   // menambahkan satu foto per pengambilan. Setiap file dinormalisasi terpisah.
@@ -1710,6 +1746,7 @@ async function tambahFotoKtpKamera(input){
     }
   }
   const queued=window._identitasKtpCameraFiles;
+  renderPratinjauFotoKtp();
   if(status)status.textContent=(queued.length? "✓ Total "+queued.length+" foto KTP siap: ":"Belum ada foto KTP siap.")+
     queued.map((f,i)=>(i+1)+". "+f.name).join(" · ")+
     (failed.length?" | Gagal: "+failed.join("; "):"");
