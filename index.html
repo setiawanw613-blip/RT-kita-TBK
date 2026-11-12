@@ -1770,6 +1770,10 @@ function parseKtpDariOcr(text){
 }
 
 async function uploadArsipIdentitas(){
+  // Data keluarga disiapkan eksplisit sebelum prompt nomor KK; tanpa ini
+  // assignment parsedKk.no_kk melempar ReferenceError dan menghentikan
+  // seluruh proses sebelum file KK/KTP sempat diunggah.
+  const parsedKk={no_kk:"",kepala_keluarga:"",alamat:"",rt:"004",rw:"01"};
   const kk=window._identitasKkFile||document.getElementById("identitasKK")?.files?.[0];
   const ktps=Array.from(window._identitasKtpCameraFiles||[]);
   if(!kk){alert("Ambil foto satu Kartu Keluarga terlebih dahulu.");return;}
