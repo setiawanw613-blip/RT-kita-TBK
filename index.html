@@ -1814,21 +1814,13 @@ async function uploadArsipIdentitas(){
         continue;
       }
       progress.textContent="Menyimpan "+item.kind+" "+(item.kind==="KTP"?i:"")+"/"+selected.length+" — "+file.name;
-      const signed=await api("/api/identitas/upload-url",{method:"POST",body:JSON.stringify({
-        keluarga_id:familyId,jenis_dokumen:item.kind,mime_type:file.type,ukuran_bytes:file.size,nama_file:file.name
-      })});
-      if(!signed?.upload_url||!signed?.storage_path)throw new Error("Server tidak memberikan alamat penyimpanan untuk "+file.name+".");
-      const uploaded=await fetch(signed.upload_url,{method:"PUT",headers:{"Content-Type":file.type,"x-upsert":"false"},body:file});
-      if(!uploaded.ok){
-        const detail=await uploaded.text().catch(()=>"");
-        throw new Error("Foto "+file.name+" gagal masuk penyimpanan (HTTP "+uploaded.status+"). "+detail.slice(0,180));
-      }
-      const registered=await api("/api/identitas/register-upload",{method:"POST",body:JSON.stringify({
-        keluarga_id:familyId,storage_path:signed.storage_path,jenis_dokumen:item.kind,mime_type:file.type,
-        ukuran_bytes:file.size,nama_file:file.name
-      })});
-      if(!registered?.document?.id)throw new Error("File "+file.name+" sudah dikirim tetapi belum tercatat di arsip. Jangan unggah ulang; periksa arsip terlebih dahulu.");
-      uploadedDocs.push({file,kind:item.kind,doc:registered.document});
+      const form=new FormData();
+      form.append("keluarga_id",familyId);
+      form.append("jenis_dokumen",item.kind);
+      form.append("file",file,file.name||("dokumen-"+i));
+      const saved=await api("/api/identitas/upload",{method:"POST",body:form});
+      if(!saved?.document?.id)throw new Error("Server belum mengonfirmasi penyimpanan "+file.name+".");
+      uploadedDocs.push({file,kind:item.kind,doc:saved.document});
     }
 
     // Semua file sudah tersimpan. Bersihkan antrean sekarang, sebelum OCR,
