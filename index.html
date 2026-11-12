@@ -1466,8 +1466,8 @@ async function arsipIdentitasAdmin(){
       </div>
       <div id="identitasKKStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KK.</div>
       <label>Foto KTP anggota keluarga (maks. 20 KTP)</label>
-      <input id="identitasKTP" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none" onchange="tambahFotoKtpKamera(this)">
-      <input id="identitasKTPFile" type="file" accept="image/*" multiple style="display:none" onchange="tambahFotoKtpKamera(this)">
+      <input id="identitasKTP" type="file" accept="image/*,.heic,.heif" capture="environment" style="display:none" onchange="tambahFotoKtpKamera(this)">
+      <input id="identitasKTPFile" type="file" accept="image/*,.heic,.heif" multiple style="display:none" onchange="tambahFotoKtpKamera(this)">
       <div style="display:flex;gap:8px;margin:7px 0 8px">
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTP').click()">📷 Kamera KTP</button>
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTPFile').click()">📁 File / Galeri KTP</button>
@@ -1614,54 +1614,52 @@ async function konversiHeicKeJpeg(file){
 }
 
 async function normalisasiFotoIdentitas(file){
-  if(!file)throw new Error("Belum ada foto yang dipilih dari Galeri.");
-  let sourceFile=file;
-  const originalName=String(file.name||"foto").toLowerCase();
+  if(!file||!Number.isFinite(file.size)||file.size<=0)throw new Error("File Galeri kosong atau tidak terbaca.");
+  const name=String(file.name||"foto").toLowerCase();
   let mime=String(file.type||"").toLowerCase();
-  // Beberapa Android/WebView mengirim MIME kosong meskipun nama file jelas.
-  if(!mime){
-    if(/\.(jpe?g)$/.test(originalName))mime="image/jpeg";
-    else if(/\.png$/.test(originalName))mime="image/png";
-    else if(/\.webp$/.test(originalName))mime="image/webp";
-    else if(/\.heic$/.test(originalName))mime="image/heic";
-    else if(/\.heif$/.test(originalName))mime="image/heif";
+  // Android Gallery / WebView sometimes reports an empty or generic MIME type.
+  // Detect HEIC by extension or ISO-BMFF brand before attempting browser decode.
+  let isHeic=/\.(heic|heif)$/.test(name)||mime==="image/heic"||mime==="image/heif";
+  if(!isHeic&&(!mime||mime==="application/octet-stream")){
+    try{
+      const head=new Uint8Array(await file.slice(0,32).arrayBuffer());
+      const signature=String.fromCharCode(...head);
+      isHeic=signature.includes("ftyp")&&(signature.includes("heic")||signature.includes("heix")||signature.includes("hevc")||signature.includes("mif1"));
+    }catch(_){}
   }
-  if(mime==="image/heic"||mime==="image/heif"||/\.(heic|heif)$/.test(originalName)){
+  let sourceFile=file;
+  if(isHeic){
     sourceFile=await konversiHeicKeJpeg(file);
     mime="image/jpeg";
-  }else if(!mime.startsWith("image/")){
-    throw new Error("File Galeri bukan gambar yang didukung. Pilih JPG, PNG, WebP, atau HEIC.");
-  }else if(mime==="image/jpg"){
-    mime="image/jpeg";
-    sourceFile=new File([file],file.name||"foto.jpg",{type:mime,lastModified:file.lastModified||Date.now()});
+  }else if(mime==="image/jpeg"||mime==="image/jpg"||mime==="image/png"||mime==="image/webp"){
+    if(file.size<=3.5*1024*1024){
+      return mime==="image/jpg"?new File([file],(file.name||"foto").replace(/\.[^.]+$/,"")+".jpg",{type:"image/jpeg"}):file;
+    }
   }
-  const accepted=["image/jpeg","image/png","image/webp"];
-  const batasUploadServer=3.5*1024*1024;
-  if(accepted.includes(mime)&&sourceFile.size<=batasUploadServer)return sourceFile;
-  // Kompres foto besar di perangkat sebelum dikirim ke server.
+  // Do not reject a selected gallery photo just because Android omitted its MIME.
+  // Decode it and make a standard JPEG for the upload endpoint.
   const decoded=await bukaGambarUntukOcr(sourceFile);
   try{
     const source=decoded.image;
     const longest=Math.max(source.width||0,source.height||0);
-    if(!longest)throw new Error("Foto tidak dapat dibaca. Coba simpan ulang sebagai JPG.");
+    if(!longest)throw new Error("Foto Galeri tidak memiliki ukuran gambar yang valid.");
     const scale=Math.min(1,2400/longest);
     const canvas=document.createElement("canvas");
     canvas.width=Math.max(1,Math.round(source.width*scale));
     canvas.height=Math.max(1,Math.round(source.height*scale));
     const ctx=canvas.getContext("2d");
-    if(!ctx)throw new Error("Perangkat tidak dapat menyiapkan foto.");
+    if(!ctx)throw new Error("Browser HP tidak dapat menyiapkan foto.");
     ctx.drawImage(source,0,0,canvas.width,canvas.height);
     let blob=null;
-    for(const quality of [0.92,0.88,0.84,0.80,0.76,0.72,0.68,0.64]){
+    for(const quality of [0.92,0.88,0.84,0.80,0.76,0.72,0.68,0.64,0.60]){
       blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",quality));
-      if(blob&&blob.size<=batasUploadServer)break;
+      if(blob&&blob.size<=3.5*1024*1024)break;
     }
-    if(!blob||blob.size>batasUploadServer)throw new Error("Foto masih terlalu besar setelah dikompres. Pilih foto dengan resolusi lebih rendah.");
+    if(!blob||blob.size>3.5*1024*1024)throw new Error("Foto terlalu besar setelah dikompres. Pilih foto dengan resolusi lebih rendah.");
     const base=String(sourceFile.name||"foto").replace(/\.[^.]+$/,"")||"foto";
     return new File([blob],base+".jpg",{type:"image/jpeg",lastModified:Date.now()});
   }finally{decoded.cleanup();}
 }
-
 async function tampilkanFotoKamera(jenis,input){
   const file=input?.files?.[0];
   if(!file)return;
