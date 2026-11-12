@@ -1842,43 +1842,47 @@ async function uploadArsipIdentitas(){
     const selected=[{file:kk,kind:"KK"},...ktps.map(file=>({file,kind:"KTP"}))];
     for(let i=0;i<selected.length;i++){
       const item=selected[i],file=item.file;
-      const arsipLama=(window._identitasDocuments||[]).find(d=>
-        String(d.keluarga_id)===familyId&&d.jenis_dokumen===item.kind&&
-        String(d.nama_file||"")===String(file.name||"")&&Number(d.ukuran_bytes)===Number(file.size)
-      );
-      if(arsipLama){
-        uploadedDocs.push({file,kind:item.kind,doc:arsipLama,alreadySaved:true});
-        progress.textContent=item.kind+" sudah ada di arsip; tidak diunggah ulang: "+file.name;
-        continue;
-      }
+      // Jangan menyimpulkan dua foto adalah file yang sama hanya dari nama
+      // dan ukuran: kamera Android sering memberi nama/ukuran identik pada KTP
+      // berbeda. Setiap pilihan harus disimpan sebagai dokumen tersendiri.
       progress.textContent="Menyimpan "+item.kind+" "+(item.kind==="KTP"?i:"")+"/"+selected.length+" — "+file.name;
-      // Minta URL unggah bertanda tangan, lalu kirim file langsung ke Storage.
-      // Ini menghindari batas payload serverless Vercel dan mencegah file besar
-      // membuat proses berhenti dengan pesan generik "Failed to fetch".
-      const prepared=await api("/api/identitas/upload-url",{method:"POST",body:JSON.stringify({
-        keluarga_id:familyId,jenis_dokumen:item.kind,mime_type:file.type,
-        ukuran_bytes:file.size,nama_file:file.name||("dokumen-"+i)
-      })});
-      if(!prepared?.upload_url||!prepared?.storage_path)throw new Error("Server tidak memberikan alamat penyimpanan untuk "+file.name+".");
-      let storageResponse;
-      try{
-        storageResponse=await fetch(prepared.upload_url,{
-          method:"PUT",headers:{"Content-Type":file.type,"x-upsert":"false"},
-          body:file,credentials:"omit",cache:"no-store"
-        });
-      }catch(networkError){
-        throw new Error("Koneksi ke penyimpanan terputus saat mengirim "+file.name+". Periksa jaringan; foto belum dinyatakan tersimpan.");
+      let saved;
+      if(file.size<=4*1024*1024){
+        // File kecil lewat endpoint server agar tidak bergantung pada CORS
+        // browser Android ke Supabase Storage.
+        const form=new FormData();
+        form.append("keluarga_id",familyId);
+        form.append("jenis_dokumen",item.kind);
+        form.append("file",file,file.name||("dokumen-"+i));
+        saved=await api("/api/identitas/upload",{method:"POST",body:form});
+      }else{
+        // File besar melewati batas payload Vercel: unggah langsung memakai URL
+        // bertanda tangan, lalu verifikasi dan catat di server.
+        const prepared=await api("/api/identitas/upload-url",{method:"POST",body:JSON.stringify({
+          keluarga_id:familyId,jenis_dokumen:item.kind,mime_type:file.type,
+          ukuran_bytes:file.size,nama_file:file.name||("dokumen-"+i)
+        })});
+        if(!prepared?.upload_url||!prepared?.storage_path)throw new Error("Server tidak memberikan alamat penyimpanan untuk "+file.name+".");
+        let storageResponse;
+        try{
+          storageResponse=await fetch(prepared.upload_url,{
+            method:"PUT",headers:{"Content-Type":file.type},
+            body:file,credentials:"omit",cache:"no-store"
+          });
+        }catch(networkError){
+          throw new Error("Koneksi penyimpanan terputus saat mengirim "+file.name+". Foto belum dinyatakan tersimpan.");
+        }
+        if(!storageResponse.ok){
+          const storageMessage=await storageResponse.text().catch(()=>"");
+          console.error("DIRECT STORAGE UPLOAD ERROR",storageResponse.status,storageMessage);
+          throw new Error("Penyimpanan menolak "+file.name+" (HTTP "+storageResponse.status+"). Foto belum dicatat.");
+        }
+        saved=await api("/api/identitas/register-upload",{method:"POST",body:JSON.stringify({
+          keluarga_id:familyId,storage_path:prepared.storage_path,jenis_dokumen:item.kind,
+          mime_type:file.type,ukuran_bytes:file.size,nama_file:file.name||("dokumen-"+i)
+        })});
       }
-      if(!storageResponse.ok){
-        const storageMessage=await storageResponse.text().catch(()=>"");
-        console.error("DIRECT STORAGE UPLOAD ERROR",storageResponse.status,storageMessage);
-        throw new Error("Penyimpanan menolak "+file.name+" (HTTP "+storageResponse.status+"). Foto belum dicatat.");
-      }
-      const saved=await api("/api/identitas/register-upload",{method:"POST",body:JSON.stringify({
-        keluarga_id:familyId,storage_path:prepared.storage_path,jenis_dokumen:item.kind,
-        mime_type:file.type,ukuran_bytes:file.size,nama_file:file.name||("dokumen-"+i)
-      })});
-      if(!saved?.document?.id)throw new Error("File "+file.name+" sudah dikirim, tetapi server belum mengonfirmasi catatan arsip. Periksa Arsip tersimpan sebelum mengulang.");
+      if(!saved?.document?.id)throw new Error("Server belum mengonfirmasi penyimpanan "+file.name+".");
       uploadedDocs.push({file,kind:item.kind,doc:saved.document});
     }
 
