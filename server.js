@@ -2285,8 +2285,14 @@ app.patch("/api/identitas/:id/ocr", requireAdmin, async (req,res) => {
     const lines=textOcr.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
     let namaCandidate="";
     for(let i=0;i<lines.length;i++){
-      const match=lines[i].match(/^NAMA\s*[:：]?\s*(.*)$/i);
-      if(match){namaCandidate=(match[1]||lines[i+1]||"").trim().slice(0,120);break;}
+      const match=lines[i].match(/^N[4A]M[4A]\s*[:：-]?\s*(.*)$/i)||lines[i].match(/^NAMA\s*[:：-]?\s*(.*)$/i);
+      if(match){
+        const compact=value=>String(value||"").toUpperCase().replace(/[^A-Z]/g,"");
+        const isRegion=value=>/^(PROVINSI|KABUPATEN|KABUPATENKOTA|KOTA|KECAMATAN|KELURAHAN|DESA|DUSUN)/.test(compact(value));
+        const candidate=(match[1]||lines.slice(i+1,i+6).find(line=>line.length>=3&&!isRegion(line)&&!/^(NIK|TEMPAT|TGL|JENIS|ALAMAT|AGAMA|STATUS|PEKERJAAN)/i.test(line)&&!/^\d/.test(line))||"").trim();
+        if(candidate&&!isRegion(candidate))namaCandidate=candidate.slice(0,120);
+        break;
+      }
     }
     if (!/^\d+$/.test(id) || !textOcr.trim()) return res.status(400).json({ok:false,message:"Hasil OCR tidak valid."});
     const updated=await supabaseRequest("dokumen_identitas",{
