@@ -1593,16 +1593,53 @@ async function buatKeluargaIdentitas(){
 window._identitasKtpCameraFiles = window._identitasKtpCameraFiles || [];
 window._identitasKkFile = window._identitasKkFile || null;
 
+async function konversiHeicKeJpeg(file){
+  if(!window.heic2any){
+    if(!window._rtHeicScriptPromise){
+      window._rtHeicScriptPromise=new Promise((resolve,reject)=>{
+        const script=document.createElement("script");
+        script.src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";
+        script.onload=resolve;
+        script.onerror=()=>reject(new Error("Konverter foto HEIC tidak dapat dimuat. Pilih foto JPG dari Galeri."));
+        document.head.appendChild(script);
+      }).catch(error=>{window._rtHeicScriptPromise=null;throw error;});
+    }
+    await window._rtHeicScriptPromise;
+  }
+  const converted=await window.heic2any({blob:file,toType:"image/jpeg",quality:0.9});
+  const blob=Array.isArray(converted)?converted[0]:converted;
+  if(!blob||!blob.size)throw new Error("Foto HEIC gagal dikonversi. Pilih ulang foto dari Galeri.");
+  const base=String(file.name||"KTP").replace(/\.[^.]+$/i,"")||"KTP";
+  return new File([blob],base+".jpg",{type:"image/jpeg",lastModified:Date.now()});
+}
+
 async function normalisasiFotoIdentitas(file){
-  if(!file||!String(file.type||"").startsWith("image/"))throw new Error("Pilih file gambar dari Galeri, bukan dokumen lain.");
+  if(!file)throw new Error("Belum ada foto yang dipilih dari Galeri.");
+  let sourceFile=file;
+  const originalName=String(file.name||"foto").toLowerCase();
+  let mime=String(file.type||"").toLowerCase();
+  // Beberapa Android/WebView mengirim MIME kosong meskipun nama file jelas.
+  if(!mime){
+    if(/\.(jpe?g)$/.test(originalName))mime="image/jpeg";
+    else if(/\.png$/.test(originalName))mime="image/png";
+    else if(/\.webp$/.test(originalName))mime="image/webp";
+    else if(/\.heic$/.test(originalName))mime="image/heic";
+    else if(/\.heif$/.test(originalName))mime="image/heif";
+  }
+  if(mime==="image/heic"||mime==="image/heif"||/\.(heic|heif)$/.test(originalName)){
+    sourceFile=await konversiHeicKeJpeg(file);
+    mime="image/jpeg";
+  }else if(!mime.startsWith("image/")){
+    throw new Error("File Galeri bukan gambar yang didukung. Pilih JPG, PNG, WebP, atau HEIC.");
+  }else if(mime==="image/jpg"){
+    mime="image/jpeg";
+    sourceFile=new File([file],file.name||"foto.jpg",{type:mime,lastModified:file.lastModified||Date.now()});
+  }
   const accepted=["image/jpeg","image/png","image/webp"];
-  // Semua foto KK/KTP dijaga <=3,5 MB agar selalu melewati endpoint server
-  // (bukan PUT lintas-domain dari Android WebView ke Supabase).
-  // Ini menghindari jalur signed-upload yang pada log sering berhenti sebelum PUT.
   const batasUploadServer=3.5*1024*1024;
-  if(accepted.includes(file.type)&&file.size<=batasUploadServer)return file;
-  // HEIC/HEIF, format lain, dan foto besar dikonversi di perangkat ke JPEG.
-  const decoded=await bukaGambarUntukOcr(file);
+  if(accepted.includes(mime)&&sourceFile.size<=batasUploadServer)return sourceFile;
+  // Kompres foto besar di perangkat sebelum dikirim ke server.
+  const decoded=await bukaGambarUntukOcr(sourceFile);
   try{
     const source=decoded.image;
     const longest=Math.max(source.width||0,source.height||0);
@@ -1615,12 +1652,12 @@ async function normalisasiFotoIdentitas(file){
     if(!ctx)throw new Error("Perangkat tidak dapat menyiapkan foto.");
     ctx.drawImage(source,0,0,canvas.width,canvas.height);
     let blob=null;
-    for(const quality of [0.92,0.88,0.84,0.80,0.76,0.72]){
+    for(const quality of [0.92,0.88,0.84,0.80,0.76,0.72,0.68,0.64]){
       blob=await new Promise(resolve=>canvas.toBlob(resolve,"image/jpeg",quality));
       if(blob&&blob.size<=batasUploadServer)break;
     }
-    if(!blob||blob.size>batasUploadServer)throw new Error("Foto masih lebih dari 3,5 MB setelah dikompres. Pilih foto lain dengan resolusi lebih rendah.");
-    const base=String(file.name||"foto").replace(/\.[^.]+$/,"")||"foto";
+    if(!blob||blob.size>batasUploadServer)throw new Error("Foto masih terlalu besar setelah dikompres. Pilih foto dengan resolusi lebih rendah.");
+    const base=String(sourceFile.name||"foto").replace(/\.[^.]+$/,"")||"foto";
     return new File([blob],base+".jpg",{type:"image/jpeg",lastModified:Date.now()});
   }finally{decoded.cleanup();}
 }
