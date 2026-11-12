@@ -1465,16 +1465,16 @@ async function arsipIdentitasAdmin(){
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKKFile').click()">📁 File / Galeri KK</button>
       </div>
       <div id="identitasKKStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KK.</div>
-      <label>Foto KTP anggota keluarga (maks. 20 KTP)</label>
+      <label>Foto KTP anggota keluarga (opsional, maks. 20 KTP)</label>
       <input id="identitasKTP" type="file" accept="image/*" capture="environment" style="display:none" onchange="tambahFotoKtpKamera(this)">
       <input id="identitasKTPFile" type="file" accept="image/*" style="display:none" onchange="tambahFotoKtpKamera(this)">
       <div style="display:flex;gap:8px;margin:7px 0 8px">
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTP').click()">📷 Kamera KTP</button>
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTPFile').click()">📁 File / Galeri KTP</button>
       </div>
-      <div id="identitasKTPStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KTP.</div>
+      <div id="identitasKTPStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KTP. KTP bisa diunggah nanti untuk verifikasi.</div>
       <p class="muted" style="font-size:11px">Jika dokumen berbentuk PDF: buka PDF, screenshot satu halaman KK penuh dan setiap KTP, lalu pilih screenshot dari Galeri. Pastikan nomor dan tulisan jelas, tidak terpotong, dan tidak buram. Pilih satu foto KTP setiap kali dari Galeri. Setelah status menunjukkan foto siap, tekan Galeri KTP lagi untuk menambahkan foto berikutnya.</p>
-      <button id="btnUploadIdentitas" class="btn" type="button" onclick="uploadArsipIdentitas()">⬆️ Upload & Catat Otomatis KK + KTP</button>
+      <button id="btnUploadIdentitas" class="btn" type="button" onclick="uploadArsipIdentitas()">⬆️ Upload KK & Catat Anggota Otomatis</button>
       <div id="identitasProgress" class="muted" style="font-size:12px;margin-top:8px"></div>
     </div>
     <div class="card">
@@ -1852,72 +1852,96 @@ function parseKtpDariOcr(text){
 }
 
 async function uploadArsipIdentitas(){
-  // Data keluarga disiapkan eksplisit sebelum prompt nomor KK; tanpa ini
-  // assignment parsedKk.no_kk melempar ReferenceError dan menghentikan
-  // seluruh proses sebelum file KK/KTP sempat diunggah.
-  const parsedKk={no_kk:"",kepala_keluarga:"",alamat:"",rt:"004",rw:"01"};
   const kk=window._identitasKkFile||document.getElementById("identitasKK")?.files?.[0];
   const ktps=Array.from(window._identitasKtpCameraFiles||[]);
-  if(!kk){alert("Ambil foto satu Kartu Keluarga terlebih dahulu.");return;}
-  if(!ktps.length){alert("Foto KK sudah dipilih, tetapi belum ada foto KTP di antrean. Pilih dua foto KTP sampai status menampilkan jumlah foto yang siap, lalu tekan Upload lagi.");return;}
-  const all=[kk,...ktps];
-  if(all.some(f=>f.size>8*1024*1024)){alert("Setiap file maksimal 8 MB.");return;}
+  if(!kk){alert("Pilih satu foto Kartu Keluarga terlebih dahulu.");return;}
+  if(kk.size>8*1024*1024||ktps.some(f=>f.size>8*1024*1024)){alert("Setiap foto maksimal 8 MB.");return;}
   if(ktps.length>20){alert("Maksimal 20 foto KTP.");return;}
   const btn=document.getElementById("btnUploadIdentitas");
   const progress=document.getElementById("identitasProgress");
   if(!btn||!progress)return;
   btn.disabled=true;
-  btn.textContent="Menyimpan dokumen...";
+  btn.textContent="Membaca Kartu Keluarga...";
   let worker=null;
   const uploadedDocs=[];
   try{
-    // Jangan jalankan OCR atau mengunduh mesin OCR sebelum unggah.
-    // Pengguna mengonfirmasi nomor KK secara manual agar gangguan OCR/CDN
-    // tidak pernah menghentikan penyimpanan foto.
-    const nomorKkDiperiksa=prompt("Masukkan nomor KK sesuai dokumen (16 digit):","");
-    if(nomorKkDiperiksa===null)throw new Error("Pendataan dibatalkan. Belum ada data keluarga yang dibuat.");
-    parsedKk.no_kk=String(nomorKkDiperiksa).replace(/\D/g,"");
-    if(!/^\d{16}$/.test(parsedKk.no_kk))throw new Error("Nomor KK harus tepat 16 digit. Periksa foto KK dan masukkan nomor yang benar.");
-    const namaKepalaDikonfirmasi=prompt("Ketik nama KEPALA KELUARGA persis seperti pada KK. Kosongkan jika belum yakin:","");
-    if(namaKepalaDikonfirmasi===null)throw new Error("Pendataan dibatalkan sebelum data keluarga dibuat.");
-    parsedKk.kepala_keluarga=namaKepalaDikonfirmasi.trim().slice(0,120);
-    progress.textContent="Membuat/mencocokkan data keluarga...";
-    const familyResult=await api("/api/identitas/keluarga-otomatis",{method:"POST",body:JSON.stringify(parsedKk)});
-    const familyId=String(familyResult.family.id);
-    if(!/^\d+$/.test(familyId))throw new Error("ID keluarga tidak valid. Foto belum diunggah.");
+    // KK adalah sumber data utama. KTP bersifat opsional dan hanya untuk verifikasi.
+    progress.textContent="Membaca nomor KK dan daftar seluruh anggota...";
+    worker=await loadTesseractIdentitas();
+    const kkImage=await siapkanGambarOcr(kk);
+    let kkOcrText="";
+    try{
+      for(const mode of ["6","11","12","3"]){
+        await worker.setParameters({tessedit_pageseg_mode:mode,preserve_interword_spaces:"1",tessedit_char_whitelist:""});
+        const result=await worker.recognize(kkImage);
+        const candidate=String(result?.data?.text||"");
+        if(candidate.length>kkOcrText.length)kkOcrText=candidate;
+      }
+    }finally{kkImage?.close?.();}
 
-    // Tahap 1: unggah setiap file secara terpisah. Kegagalan satu KTP
-    // tidak boleh menghentikan percobaan penyimpanan KTP berikutnya.
+    const parsedKk=parseKkDariOcr(kkOcrText);
+    const kkMembers=parseAnggotaKkDariOcr(kkOcrText);
+    if(!/^\d{16}$/.test(String(parsedKk.no_kk||""))){
+      throw new Error("Nomor KK belum terbaca dengan yakin. Foto belum disimpan. Ambil ulang foto KK secara utuh, terang, dan tidak miring.");
+    }
+    if(!kkMembers.length){
+      throw new Error("Daftar anggota dan NIK belum terbaca dengan cukup jelas. Foto belum disimpan agar tidak membuat data warga yang salah. Coba foto KK lebih dekat dan tidak buram.");
+    }
+    const head=kkMembers.find(m=>m.hubungan_keluarga==="Kepala Keluarga");
+    if(!parsedKk.kepala_keluarga&&head)parsedKk.kepala_keluarga=head.nama_lengkap;
+    const preview=kkMembers.map((m,index)=>
+      (index+1)+". "+m.nama_lengkap+" — "+m.hubungan_keluarga+" — NIK "+m.nik.slice(0,4)+"••••••••"+m.nik.slice(-4)
+    ).join("\n");
+    const approved=confirm(
+      "HASIL PEMBACAAN KK\nNomor KK: •••• "+parsedKk.no_kk.slice(-4)+
+      "\nAnggota terdeteksi: "+kkMembers.length+
+      "\n\n"+preview+
+      "\n\nPeriksa daftar ini dengan foto KK asli. Simpan data warga sekarang?"
+    );
+    if(!approved)throw new Error("Dibatalkan. Tidak ada data keluarga atau warga yang disimpan.");
+
+    progress.textContent="Membuat/mencocokkan data keluarga...";
+    const familyResult=await api("/api/identitas/keluarga-otomatis",{
+      method:"POST",
+      body:JSON.stringify({
+        no_kk:parsedKk.no_kk,
+        kepala_keluarga:parsedKk.kepala_keluarga||"",
+        alamat:parsedKk.alamat||"",
+        rt:parsedKk.rt||"004",
+        rw:parsedKk.rw||"01"
+      })
+    });
+    const familyId=String(familyResult?.family?.id||"");
+    if(!/^\d+$/.test(familyId))throw new Error("Data keluarga belum berhasil dibuat.");
+
     const selected=[{file:kk,kind:"KK"},...ktps.map(file=>({file,kind:"KTP"}))];
     const uploadFailures=[];
     for(let i=0;i<selected.length;i++){
-      const item=selected[i],file=item.file;
-      progress.textContent="Menyimpan "+item.kind+" "+(item.kind==="KTP"?(i):"")+" dari "+selected.length+" — "+(file.name||"foto");
+      const item=selected[i];
+      progress.textContent="Menyimpan "+item.kind+" "+(item.kind==="KTP"?(i):"")+" dari "+selected.length+"...";
       try{
         const form=new FormData();
         form.append("keluarga_id",familyId);
         form.append("jenis_dokumen",item.kind);
-        form.append("file",file,file.name||("dokumen-"+i));
+        form.append("file",item.file,item.file.name||("dokumen-"+i));
         const saved=await api("/api/identitas/upload",{method:"POST",body:form});
         if(!saved?.document?.id)throw new Error("Server belum mengonfirmasi penyimpanan.");
-        uploadedDocs.push({file,kind:item.kind,doc:saved.document});
+        uploadedDocs.push({file:item.file,kind:item.kind,doc:saved.document});
       }catch(fileError){
-        console.error("UPLOAD ARSIP "+item.kind+" GAGAL:",file.name,fileError);
-        uploadFailures.push(item.kind+" "+(file.name||("ke-"+i))+": "+(fileError.message||"gagal disimpan"));
+        console.error("UPLOAD ARSIP "+item.kind+" GAGAL:",item.file.name,fileError);
+        uploadFailures.push(item.kind+" "+(item.file.name||("ke-"+i))+": "+(fileError.message||"gagal disimpan"));
       }
     }
     if(!uploadedDocs.some(item=>item.kind==="KK")){
-      throw new Error("Foto KK belum berhasil disimpan. "+uploadFailures.join(" | "));
-    }
-    if(!uploadedDocs.some(item=>item.kind==="KTP")){
-      await muatArsipIdentitas();
-      progress.textContent="KK tersimpan, tetapi "+ktps.length+" foto KTP gagal disimpan. "+uploadFailures.join(" | ");
-      alert("KK tersimpan. KTP belum tersimpan: "+uploadFailures.join(" | "));
-      return;
+      throw new Error("Foto KK gagal disimpan. "+uploadFailures.join(" | "));
     }
 
-    // Semua file sudah tersimpan. Bersihkan antrean sekarang, sebelum OCR,
-    // supaya kegagalan OCR tidak menghapus foto dari arsip.
+    // Simpan semua anggota dari KK. Endpoint menolak NIK ganda dan tidak membuat
+    // warga baru bila NIK sudah terdaftar di keluarga lain.
+    progress.textContent="Menyimpan "+kkMembers.length+" anggota keluarga dari KK...";
+    const kkMemberResult=await api("/api/identitas/keluarga/"+familyId+"/anggota-kk",{
+      method:"POST",body:JSON.stringify({anggota:kkMembers})
+    });
     window._identitasKkFile=null;
     window._identitasKtpCameraFiles=[];
     ["identitasKK","identitasKKFile","identitasKTP","identitasKTPFile"].forEach(id=>{
@@ -1925,85 +1949,13 @@ async function uploadArsipIdentitas(){
     });
     const kkStatus=document.getElementById("identitasKKStatus");
     const ktpStatus=document.getElementById("identitasKTPStatus");
-    if(kkStatus)kkStatus.textContent="✓ Foto KK sudah tersimpan di arsip.";
-    if(ktpStatus)ktpStatus.textContent="✓ "+ktps.length+" foto KTP sudah tersimpan di arsip.";
+    if(kkStatus)kkStatus.textContent="✓ Foto KK tersimpan.";
+    if(ktpStatus)ktpStatus.textContent=ktps.length?"✓ "+ktps.length+" foto KTP tersimpan.":"KTP belum diunggah — bisa ditambahkan nanti sebagai verifikasi.";
 
-    // Tahap 2: OCR opsional setelah semua file selesai disimpan.
-    // Jika mesin OCR gagal dimuat di Android, dokumen tetap aman di arsip.
     let autoCount=0,unreadable=0,duplicates=0,ocrErrors=0;
-    try{
-      worker=await loadTesseractIdentitas();
-    }catch(ocrInitError){
-      console.error("Mesin OCR tidak tersedia; dokumen tetap tersimpan:",ocrInitError);
-      ocrErrors++;
-    }
-    // Tahap 2a: baca juga tabel anggota pada KK. Sebelumnya alur ini terlewat,
-    // sehingga endpoint pencatatan anggota KK tidak pernah dipanggil.
-    let kkMemberResult={created:0,duplicates:0,skipped:0};
-    const kkItem=uploadedDocs.find(item=>item.kind==="KK");
-    let kkOcrText="";
-    if(worker&&kkItem){
-      try{
-        progress.textContent="Membaca tabel seluruh anggota pada KK...";
-        const kkImage=await siapkanGambarOcr(kkItem.file);
-        try{
-          for(const mode of ["6","11","12","3"]){
-            await worker.setParameters({tessedit_pageseg_mode:mode,preserve_interword_spaces:"1",tessedit_char_whitelist:""});
-            const result=await worker.recognize(kkImage);
-            kkOcrText+=(kkOcrText?"\n":"")+String(result?.data?.text||"");
-          }
-        }finally{kkImage?.close?.();}
-        if(kkOcrText.trim()){
-          await api("/api/identitas/"+kkItem.doc.id+"/ocr",{method:"PATCH",body:JSON.stringify({ocr_text:kkOcrText.slice(0,50000)})});
-          const kkParsed=parseKkDariOcr(kkOcrText);
-          if(kkParsed.alamat&&!parsedKk.alamat)parsedKk.alamat=kkParsed.alamat;
-          if(kkParsed.rt)parsedKk.rt=kkParsed.rt;
-          if(kkParsed.rw)parsedKk.rw=kkParsed.rw;
-        }
-      }catch(kkOcrError){
-        console.error("OCR tabel KK gagal; foto tetap tersimpan:",kkOcrError);
-        ocrErrors++;
-      }
-    }
-    let kkMembers=parseAnggotaKkDariOcr(kkOcrText);
-    // Nama kepala keluarga yang dikonfirmasi Ketua RT menjadi sumber kebenaran.
-    kkMembers=kkMembers.map(member=>({
-      ...member,
-      hubungan_keluarga:String(member.nama_lengkap||"").normalize("NFKD").toUpperCase().replace(/[^A-Z0-9]/g,"")===
-        String(parsedKk.kepala_keluarga||"").normalize("NFKD").toUpperCase().replace(/[^A-Z0-9]/g,"")
-        ? "Kepala Keluarga" : member.hubungan_keluarga
-    }));
-    const kkSuggested=kkMembers.map(m=>[m.nik,m.nama_lengkap,m.hubungan_keluarga,m.jenis_kelamin||""].join(" | ")).join("\n");
-    const kkReview=prompt(
-      "PERIKSA DAFTAR ANGGOTA DARI KK. Satu orang per baris dengan format: NIK | NAMA LENGKAP | HUBUNGAN | JENIS KELAMIN.\nHubungan: Kepala Keluarga, Istri, Suami, Anak, Orang Tua, atau Lainnya.\nPeriksa agar istri dan SEMUA anak tercantum. Foto KK tetap tersimpan jika bagian ini dikosongkan.",
-      kkSuggested
-    );
-    if(kkReview!==null&&kkReview.trim()){
-      const allowedRelations=["Kepala Keluarga","Istri","Suami","Anak","Orang Tua","Lainnya"];
-      const reviewedMembers=kkReview.split(/\r?\n/).map(line=>{
-        const parts=line.split("|").map(part=>part.trim());
-        if(parts.length<3)return null;
-        const nik=parts[0].replace(/\D/g,"");
-        const nama_lengkap=parts[1].slice(0,120);
-        const hubungan_keluarga=allowedRelations.find(value=>value.toLowerCase()===parts[2].toLowerCase())||"";
-        const jenis_kelamin=parts[3]==="Laki-laki"||parts[3]==="Perempuan"?parts[3]:"";
-        if(!/^\d{16}$/.test(nik)||nama_lengkap.length<3||!hubungan_keluarga)return null;
-        return {nik,nama_lengkap,hubungan_keluarga,jenis_kelamin};
-      }).filter(Boolean);
-      if(reviewedMembers.length){
-        progress.textContent="Menyimpan "+reviewedMembers.length+" anggota yang sudah diperiksa dari KK...";
-        kkMemberResult=await api("/api/identitas/keluarga/"+familyId+"/anggota-kk",{
-          method:"POST",body:JSON.stringify({anggota:reviewedMembers})
-        });
-      }
-    }
-    // KTP diproses setelah anggota dari KK dicatat, agar NIK KTP menautkan
-    // dokumen ke orang yang sama dan mempertahankan hubungan keluarga.
-    for(let i=0;i<uploadedDocs.length;i++){
-      const item=uploadedDocs[i];
+    for(const item of uploadedDocs){
       if(item.kind!=="KTP")continue;
-      if(!worker){unreadable++;continue;}
-      progress.textContent="Membaca KTP "+(i)+"/"+uploadedDocs.length+" — "+item.file.name+" (foto sudah aman tersimpan)";
+      progress.textContent="Mencocokkan KTP dengan anggota keluarga...";
       try{
         const ocrImage=await siapkanGambarOcr(item.file);
         let recognizedText="";
@@ -2030,165 +1982,25 @@ async function uploadArsipIdentitas(){
           }else unreadable++;
         }else unreadable++;
       }catch(ocrError){
-        console.error("OCR KTP gagal, tetapi dokumen tetap tersimpan:",item.file.name,ocrError);
+        console.error("OCR KTP gagal, dokumen tetap tersimpan:",ocrError);
         ocrErrors++;unreadable++;
       }
     }
+    if(kkOcrText.trim()){
+      const kkDoc=uploadedDocs.find(item=>item.kind==="KK");
+      if(kkDoc)await api("/api/identitas/"+kkDoc.doc.id+"/ocr",{method:"PATCH",body:JSON.stringify({ocr_text:kkOcrText.slice(0,50000)})}).catch(error=>console.warn("OCR KK tidak tersimpan:",error));
+    }
     await muatArsipIdentitas();
-    progress.textContent="Selesai. "+uploadedDocs.length+" dokumen berhasil disimpan. "+autoCount+" KTP terbaca otomatis; "+unreadable+" KTP menunggu pemeriksaan manual; "+duplicates+" NIK perlu pemeriksaan duplikasi."+(uploadFailures.length?" Upload gagal: "+uploadFailures.join(" | "):"");
-    alert("Dokumen berhasil disimpan: "+uploadedDocs.length+" file. KTP dipilih: "+ktps.length+"; KTP berhasil diarsipkan: "+uploadedDocs.filter(x=>x.kind==="KTP").length+". Anggota KK tercatat: "+Number(kkMemberResult.created||0)+"; duplikat: "+Number(kkMemberResult.duplicates||0)+"; perlu diperiksa: "+Number(kkMemberResult.skipped||0)+". KTP terbaca otomatis: "+autoCount+"; KTP menunggu pemeriksaan manual: "+unreadable+"; NIK perlu pemeriksaan duplikasi: "+duplicates+"."+(uploadFailures.length?" Gagal: "+uploadFailures.join(" | "):"")+" Foto yang gagal OCR tetap tersedia di arsip untuk input manual.");
-  }catch(e){
-    console.error("ARSIP IDENTITAS UPLOAD GAGAL:",e);
-    progress.textContent="Proses terhenti: "+(e.message||"kesalahan tidak diketahui");
-    await muatArsipIdentitas().catch(()=>{});
-    alert(e.message||"Pendataan gagal. Periksa bagian Arsip tersimpan sebelum mencoba lagi agar tidak membuat dokumen ganda.");
+    progress.textContent="Selesai: "+kkMemberResult.created+" anggota baru tercatat; "+Number(kkMemberResult.duplicates||0)+" NIK terdeteksi ganda; "+Number(kkMemberResult.skipped||0)+" data dilewati. "+autoCount+" KTP cocok otomatis; "+unreadable+" KTP perlu diperiksa."+(uploadFailures.length?" Gagal upload: "+uploadFailures.join(" | "):"");
+    alert("Pendataan KK selesai. Anggota baru: "+kkMemberResult.created+". Duplikat: "+Number(kkMemberResult.duplicates||0)+". Dilewati: "+Number(kkMemberResult.skipped||0)+".\nKTP bersifat opsional dan bisa diunggah setelahnya. Cocokkan hasil dengan dokumen asli.");
+  }catch(error){
+    console.error("PENDATAAN KK ERROR:",error);
+    progress.textContent=error.message||"Pendataan belum selesai.";
+    alert(error.message||"Pendataan belum selesai.");
   }finally{
     btn.disabled=false;
-    btn.textContent="⬆️ Upload & Catat Otomatis KK + KTP";
+    btn.textContent="⬆️ Upload KK & Catat Anggota Otomatis";
   }
-}
-
-async function bukaGambarUntukOcr(file){
-  // Android WebView tertentu gagal pada createImageBitmap untuk foto dari kamera.
-  // Coba jalur Image + object URL sebagai fallback sebelum menyatakan file rusak.
-  try{
-    if(typeof createImageBitmap==="function"){
-      const bitmap=await createImageBitmap(file);
-      return {image:bitmap,cleanup:()=>bitmap.close?.()};
-    }
-  }catch(bitmapError){
-    console.warn("createImageBitmap gagal, mencoba decoder browser",bitmapError);
-  }
-  const objectUrl=URL.createObjectURL(file);
-  try{
-    const image=await new Promise((resolve,reject)=>{
-      const el=new Image();
-      el.onload=()=>resolve(el);
-      el.onerror=()=>reject(new Error("Browser tidak dapat membaca format foto "+(file.name||"yang dipilih")+". Gunakan JPG atau PNG."));
-      el.src=objectUrl;
-    });
-    return {image,cleanup:()=>URL.revokeObjectURL(objectUrl)};
-  }catch(error){
-    URL.revokeObjectURL(objectUrl);
-    throw error;
-  }
-}
-
-async function siapkanGambarOcr(file){
-  // Optimalkan salinan OCR saja; file asli tetap dipakai untuk arsip.
-  const decoded=await bukaGambarUntukOcr(file);
-  const source=decoded.image;
-  try{
-    const longest=Math.max(source.width,source.height);
-    if(!longest)throw new Error("Ukuran foto tidak valid: "+(file.name||"foto"));
-    const scale=Math.min(1.15,1800/longest);
-    const canvas=document.createElement("canvas");
-    canvas.width=Math.max(1,Math.round(source.width*scale));
-    canvas.height=Math.max(1,Math.round(source.height*scale));
-    const ctx=canvas.getContext("2d",{willReadFrequently:true});
-    if(!ctx)throw new Error("Browser tidak dapat menyiapkan gambar untuk OCR.");
-    ctx.drawImage(source,0,0,canvas.width,canvas.height);
-    try{
-      const image=ctx.getImageData(0,0,canvas.width,canvas.height);
-      const pixels=image.data;
-      for(let i=0;i<pixels.length;i+=4){
-        const gray=0.299*pixels[i]+0.587*pixels[i+1]+0.114*pixels[i+2];
-        const enhanced=Math.max(0,Math.min(255,(gray-128)*1.22+128));
-        pixels[i]=pixels[i+1]=pixels[i+2]=enhanced;
-      }
-      ctx.putImageData(image,0,0);
-    }catch(e){console.warn("Peningkatan kontras OCR dilewati",e);}
-    const blob=await new Promise((resolve,reject)=>canvas.toBlob(
-      result=>result?resolve(result):reject(new Error("Gagal mengubah foto "+(file.name||"dokumen")+" menjadi JPEG untuk OCR.")),
-      "image/jpeg",0.90
-    ));
-    return blob;
-  }finally{decoded.cleanup();}
-}
-
-async function siapkanPotonganHeaderKk(file){
-  const decoded=await bukaGambarUntukOcr(file);
-  const source=decoded.image;
-  try{
-    // Nomor KK berada di bagian atas; crop lebih pendek dan ringan untuk HP.
-    const cropHeight=Math.max(1,Math.round(source.height*0.34));
-    const scale=Math.min(1.8,2400/source.width,1400/cropHeight);
-    const canvas=document.createElement("canvas");
-    canvas.width=Math.max(1,Math.round(source.width*scale));
-    canvas.height=Math.max(1,Math.round(cropHeight*scale));
-    const ctx=canvas.getContext("2d",{willReadFrequently:true});
-    if(!ctx)throw new Error("Browser tidak dapat menyiapkan bagian nomor KK.");
-    ctx.drawImage(source,0,0,source.width,cropHeight,0,0,canvas.width,canvas.height);
-    const image=ctx.getImageData(0,0,canvas.width,canvas.height);
-    const pixels=image.data;
-    for(let i=0;i<pixels.length;i+=4){
-      const gray=0.299*pixels[i]+0.587*pixels[i+1]+0.114*pixels[i+2];
-      const enhanced=Math.max(0,Math.min(255,(gray-128)*1.5+128));
-      pixels[i]=pixels[i+1]=pixels[i+2]=enhanced;
-    }
-    ctx.putImageData(image,0,0);
-    return await new Promise((resolve,reject)=>canvas.toBlob(
-      blob=>blob?resolve(blob):reject(new Error("Gagal menyiapkan potongan foto KK.")),
-      "image/png"
-    ));
-  }finally{decoded.cleanup();}
-}
-
-async function loadTesseractIdentitas(){
-  // Simpan pustaka dan worker OCR selama halaman aplikasi masih terbuka.
-  // Pemindaian berikutnya tidak perlu mengunduh/menyiapkan mesin bahasa Indonesia lagi.
-  if(!window.Tesseract){
-    if(!window._rtTesseractScriptPromise){
-      window._rtTesseractScriptPromise=new Promise((resolve,reject)=>{
-        const script=document.createElement("script");
-        script.src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
-        script.onload=resolve;
-        script.onerror=()=>reject(new Error("Pustaka OCR tidak dapat dimuat. Periksa koneksi internet."));
-        document.head.appendChild(script);
-      }).catch(error=>{
-        window._rtTesseractScriptPromise=null;
-        throw error;
-      });
-    }
-    await window._rtTesseractScriptPromise;
-  }
-
-  if(window._rtIdentitasOcrWorker) return window._rtIdentitasOcrWorker;
-  if(!window._rtIdentitasOcrWorkerPromise){
-    window._rtIdentitasOcrWorkerPromise=window.Tesseract.createWorker("ind",1,{
-      langPath:"https://tessdata.projectnaptha.com/4.0.0",
-      logger:m=>{
-        const progress=document.getElementById("identitasProgress");
-        const percent=Math.round((m.progress||0)*100);
-        if(progress&&m.status==="recognizing text"){
-          progress.textContent="Membaca tulisan... "+percent+"%";
-        }else if(progress&&m.status==="loading language traineddata"){
-          progress.textContent="Menyiapkan OCR bahasa Indonesia... "+percent+"%";
-        }else if(progress&&m.status==="loading tesseract core"){
-          progress.textContent="Menyiapkan mesin OCR... "+percent+"%";
-        }
-      }
-    }).then(worker=>{
-      window._rtIdentitasOcrWorker=worker;
-      return worker;
-    }).catch(error=>{
-      window._rtIdentitasOcrWorkerPromise=null;
-      window._rtIdentitasOcrWorker=null;
-      throw error;
-    });
-  }
-  return window._rtIdentitasOcrWorkerPromise;
-}
-
-// Lepaskan worker hanya ketika halaman benar-benar ditinggalkan.
-if(!window._rtTesseractCleanupBound){
-  window._rtTesseractCleanupBound=true;
-  window.addEventListener("pagehide",()=>{
-    const worker=window._rtIdentitasOcrWorker;
-    window._rtIdentitasOcrWorker=null;
-    window._rtIdentitasOcrWorkerPromise=null;
-    if(worker) worker.terminate().catch(()=>{});
-  });
 }
 
 async function jalankanOcrIdentitas(id){
