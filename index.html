@@ -1477,14 +1477,14 @@ async function arsipIdentitasAdmin(){
       </div>
       <label>Foto KTP anggota keluarga (opsional, maks. 20 KTP)</label>
       <input id="identitasKTP" type="file" accept="image/*" capture="environment" style="display:none" onchange="tambahFotoKtpKamera(this)">
-      <input id="identitasKTPFile" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp,.heic,.heif" style="display:none" onchange="tambahFotoKtpKamera(this)">
+      <input id="identitasKTPFile" type="file" accept="image/*,.heic,.heif" multiple style="display:none" onchange="tambahFotoKtpKamera(this)">
       <div style="display:flex;gap:8px;margin:7px 0 8px">
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTP').click()">📷 Kamera KTP</button>
-        <button class="btn secondary" type="button" style="flex:1" onclick="pilihFotoKtpGaleri()">📁 Tambah 1 Foto dari Galeri</button>
+        <button class="btn secondary" type="button" style="flex:1" onclick="pilihFotoKtpGaleri()">📁 Pilih Foto KTP dari Galeri</button>
       </div>
       <div id="identitasKTPStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KTP. Pilih beberapa foto sekaligus dari Galeri atau tambahkan lewat Kamera.</div>
       <div id="identitasKTPPreview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px;margin:8px 0 14px"></div>
-      <p class="muted" style="font-size:11px">Jika dokumen berbentuk PDF: buka PDF, screenshot satu halaman KK penuh dan setiap KTP, lalu pilih screenshot dari Galeri. Pastikan nomor dan tulisan jelas, tidak terpotong, dan tidak buram. Pilih satu foto KTP setiap kali. Untuk KTP berikutnya, tekan lagi tombol Tambah 1 Foto dari Galeri. Foto sebelumnya tetap disimpan dalam daftar. Maksimal 20 foto KTP per keluarga.</p>
+      <p class="muted" style="font-size:11px">Jika dokumen berbentuk PDF: buka PDF, screenshot satu halaman KK penuh dan setiap KTP, lalu pilih screenshot dari Galeri. Pastikan nomor dan tulisan jelas, tidak terpotong, dan tidak buram. Anda bisa memilih beberapa foto KTP sekaligus dari Galeri. Jika ingin menambah foto lagi, buka Galeri kembali; foto sebelumnya tetap tersimpan dalam daftar. Maksimal 20 foto KTP per keluarga.</p>
       <button id="btnUploadIdentitas" class="btn" type="button" onclick="uploadArsipIdentitas()">⬆️ Simpan Arsip KK & KTP</button>
       <div id="identitasProgress" class="muted" style="font-size:12px;margin-top:8px"></div>
     </div>
