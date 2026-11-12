@@ -1819,6 +1819,15 @@ async function uploadArsipIdentitas(){
     const selected=[{file:kk,kind:"KK"},...ktps.map(file=>({file,kind:"KTP"}))];
     for(let i=0;i<selected.length;i++){
       const item=selected[i],file=item.file;
+      const arsipLama=(window._identitasDocuments||[]).find(d=>
+        String(d.keluarga_id)===familyId&&d.jenis_dokumen===item.kind&&
+        String(d.nama_file||"")===String(file.name||"")&&Number(d.ukuran_bytes)===Number(file.size)
+      );
+      if(arsipLama){
+        uploadedDocs.push({file,kind:item.kind,doc:arsipLama,alreadySaved:true});
+        progress.textContent=item.kind+" sudah ada di arsip; tidak diunggah ulang: "+file.name;
+        continue;
+      }
       progress.textContent="Menyimpan "+item.kind+" "+(item.kind==="KTP"?i:"")+"/"+selected.length+" — "+file.name;
       const signed=await api("/api/identitas/upload-url",{method:"POST",body:JSON.stringify({
         keluarga_id:familyId,jenis_dokumen:item.kind,mime_type:file.type,ukuran_bytes:file.size,nama_file:file.name
