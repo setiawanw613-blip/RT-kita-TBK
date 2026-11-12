@@ -1784,25 +1784,10 @@ async function uploadArsipIdentitas(){
   let worker=null;
   const uploadedDocs=[];
   try{
-    // Baca hanya KK sebelum membuat folder keluarga. OCR KTP tidak boleh
-    // menghalangi penyimpanan foto-foto KTP ke arsip.
-    worker=await loadTesseractIdentitas();
-    progress.textContent="Membaca nomor pada bagian atas KK...";
-    const headerImage=await siapkanPotonganHeaderKk(kk);
-    let kkText="";
-    try{
-      await worker.setParameters({tessedit_pageseg_mode:"6",preserve_interword_spaces:"1",tessedit_char_whitelist:"0123456789OQILSBZ.- "});
-      let result=await worker.recognize(headerImage);
-      kkText=String(result?.data?.text||"");
-      if(!/^\d{16}$/.test(parseKkDariOcr(kkText).no_kk)){
-        progress.textContent="Mencoba pembacaan nomor KK sekali lagi...";
-        await worker.setParameters({tessedit_pageseg_mode:"11",preserve_interword_spaces:"1",tessedit_char_whitelist:"0123456789OQILSBZ.- "});
-        result=await worker.recognize(headerImage);
-        kkText+="\n"+String(result?.data?.text||"");
-      }
-    }finally{headerImage?.close?.();}
-    const parsedKk=parseKkDariOcr(kkText);
-    const nomorKkDiperiksa=prompt("PERIKSA NOMOR KK PADA FOTO ASLI. Jika OCR salah atau foto buram, ketik nomor KK yang benar (16 digit):",parsedKk.no_kk||"");
+    // Jangan jalankan OCR atau mengunduh mesin OCR sebelum unggah.
+    // Pengguna mengonfirmasi nomor KK secara manual agar gangguan OCR/CDN
+    // tidak pernah menghentikan penyimpanan foto.
+    const nomorKkDiperiksa=prompt("Masukkan nomor KK sesuai dokumen (16 digit):","");
     if(nomorKkDiperiksa===null)throw new Error("Pendataan dibatalkan. Belum ada data keluarga yang dibuat.");
     parsedKk.no_kk=String(nomorKkDiperiksa).replace(/\D/g,"");
     if(!/^\d{16}$/.test(parsedKk.no_kk))throw new Error("Nomor KK harus tepat 16 digit. Periksa foto KK dan masukkan nomor yang benar.");
@@ -1858,12 +1843,19 @@ async function uploadArsipIdentitas(){
     if(kkStatus)kkStatus.textContent="✓ Foto KK sudah tersimpan di arsip.";
     if(ktpStatus)ktpStatus.textContent="✓ "+ktps.length+" foto KTP sudah tersimpan di arsip.";
 
-    // Tahap 2: OCR dilakukan setelah semua dokumen aman tersimpan.
-    // Kegagalan OCR per KTP hanya membuatnya menunggu input manual.
+    // Tahap 2: OCR opsional setelah semua file selesai disimpan.
+    // Jika mesin OCR gagal dimuat di Android, dokumen tetap aman di arsip.
     let autoCount=0,unreadable=0,duplicates=0,ocrErrors=0;
+    try{
+      worker=await loadTesseractIdentitas();
+    }catch(ocrInitError){
+      console.error("Mesin OCR tidak tersedia; dokumen tetap tersimpan:",ocrInitError);
+      ocrErrors++;
+    }
     for(let i=0;i<uploadedDocs.length;i++){
       const item=uploadedDocs[i];
       if(item.kind!=="KTP")continue;
+      if(!worker){unreadable++;continue;}
       progress.textContent="Membaca KTP "+(i)+"/"+uploadedDocs.length+" — "+item.file.name+" (foto sudah aman tersimpan)";
       try{
         const ocrImage=await siapkanGambarOcr(item.file);
