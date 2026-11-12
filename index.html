@@ -1712,8 +1712,8 @@ function renderPratinjauFotoKtp(){
 }
 
 async function tambahFotoKtpKamera(input){
-  // Galeri KTP mendukung pemilihan beberapa foto sekaligus; kamera tetap dapat
-  // menambahkan satu foto per pengambilan. Setiap file dinormalisasi terpisah.
+  // Tampilkan file asli segera setelah dipilih. Jangan menunggu OCR/decode/canvas,
+  // karena proses tersebut dapat tertahan pada sebagian perangkat Android.
   const files=Array.from(input?.files||[]);
   const status=document.getElementById("identitasKTPStatus");
   if(!files.length){
@@ -1730,30 +1730,33 @@ async function tambahFotoKtpKamera(input){
     if(input)input.value="";
     return;
   }
-  if(files.length>remaining){
-    alert("Sisa slot hanya "+remaining+" foto. Hanya "+remaining+" foto pertama yang akan ditambahkan.");
-  }
-  let added=0,failed=[];
-  for(const file of files.slice(0,remaining)){
-    if(status)status.textContent="Menyiapkan foto KTP "+(added+1)+" dari "+Math.min(files.length,remaining)+"...";
+  const selected=files.slice(0,remaining);
+  if(files.length>remaining)alert("Sisa slot hanya "+remaining+" foto. Hanya "+remaining+" foto pertama yang ditambahkan.");
+  const firstIndex=window._identitasKtpCameraFiles.length;
+  selected.forEach(file=>window._identitasKtpCameraFiles.push(file));
+  renderPratinjauFotoKtp();
+  if(status)status.textContent="✓ "+selected.length+" foto dipilih. Pratinjau ditampilkan; menyiapkan berkas...";
+  if(input)input.value="";
+
+  // Normalisasi berjalan setelah pratinjau tampil. Bila gagal, pertahankan file
+  // asli agar tidak hilang; unggah akan tetap memeriksa batas ukuran/format.
+  for(let i=0;i<selected.length;i++){
+    const index=firstIndex+i;
+    const file=selected[i];
     try{
       const ready=await normalisasiFotoIdentitas(file);
-      window._identitasKtpCameraFiles.push(ready);
-      added++;
+      if(window._identitasKtpCameraFiles[index]===file){
+        window._identitasKtpCameraFiles[index]=ready;
+      }
     }catch(error){
-      console.error("Foto KTP tidak dapat disiapkan:",file?.name,error);
-      failed.push((file?.name||"Foto tanpa nama")+": "+(error.message||"format tidak didukung"));
+      console.error("Normalisasi foto KTP gagal; file asli dipertahankan:",file?.name,error);
+      if(status)status.textContent="Pratinjau tampil. "+(file.name||"Foto KTP")+" dipertahankan dalam format asli: "+(error.message||"normalisasi gagal")+".";
     }
+    renderPratinjauFotoKtp();
   }
   const queued=window._identitasKtpCameraFiles;
-  renderPratinjauFotoKtp();
-  if(status)status.textContent=(queued.length? "✓ Total "+queued.length+" foto KTP siap: ":"Belum ada foto KTP siap.")+
-    queued.map((f,i)=>(i+1)+". "+f.name).join(" · ")+
-    (failed.length?" | Gagal: "+failed.join("; "):"");
-  if(failed.length)alert("Sebagian foto KTP tidak dapat diproses:\n"+failed.join("\n"));
-  if(input)input.value="";
+  if(status)status.textContent="✓ Total "+queued.length+" foto KTP dipilih dan tampil. Periksa pratinjau sebelum menyimpan.";
 }
-
 function ambilFieldOcr(text, patterns){
   const source=String(text||"").replace(/\r/g,"");
   for(const pattern of patterns){
