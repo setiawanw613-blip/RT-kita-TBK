@@ -1891,7 +1891,7 @@ async function uploadArsipIdentitas(){
     }
 
     let familyId="";
-    if(/^\\d{16}$/.test(String(parsedKk.no_kk||""))){
+    if(/^\d{16}$/.test(String(parsedKk.no_kk||""))){
       const head=kkMembers.find(m=>m.hubungan_keluarga==="Kepala Keluarga");
       if(!parsedKk.kepala_keluarga&&head)parsedKk.kepala_keluarga=head.nama_lengkap;
       progress.textContent="Mencocokkan nomor KK dengan data keluarga...";
@@ -1909,12 +1909,12 @@ async function uploadArsipIdentitas(){
     }else{
       // Jika nomor KK tidak terbaca, izinkan arsip masuk ke keluarga yang sudah dipilih.
       const selectedFamily=document.getElementById("identitasFamily")?.value||"";
-      if(/^\\d+$/.test(String(selectedFamily)))familyId=String(selectedFamily);
+      if(/^\d+$/.test(String(selectedFamily)))familyId=String(selectedFamily);
       if(!familyId){
         throw new Error("Nomor KK belum terbaca dan belum ada keluarga yang dipilih. Foto belum dapat ditempelkan ke arsip keluarga. Buat/pilih data keluarga terlebih dahulu, lalu unggah ulang.");
       }
     }
-    if(!/^\\d+$/.test(familyId))throw new Error("Data keluarga belum berhasil ditentukan.");
+    if(!/^\d+$/.test(familyId))throw new Error("Data keluarga belum berhasil ditentukan.");
 
     const selected=[{file:kk,kind:"KK"},...ktps.map(file=>({file,kind:"KTP"}))];
     for(let i=0;i<selected.length;i++){
@@ -1950,11 +1950,11 @@ async function uploadArsipIdentitas(){
     let kkMemberResult={created:0,duplicates:0,skipped:0};
     let memberMessage="OCR belum berhasil membaca daftar anggota dengan yakin. Foto KK dan KTP tetap tersimpan; data anggota menunggu pemeriksaan.";
     if(kkMembers.length){
-      const preview=kkMembers.map((m,index)=>(index+1)+". "+m.nama_lengkap+" — "+m.hubungan_keluarga+" — NIK "+m.nik.slice(0,4)+"••••••••"+m.nik.slice(-4)).join("\\n");
+      const preview=kkMembers.map((m,index)=>(index+1)+". "+m.nama_lengkap+" — "+m.hubungan_keluarga+" — NIK "+m.nik.slice(0,4)+"••••••••"+m.nik.slice(-4)).join("\n");
       const approved=confirm(
-        "HASIL PEMBACAAN KK\\nNomor KK: •••• "+String(parsedKk.no_kk||"").slice(-4)+
-        "\\nAnggota terdeteksi: "+kkMembers.length+"\\n\\n"+preview+
-        "\\n\\nPeriksa hasil dengan dokumen asli. Simpan kandidat data warga?"
+        "HASIL PEMBACAAN KK\nNomor KK: •••• "+String(parsedKk.no_kk||"").slice(-4)+
+        "\nAnggota terdeteksi: "+kkMembers.length+"\n\n"+preview+
+        "\n\nPeriksa hasil dengan dokumen asli. Simpan kandidat data warga?"
       );
       if(approved){
         progress.textContent="Menyimpan kandidat anggota keluarga...";
@@ -2011,7 +2011,7 @@ async function uploadArsipIdentitas(){
     if(ktpStatus)ktpStatus.textContent="✓ "+uploadedDocs.filter(item=>item.kind==="KTP").length+" foto KTP tersimpan.";
     await muatArsipIdentitas();
     progress.textContent="Arsip selesai. "+memberMessage+" KTP cocok otomatis: "+ktpMatched+"; perlu pemeriksaan: "+ktpNeedsReview+"."+(uploadFailures.length?" Sebagian upload gagal: "+uploadFailures.join(" | "):"");
-    alert("Arsip dokumen selesai. KK tersimpan dan "+uploadedDocs.filter(item=>item.kind==="KTP").length+" foto KTP tersimpan.\\n"+memberMessage+"\\nKTP cocok otomatis: "+ktpMatched+"; perlu pemeriksaan: "+ktpNeedsReview+"."+(uploadFailures.length?"\\nCatatan upload: "+uploadFailures.join(" | "):""));
+    alert("Arsip dokumen selesai. KK tersimpan dan "+uploadedDocs.filter(item=>item.kind==="KTP").length+" foto KTP tersimpan.\n"+memberMessage+"\nKTP cocok otomatis: "+ktpMatched+"; perlu pemeriksaan: "+ktpNeedsReview+"."+(uploadFailures.length?"\nCatatan upload: "+uploadFailures.join(" | "):""));
   }catch(error){
     console.error("PENDATAAN KK ERROR:",error);
     progress.textContent=error.message||"Pendataan belum selesai.";
