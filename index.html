@@ -1465,6 +1465,16 @@ async function arsipIdentitasAdmin(){
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKKFile').click()">📁 File / Galeri KK</button>
       </div>
       <div id="identitasKKStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KK.</div>
+      <div style="border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px;padding:10px;margin:8px 0 14px">
+        <b style="font-size:13px">Data KK (cadangan jika OCR tidak terbaca)</b>
+        <label style="display:block;margin-top:7px">Nomor KK 16 digit</label>
+        <input id="identitasManualNoKk" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit nomor KK" style="width:100%;box-sizing:border-box">
+        <label style="display:block;margin-top:7px">Nama kepala keluarga</label>
+        <input id="identitasManualKepala" placeholder="Nama sesuai KK" style="width:100%;box-sizing:border-box">
+        <label style="display:block;margin-top:7px">Alamat</label>
+        <input id="identitasManualAlamat" placeholder="Alamat sesuai KK" style="width:100%;box-sizing:border-box">
+        <p class="muted" style="font-size:11px;margin:6px 0 0">Jika pembacaan otomatis gagal, data ini dipakai untuk membuat/mencocokkan arsip keluarga. Foto asli tetap disimpan.</p>
+      </div>
       <label>Foto KTP anggota keluarga (opsional, maks. 20 KTP)</label>
       <input id="identitasKTP" type="file" accept="image/*" capture="environment" style="display:none" onchange="tambahFotoKtpKamera(this)">
       <input id="identitasKTPFile" type="file" accept="image/*" multiple style="display:none" onchange="tambahFotoKtpKamera(this)">
@@ -1679,35 +1689,35 @@ async function tampilkanFotoKamera(jenis,input){
 function renderPratinjauFotoKtp(){
   const box=document.getElementById("identitasKTPPreview");
   if(!box)return;
-  (window._identitasKtpPreviewUrls||[]).forEach(url=>URL.revokeObjectURL(url));
-  window._identitasKtpPreviewUrls=[];
-  box.replaceChildren();
+  box.innerHTML="";
   const files=Array.isArray(window._identitasKtpCameraFiles)?window._identitasKtpCameraFiles:[];
   files.forEach((file,index)=>{
     const card=document.createElement("div");
     card.style.cssText="border:1px solid #d1d5db;border-radius:10px;padding:7px;background:#fff;min-width:0";
     const img=document.createElement("img");
-    const url=URL.createObjectURL(file);
-    window._identitasKtpPreviewUrls.push(url);
-    img.src=url; img.alt="Pratinjau foto KTP "+(index+1);
+    img.alt="Pratinjau foto KTP "+(index+1);
     img.style.cssText="width:100%;height:112px;object-fit:contain;background:#f3f4f6;border-radius:6px;display:block";
+    img.onerror=()=>{img.style.display="none";const fallback=document.createElement("div");fallback.textContent="Pratinjau gagal dibuka. File tetap dipilih untuk diunggah.";fallback.style.cssText="font-size:11px;color:#b45309;padding:8px";card.insertBefore(fallback,name);};
     const name=document.createElement("div");
     name.textContent=(index+1)+". "+(file.name||"Foto KTP");
     name.style.cssText="font-size:11px;overflow-wrap:anywhere;margin:5px 0";
     const remove=document.createElement("button");
-    remove.type="button"; remove.textContent="Hapus foto";
-    remove.className="btn secondary";
+    remove.type="button"; remove.textContent="Hapus foto"; remove.className="btn secondary";
     remove.style.cssText="width:100%;padding:5px;font-size:11px";
     remove.addEventListener("click",()=>{
       window._identitasKtpCameraFiles.splice(index,1);
       const status=document.getElementById("identitasKTPStatus");
       if(status)status.textContent=window._identitasKtpCameraFiles.length
-        ?"✓ Total "+window._identitasKtpCameraFiles.length+" foto KTP siap dipreview dan disimpan."
+        ?"✓ Total "+window._identitasKtpCameraFiles.length+" foto KTP dipilih."
         :"Belum ada foto KTP. Pilih dari Galeri atau Kamera.";
       renderPratinjauFotoKtp();
     });
-    card.append(img,name,remove);
-    box.appendChild(card);
+    card.append(img,name,remove);box.appendChild(card);
+    // FileReader lebih kompatibel pada sebagian Android/WebView daripada blob URL.
+    const reader=new FileReader();
+    reader.onload=()=>{if(img.isConnected)img.src=String(reader.result||"");};
+    reader.onerror=()=>{img.style.display="none";};
+    try{reader.readAsDataURL(file);}catch(error){img.style.display="none";}
   });
 }
 
@@ -1939,28 +1949,27 @@ async function uploadArsipIdentitas(){
     }
 
     let familyId="";
-    if(/^\d{16}$/.test(String(parsedKk.no_kk||""))){
+    const manualNoKk=String(document.getElementById("identitasManualNoKk")?.value||"").replace(/\D/g,"");
+    const manualHead=String(document.getElementById("identitasManualKepala")?.value||"").trim();
+    const manualAddress=String(document.getElementById("identitasManualAlamat")?.value||"").trim();
+    const finalNoKk=/^\d{16}$/.test(String(parsedKk.no_kk||""))?String(parsedKk.no_kk):manualNoKk;
+    if(/^\d{16}$/.test(finalNoKk)){
       const head=kkMembers.find(m=>m.hubungan_keluarga==="Kepala Keluarga");
-      if(!parsedKk.kepala_keluarga&&head)parsedKk.kepala_keluarga=head.nama_lengkap;
+      if(!parsedKk.kepala_keluarga)parsedKk.kepala_keluarga=head?.nama_lengkap||manualHead;
       progress.textContent="Mencocokkan nomor KK dengan data keluarga...";
       const familyResult=await api("/api/identitas/keluarga-otomatis",{
         method:"POST",
         body:JSON.stringify({
-          no_kk:parsedKk.no_kk,
-          kepala_keluarga:parsedKk.kepala_keluarga||"",
-          alamat:parsedKk.alamat||"",
+          no_kk:finalNoKk,
+          kepala_keluarga:parsedKk.kepala_keluarga||manualHead,
+          alamat:parsedKk.alamat||manualAddress,
           rt:parsedKk.rt||"004",
           rw:parsedKk.rw||"01"
         })
       });
       familyId=String(familyResult?.family?.id||"");
     }else{
-      // Jika nomor KK tidak terbaca, izinkan arsip masuk ke keluarga yang sudah dipilih.
-      const selectedFamily=document.getElementById("identitasFamily")?.value||"";
-      if(/^\d+$/.test(String(selectedFamily)))familyId=String(selectedFamily);
-      if(!familyId){
-        throw new Error("Nomor KK belum terbaca dan belum ada keluarga yang dipilih. Foto belum dapat ditempelkan ke arsip keluarga. Buat/pilih data keluarga terlebih dahulu, lalu unggah ulang.");
-      }
+      throw new Error("Nomor KK belum berhasil dibaca. Isi nomor KK 16 digit pada bagian Data KK (cadangan jika OCR tidak terbaca), lalu tekan Simpan lagi. Foto KK dan KTP masih ada di layar.");
     }
     if(!/^\d+$/.test(familyId))throw new Error("Data keluarga belum berhasil ditentukan.");
 
