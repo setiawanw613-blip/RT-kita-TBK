@@ -1467,7 +1467,7 @@ async function arsipIdentitasAdmin(){
       <div id="identitasKKStatus" class="muted" style="font-size:12px;margin-bottom:12px">Belum ada foto KK.</div>
       <label>Foto KTP anggota keluarga (maks. 20 KTP)</label>
       <input id="identitasKTP" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" style="display:none" onchange="tambahFotoKtpKamera(this)">
-      <input id="identitasKTPFile" type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="tambahFotoKtpKamera(this)">
+      <input id="identitasKTPFile" type="file" accept="image/jpeg,image/png,image/webp" multiple style="display:none" onchange="tambahFotoKtpKamera(this)">
       <div style="display:flex;gap:8px;margin:7px 0 8px">
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTP').click()">📷 Kamera KTP</button>
         <button class="btn secondary" type="button" style="flex:1" onclick="document.getElementById('identitasKTPFile').click()">📁 File / Galeri KTP</button>
@@ -1603,14 +1603,29 @@ function tampilkanFotoKamera(jenis,input){
   if(status)status.textContent="✓ Foto KK siap diproses otomatis: "+file.name;
 }
 function tambahFotoKtpKamera(input){
-  const file=input?.files?.[0];
-  if(!file)return;
-  if(!/^image\/(jpeg|png|webp)$/.test(file.type)){alert("Gunakan foto JPG, PNG, atau WebP dari kamera.");input.value="";return;}
-  if(file.size>8*1024*1024){alert("Ukuran foto maksimal 8 MB.");input.value="";return;}
-  if(window._identitasKtpCameraFiles.length>=20){alert("Maksimal 20 foto KTP untuk satu keluarga.");input.value="";return;}
-  window._identitasKtpCameraFiles.push(file);
+  const files=Array.from(input?.files||[]);
+  if(!files.length)return;
+  const queue=[];
+  for(const file of files){
+    if(!/^image\/(jpeg|png|webp)$/.test(file.type)){
+      alert("File "+(file.name||"yang dipilih")+" bukan foto JPG, PNG, atau WebP. File tersebut dilewati.");
+      continue;
+    }
+    if(file.size>8*1024*1024){
+      alert("Foto "+(file.name||"KTP")+" melebihi 8 MB dan dilewati.");
+      continue;
+    }
+    if(window._identitasKtpCameraFiles.length+queue.length>=20){
+      alert("Maksimal 20 foto KTP untuk satu keluarga. Foto selebihnya dilewati.");
+      break;
+    }
+    queue.push(file);
+  }
+  window._identitasKtpCameraFiles.push(...queue);
   const status=document.getElementById("identitasKTPStatus");
-  if(status)status.textContent="✓ "+window._identitasKtpCameraFiles.length+" foto KTP siap disimpan: "+window._identitasKtpCameraFiles.map((f,i)=>(i+1)+". "+f.name).join(" · ");
+  if(status)status.textContent=window._identitasKtpCameraFiles.length
+    ? "✓ "+window._identitasKtpCameraFiles.length+" foto KTP siap diproses: "+window._identitasKtpCameraFiles.map((f,i)=>(i+1)+". "+f.name).join(" · ")
+    : "Belum ada foto KTP yang valid.";
   input.value="";
 }
 
@@ -1703,41 +1718,52 @@ function parseAnggotaKkDariOcr(text){
   return out;
 }
 function parseKtpDariOcr(text){
-  const source=String(text||"").replace(/\r/g,"");
+  const source=String(text||"").replace(/\r/g,"").normalize("NFKC");
   const lines=source.split("\n").map(x=>x.trim()).filter(Boolean);
   const normalizeDigits=value=>String(value||"").toUpperCase()
     .replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
-  // OCR sering memisahkan label NIK dan angka ke baris berbeda.
-  const nikLabel=lines.findIndex(line=>/\bN[1I]K\b/i.test(line));
-  let nik="";
-  if(nikLabel>=0){
-    for(const line of lines.slice(nikLabel,Math.min(lines.length,nikLabel+4))){
-      const digits=normalizeDigits(line).replace(/[^0-9]/g,"");
-      const match=digits.match(/\d{16}/);
-      if(match){nik=match[0];break;}
-    }
-  }
-  if(!nik){
-    const normalized=normalizeDigits(source);
-    const candidates=normalized.match(/(?:\d[\s.-]*){16,}/g)||[];
+  // Cari NIK di sekitar label terlebih dahulu, lalu di seluruh teks.
+  // Pola ini menerima angka yang dipisah spasi/titik atau salah baca O/I/S oleh OCR.
+  const findNik=value=>{
+    const candidates=String(value||"").toUpperCase().match(/[0-9OQILSBZ](?:[\\s.-]*[0-9OQILSBZ]){15,20}/g)||[];
     for(const candidate of candidates){
-      const match=candidate.replace(/\D/g,"").match(/\d{16}/);
-      if(match){nik=match[0];break;}
+      const digits=normalizeDigits(candidate).replace(/\\D/g,"");
+      if(digits.length>=16){
+        for(let i=0;i<=digits.length-16;i++){
+          const part=digits.slice(i,i+16);
+          if(/^\\d{16}$/.test(part))return part;
+        }
+      }
     }
-  }
-  // Nama bisa berada tepat di bawah label NAMA, bukan di baris yang sama.
+    return "";
+  };
+  const nikLabel=lines.findIndex(line=>/N[1I]K/i.test(line));
+  let nik=nikLabel>=0?findNik(lines.slice(Math.max(0,nikLabel),Math.min(lines.length,nikLabel+5)).join(" ")):"";
+  if(!nik)nik=findNik(source);
+  // Label NAMA sering terpisah dari nilai nama pada hasil OCR Android.
+  const isFieldLabel=line=>/^(N[1I]K|NAMA|TEMPAT|TGL|TANGGAL|JENIS|ALAMAT|AGAMA|STATUS|KEWARGANEGARAAN|BERLAKU|GOLONGAN|DARAH|PEKERJAAN|PROVINSI|KABUPATEN|KOTA|KECAMATAN|KELURAHAN|DESA)\\b/i.test(String(line||"").replace(/[:：].*$/,"").trim());
   let nama="";
-  const namaIndex=lines.findIndex(line=>/^N[4A]M[4A]\b/i.test(line)||/\bNAMA\s*[:：]/i.test(line));
+  const namaIndex=lines.findIndex(line=>/^N[4A]M[4A](?:\\b|\\s*[:：])/i.test(line)||/^NAMA\\b/i.test(line));
   if(namaIndex>=0){
-    const sameLine=lines[namaIndex].replace(/^.*?N[4A]M[4A]\s*[:：]?/i,"").trim();
-    const nextLine=lines.slice(namaIndex+1,namaIndex+3).find(line=>line.length>=3&&!/^(NIK|TEMPAT|TGL|JENIS|ALAMAT|AGAMA|STATUS|KEWARGANEGARAAN)\b/i.test(line))||"";
-    const candidate=sameLine||nextLine;
-    nama=candidate.replace(/[^A-ZÀ-ÿ .'’-]/gi," ").replace(/\s+/g," ").trim();
+    const labelLine=lines[namaIndex];
+    const sameLine=labelLine.replace(/^.*?N[4A]M[4A]\\b\\s*[:：-]?\\s*/i,"").trim();
+    const nextLine=lines.slice(namaIndex+1,namaIndex+5).find(line=>
+      line.length>=3&&!isFieldLabel(line)&&!findNik(line)&&!/^\\d/.test(line)
+    )||"";
+    nama=sameLine||nextLine;
   }
-  const jkText=ambilFieldOcr(source,[/JENIS\s*KELAMIN\s*[:：]?\s*([^\n]+)/i]);
+  // Fallback terbatas: ambil baris teks yang paling dekat dengan NIK jika label nama
+  // gagal dikenali, tetapi jangan pernah mengambil label administrasi atau angka.
+  if(!nama&&nikLabel>=0){
+    nama=lines.slice(0,nikLabel).reverse().find(line=>
+      line.length>=3&&!isFieldLabel(line)&&!findNik(line)&&/[A-ZÀ-ÿ]{2}/i.test(line)
+    )||"";
+  }
+  nama=String(nama||"").replace(/^[^A-ZÀ-ÿ]+/i,"").replace(/[^A-ZÀ-ÿ .'’-]/gi," ").replace(/\\s+/g," ").trim().slice(0,120);
+  const jkText=ambilFieldOcr(source,[/JENIS\\s*KELAMIN\\s*[:：]?\\s*([^\\n]+)/i]);
   const jenis_kelamin=/PEREMPUAN/i.test(jkText)?"Perempuan":/LAKI/i.test(jkText)?"Laki-laki":"";
-  const lahir=ambilFieldOcr(source,[/(?:TEMPAT\s*[/ ]\s*TGL\s*LAHIR|TEMPAT\s*LAHIR)\s*[:：]?\s*([^\n]+)/i]);
-  const dateMatch=lahir.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{4})/);
+  const lahir=ambilFieldOcr(source,[/(?:TEMPAT\\s*[/ ]\\s*TGL\\s*LAHIR|TEMPAT\\s*LAHIR)\\s*[:：]?\\s*([^\\n]+)/i]);
+  const dateMatch=lahir.match(/(\\d{1,2}[/-]\\d{1,2}[/-]\\d{4})/);
   const tanggal_lahir=dateMatch?tanggalOcrKeIso(dateMatch[1]):"";
   const tempat_lahir=lahir.replace(dateMatch?dateMatch[0]:"","").replace(/[,;:]/g," ").trim().slice(0,100);
   return {nik,nama_lengkap:nama,jenis_kelamin,tempat_lahir,tanggal_lahir,hubungan_keluarga:"Anggota Keluarga"};
@@ -1836,7 +1862,12 @@ async function uploadArsipIdentitas(){
         }else unreadable++;
       }
     }
+    // Worker dihentikan dan referensi global dibersihkan bersama-sama.
+    // Sebelumnya hanya variabel lokal yang dikosongkan sehingga pemindaian ulang
+    // dapat memakai worker yang sudah terminate dan gagal membaca KTP berikutnya.
     await worker.terminate();worker=null;
+    window._rtIdentitasOcrWorker=null;
+    window._rtIdentitasOcrWorkerPromise=null;
     window._identitasKkFile=null;
     window._identitasKtpCameraFiles=[];
     document.getElementById("identitasKK").value="";
