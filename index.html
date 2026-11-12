@@ -1802,8 +1802,6 @@ function parseKtpDariOcr(text){
   const lines=source.split("\n").map(x=>x.trim()).filter(Boolean);
   const normalizeDigits=value=>String(value||"").toUpperCase()
     .replace(/[OQ]/g,"0").replace(/[IL|]/g,"1").replace(/S/g,"5").replace(/B/g,"8").replace(/Z/g,"2");
-  // Cari NIK di sekitar label terlebih dahulu, lalu di seluruh teks.
-  // Pola ini menerima angka yang dipisah spasi/titik atau salah baca O/I/S oleh OCR.
   const findNik=value=>{
     const candidates=String(value||"").toUpperCase().match(/[0-9OQILSBZ](?:[\s.-]*[0-9OQILSBZ]){15,20}/g)||[];
     for(const candidate of candidates){
@@ -1820,25 +1818,29 @@ function parseKtpDariOcr(text){
   const nikLabel=lines.findIndex(line=>/N[1I]K/i.test(line));
   let nik=nikLabel>=0?findNik(lines.slice(Math.max(0,nikLabel),Math.min(lines.length,nikLabel+5)).join(" ")):"";
   if(!nik)nik=findNik(source);
-  // Label NAMA sering terpisah dari nilai nama pada hasil OCR Android.
-  const isFieldLabel=line=>/^(N[1I]K|NAMA|TEMPAT|TGL|TANGGAL|JENIS|ALAMAT|AGAMA|STATUS|KEWARGANEGARAAN|BERLAKU|GOLONGAN|DARAH|PEKERJAAN|PROVINSI|KABUPATEN|KOTA|KECAMATAN|KELURAHAN|DESA)\b/i.test(String(line||"").replace(/[:：].*$/,"").trim());
+
+  // Abaikan baris wilayah/administrasi, termasuk OCR yang menghilangkan spasi
+  // seperti "KABUPATENBEKASI" atau "PROVINSIJAWABARAT".
+  const compact=line=>String(line||"").toUpperCase().replace(/[^A-Z]/g,"");
+  const isAdministrativeLine=line=>{
+    const value=compact(String(line||"").replace(/[:：].*$/,""));
+    return /^(PROVINSI|KABUPATEN|KABUPATENKOTA|KOTA|KOTAADMINISTRASI|KECAMATAN|KELURAHAN|DESA|DUSUN|RT|RW|NIK|NAMA|TEMPAT|TANGGALLAHIR|JENISKELAMIN|ALAMAT|AGAMA|STATUSPERKAWINAN|PEKERJAAN|KEWARGANEGARAAN|BERLAKUHINGGA|GOLONGANDARAH)/.test(value);
+  };
+  const isFieldLabel=line=>isAdministrativeLine(line)||
+    /^(N[1I]K|N[4A]M[4A]|NAMA|TEMPAT|TGL|TANGGAL|JENIS|ALAMAT|AGAMA|STATUS|KEWARGANEGARAAN|BERLAKU|GOLONGAN|DARAH|PEKERJAAN)/i.test(String(line||"").trim());
   let nama="";
-  const namaIndex=lines.findIndex(line=>/^N[4A]M[4A](?:\b|\s*[:：])/i.test(line)||/^NAMA\b/i.test(line));
+  const namaIndex=lines.findIndex(line=>/^N[4A]M[4A](?:\b|\s*[:：])|^NAMA(?:\b|\s*[:：])/i.test(line));
   if(namaIndex>=0){
     const labelLine=lines[namaIndex];
-    const sameLine=labelLine.replace(/^.*?N[4A]M[4A]\b\s*[:：-]?\s*/i,"").trim();
-    const nextLine=lines.slice(namaIndex+1,namaIndex+5).find(line=>
+    const sameLine=labelLine.replace(/^.*?N[4A]M[4A]\s*[:：-]?\s*/i,"").trim();
+    const nextLine=lines.slice(namaIndex+1,namaIndex+6).find(line=>
       line.length>=3&&!isFieldLabel(line)&&!findNik(line)&&!/^\d/.test(line)
     )||"";
-    nama=sameLine||nextLine;
+    const candidate=sameLine||nextLine;
+    if(candidate&&!isAdministrativeLine(candidate))nama=candidate;
   }
-  // Fallback terbatas: ambil baris teks yang paling dekat dengan NIK jika label nama
-  // gagal dikenali, tetapi jangan pernah mengambil label administrasi atau angka.
-  if(!nama&&nikLabel>=0){
-    nama=lines.slice(0,nikLabel).reverse().find(line=>
-      line.length>=3&&!isFieldLabel(line)&&!findNik(line)&&/[A-ZÀ-ÿ]{2}/i.test(line)
-    )||"";
-  }
+  // Tidak menebak nama dari baris sebelum NIK. Jika label NAMA tidak terbaca,
+  // biarkan kosong agar Ketua RT mengisi dari foto asli, bukan salah mencatat wilayah.
   nama=String(nama||"").replace(/^[^A-ZÀ-ÿ]+/i,"").replace(/[^A-ZÀ-ÿ .'’-]/gi," ").replace(/\s+/g," ").trim().slice(0,120);
   const jkText=ambilFieldOcr(source,[/JENIS\s*KELAMIN\s*[:：]?\s*([^\n]+)/i]);
   const jenis_kelamin=/PEREMPUAN/i.test(jkText)?"Perempuan":/LAKI/i.test(jkText)?"Laki-laki":"";
