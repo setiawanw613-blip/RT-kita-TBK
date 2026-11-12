@@ -2193,41 +2193,87 @@ app.post("/api/identitas/register-upload", requireAdmin, async(req,res)=>{
 
 app.delete("/api/identitas/arsip-upload", requireAdmin, async (req,res) => {
   try {
-    const docs = await supabaseRequest("dokumen_identitas", {
-      query: "select=id,storage_path&order=id.asc&limit=5000"
-    });
-    const rows = Array.isArray(docs) ? docs : [];
-    let filesDeleted = 0;
-    for (const doc of rows) {
-      const pathObject = String(doc.storage_path || "");
-      if (!pathObject || pathObject.startsWith("/") || pathObject.includes("..")) {
-        throw new Error("Path arsip tidak valid; penghapusan dihentikan demi keamanan.");
+    // Enumerate the entire private identity bucket, including orphaned uploads
+    // that no longer have a row in dokumen_identitas.
+    const paths = [];
+    const visited = new Set();
+    async function listFolder(prefix) {
+      if (visited.has(prefix)) return;
+      visited.add(prefix);
+      for (let offset = 0; ; offset += 1000) {
+        const response = await fetch(
+          `${SUPABASE_URL}/storage/v1/object/list/${encodeURIComponent(IDENTITAS_BUCKET)}`,
+          {
+            method: "POST",
+            headers: {
+              apikey: SUPABASE_KEY,
+              Authorization: `Bearer ${SUPABASE_KEY}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ prefix, limit: 1000, offset, sortBy: { column: "name", order: "asc" } }),
+            signal: AbortSignal.timeout(15000)
+          }
+        );
+        const items = await response.json().catch(() => null);
+        if (!response.ok || !Array.isArray(items)) {
+          throw new Error("Daftar file Storage gagal dibaca; tidak ada catatan database yang dihapus.");
+        }
+        for (const item of items) {
+          const name = String(item?.name || "");
+          if (!name || name === "." || name === ".." || name.includes("/") || name.includes("\\\\")) {
+            throw new Error("Nama/path objek Storage tidak valid; penghapusan dihentikan.");
+          }
+          if (item.id === null || item.id === undefined) {
+            await listFolder(prefix ? `${prefix}${name}/` : `${name}/`);
+          } else {
+            paths.push(prefix ? `${prefix}${name}` : name);
+          }
+        }
+        if (items.length < 1000) break;
       }
-      const encoded = pathObject.split("/").map(encodeURIComponent).join("/");
+    }
+    await listFolder("");
+
+    let filesDeleted = 0;
+    for (let i = 0; i < paths.length; i += 1000) {
+      const batch = paths.slice(i, i + 1000);
       const response = await fetch(
-        `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(IDENTITAS_BUCKET)}/${encoded}`,
+        `${SUPABASE_URL}/storage/v1/object/${encodeURIComponent(IDENTITAS_BUCKET)}`,
         {
           method: "DELETE",
-          headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-          signal: AbortSignal.timeout(15000)
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ prefixes: batch }),
+          signal: AbortSignal.timeout(30000)
         }
       );
-      if (!response.ok && response.status !== 404) {
-        throw new Error("File arsip gagal dihapus dari penyimpanan; catatan database dipertahankan.");
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        console.error("DELETE IDENTITY STORAGE BATCH ERROR:", response.status, detail);
+        throw new Error("Penghapusan file Storage gagal; arsip database belum dihapus.");
       }
-      if (response.ok) filesDeleted++;
+      filesDeleted += batch.length;
     }
-    for (const doc of rows) {
-      await supabaseRequest("dokumen_identitas", {
+
+    const docs = await supabaseRequest("dokumen_identitas", {
+      query: "select=id&order=id.asc&limit=5000"
+    });
+    const rows = Array.isArray(docs) ? docs : [];
+    if (rows.length) {
+      const deleted = await supabaseRequest("dokumen_identitas", {
         method: "DELETE",
-        query: "id=eq." + encodeURIComponent(String(doc.id))
+        query: "id=not.is.null"
       });
+      void deleted;
     }
     res.setHeader("Cache-Control", "no-store");
     return res.json({ ok:true, documents_deleted:rows.length, files_deleted:filesDeleted });
   } catch (error) {
     console.error("DELETE IDENTITY ARCHIVES ERROR:", error);
-    return res.status(500).json({ ok:false, message:"Penghapusan arsip tidak selesai. Data keluarga dan warga tetap dipertahankan." });
+    return res.status(500).json({ ok:false, message:"Penghapusan arsip tidak selesai. Data warga dan keluarga tetap dipertahankan." });
   }
 });
 
