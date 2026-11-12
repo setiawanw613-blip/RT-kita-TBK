@@ -1787,8 +1787,6 @@ async function uploadArsipIdentitas(){
   btn.textContent="Menyimpan dokumen...";
   let worker=null;
   const uploadedDocs=[];
-  // Data KK harus selalu diinisialisasi sebelum dipakai; sebelumnya variabel ini tidak dibuat.
-  const parsedKk={no_kk:"",kepala_keluarga:"",alamat:"",rt:"004",rw:"01"};
   try{
     // Jangan jalankan OCR atau mengunduh mesin OCR sebelum unggah.
     // Pengguna mengonfirmasi nomor KK secara manual agar gangguan OCR/CDN
