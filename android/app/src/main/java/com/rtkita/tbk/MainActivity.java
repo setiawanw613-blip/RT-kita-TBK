@@ -22,6 +22,8 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Toast;
+import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends Activity {
     private static final String HOME = "https://rt-kita-tbk.vercel.app/";
@@ -31,6 +33,8 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> fileCallback;
     private Uri pendingCameraUri;
     private File pendingCameraFile;
+    // Keep each captured image alive while the WebView still holds its File reference.
+    private final List<File> capturedCameraFiles = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -135,6 +139,7 @@ public class MainActivity extends Activity {
                                 throw new IOException("Folder kamera tidak dapat dibuat");
                             }
                             pendingCameraFile = File.createTempFile("RTTBK_KAMERA_", ".jpg", pictures);
+                            capturedCameraFiles.add(pendingCameraFile);
                             pendingCameraUri = FileProvider.getUriForFile(
                                     MainActivity.this,
                                     getPackageName() + ".fileprovider",
@@ -174,9 +179,17 @@ public class MainActivity extends Activity {
     }
 
     private void clearPendingCamera() {
-        if (pendingCameraFile != null && pendingCameraFile.exists()) pendingCameraFile.delete();
+        // Do not delete the previous capture here: JavaScript may still hold a File
+        // object for it when the user opens the camera again for another KTP.
         pendingCameraFile = null;
         pendingCameraUri = null;
+    }
+
+    private void deleteCapturedCameraFiles() {
+        for (File file : capturedCameraFiles) {
+            if (file != null && file.exists()) file.delete();
+        }
+        capturedCameraFiles.clear();
     }
 
     private void openExternal(Uri uri) {
@@ -223,6 +236,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (fileCallback != null) fileCallback.onReceiveValue(null);
         clearPendingCamera();
+        deleteCapturedCameraFiles();
         if (webView != null) webView.destroy();
         super.onDestroy();
     }
