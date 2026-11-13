@@ -1020,8 +1020,8 @@ async function submitRegisterWarga(){
   const hpInput=ambil("regHp");
   const passwordInput=ambil("regPassword");
   if(!namaInput||!nikInput||!alamatInput||!hpInput||!passwordInput){alert("Form pendaftaran tidak termuat sempurna. Muat ulang halaman lalu coba kembali.");return;}
-  const nama_lengkap=String(namaInput.value||"").trim().replace(/\\s+/g," ");
-  const nik=String(nikInput.value||"").replace(/\\D/g,"");
+  const nama_lengkap=String(namaInput.value||"").trim().replace(/\s+/g," ");
+  const nik=String(nikInput.value||"").replace(/\D/g,"");
   const alamat=String(alamatInput.value||"").trim();
   const no_hp=String(hpInput.value||"").trim();
   const password=passwordInput.value;
