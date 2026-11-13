@@ -1103,7 +1103,7 @@ async function staffHome(){
   ${role==="bendahara"?"<p>Pengelolaan iuran, kas, bukti transaksi, dan laporan keuangan.</p><button class='btn' onclick='cash()'>Buka Kas RT</button><button class='btn secondary' onclick='iuranAdmin()'>Riwayat Iuran</button><button class='btn secondary' onclick='transparansiQRIS()'>Transparansi QRIS</button>":""}
   ${role==="sekretaris"?"<p>Administrasi surat, pengumuman, dan pengajuan warga. Akses administrasi tetap dibatasi oleh server.</p>":""}
   ${role==="ketua_gang"?"<p>Wilayah tugas: <b>"+esc(currentUser?.gang||"Belum ditetapkan")+"</b></p><button class='btn' onclick='lihatWargaGang()'>Lihat warga gang</button><button class='btn' onclick='buatSetoranGang()'>Buat QRIS Setoran Iuran Warga</button><button class='btn secondary' onclick='riwayatSetoranGang()'>Riwayat Setoran Saya</button>":""}
-  ${role==="sekretaris"?"<button class='btn' onclick='letters()'>Kelola Pengajuan Surat</button><button class='btn secondary' onclick='announcements()'>Kelola Pengumuman</button>":""}</div>
+  ${role==="sekretaris"?"<button class='btn' onclick='letters()'>Pengajuan Surat Warga</button><button class='btn secondary' onclick='announcements()'>Kelola Pengumuman</button>":""}</div>
   <button class="btn secondary" style="width:100%" onclick="logout()">Keluar</button>`;
   layout(title,content,false);
 }
@@ -1237,7 +1237,7 @@ async function adminHome(){
 
 <button data-menu-notif="surat" onclick="letters()">
   <span style="font-size:26px">📄</span>
-  <span>Surat</span>
+  <span>Pengajuan Surat Warga</span>
 </button>
 
 <button data-menu-notif="pengaduan" onclick="complaints()">
@@ -3765,7 +3765,7 @@ async function saveCash(){
 
 
 async function letters(){
-  layout("Surat Masuk",`
+  layout("Pengajuan Surat Warga",`
     <div class="card" id="letterList">Memuat...</div>
   `);
 
