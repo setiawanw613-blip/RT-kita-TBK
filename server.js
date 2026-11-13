@@ -3196,11 +3196,8 @@ app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
       if (!nama || !/^\d{16}$/.test(nik) || !alamat) {
         return res.status(400).json({ ok: false, message: "Nama, NIK 16 digit, dan alamat sesuai KTP wajib diisi." });
       }
-      if (kkRequired && !/^\d{16}$/.test(noKk)) {
-        return res.status(400).json({ ok: false, message: "Jenis surat ini mewajibkan nomor KK 16 digit." });
-      }
-      if (!kkRequired && noKk) {
-        return res.status(400).json({ ok: false, message: "Nomor KK tidak diperlukan untuk jenis surat ini." });
+      if (noKk && !/^\d{16}$/.test(noKk)) {
+        return res.status(400).json({ ok: false, message: "Nomor KK harus 16 digit jika diisi." });
       }
       if (tanggalLahir && !/^\d{4}-\d{2}-\d{2}$/.test(tanggalLahir)) {
         return res.status(400).json({ ok: false, message: "Format tanggal lahir tidak valid." });
@@ -3230,7 +3227,7 @@ app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
       identity = {
         nama_pemohon: warga.nama_lengkap || null,
         nik_pemohon: warga.nik || null,
-        no_kk_pemohon: kkRequired ? (warga.no_kk || null) : null,
+        no_kk_pemohon: String(req.body?.no_kk || warga.no_kk || "").replace(/\D/g, "") || null,
         alamat_pemohon: warga.alamat || null,
         tempat_lahir_pemohon: warga.tempat_lahir || null,
         tanggal_lahir_pemohon: warga.tanggal_lahir || null,
@@ -3242,8 +3239,8 @@ app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
       };
     }
 
-    if (kkRequired && !/^\d{16}$/.test(String(identity.no_kk_pemohon || "").replace(/\s/g, ""))) {
-      return res.status(400).json({ ok: false, message: "Jenis surat ini mewajibkan nomor KK 16 digit. Lengkapi nomor KK pada Data Warga atau isi manual." });
+    if (identity.no_kk_pemohon && !/^\d{16}$/.test(String(identity.no_kk_pemohon).replace(/\D/g, ""))) {
+      return res.status(400).json({ ok: false, message: "Nomor KK harus 16 digit jika diisi." });
     }
 
     const inserted = await supabaseRequest("pengajuan_surat", {
@@ -3296,6 +3293,10 @@ app.post("/api/letters", requireWarga, async (req, res) => {
       type,
       purpose
     } = req.body;
+    const noKk = String(req.body?.no_kk || "").replace(/\D/g, "");
+    if (noKk && !/^\d{16}$/.test(noKk)) {
+      return res.status(400).json({ ok: false, message: "Nomor KK harus 16 digit jika diisi." });
+    }
 
     if (!type || !purpose) {
       return res.status(400).json({
@@ -3308,6 +3309,7 @@ app.post("/api/letters", requireWarga, async (req, res) => {
       method: "POST",
       body: {
         warga_id: req.session.wargaId,
+        no_kk_pemohon: noKk || null,
         jenis_surat: type,
         keperluan: purpose,
         status: "diajukan"
