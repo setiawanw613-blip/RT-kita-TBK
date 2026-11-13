@@ -3747,10 +3747,7 @@ function kodeVerifikasiSurat(id, letter) {
 }
 
 async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
-  const fs = require("fs");
-  const path = require("path");
   const W = SURAT_WILAYAH;
-  const clean = (v) => (v == null ? "" : String(v).replace(/\\s+/g, " ").trim());
   const X = 72;
   const LEBAR = 451;
   const UKURAN = 11;
@@ -3758,24 +3755,22 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   const FONT_TEBAL = "Times-Bold";
   const { tanggalSurat } = infoTanggalSurat(letter);
 
-  // ---------- Tanda tangan Ketua RT ----------
-  const namaRT = clean(process.env.KETUA_RT_NAMA);
-  const garisNama = "(.......................................)";
-
+  // Blok pengesahan dibuat rata tengah: tanpa gambar tanda tangan.
   const yTtd = Math.min(yAkhir + 18, 652);
   const lebarTtd = 200;
-  const xKanan = X + LEBAR - lebarTtd;
-  const yNama = yTtd + 90;
+  const xTengah = X + (LEBAR - lebarTtd) / 2;
+  const namaRT = "Wawan Setiawan";
 
   doc.font(FONT).fontSize(UKURAN).fillColor("#000000");
-  doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xKanan, yTtd, { width: lebarTtd, align: "center" });
-  doc.text(`Ketua RT ${W.rt} / RW ${W.rw}`, xKanan, yTtd + 15, { width: lebarTtd, align: "center" });
+  doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xTengah, yTtd, {
+    width: lebarTtd, align: "center"
+  });
+  doc.text(`Ketua RT ${W.rt} / RW ${W.rw}`, xTengah, yTtd + 15, {
+    width: lebarTtd, align: "center"
+  });
 
-  // Stempel memakai file edited-image.png yang diberikan Ketua RT.
-  // Stempel diletakkan di kiri; tanda tangan di kanan dan sedikit menimpa sisi stempel.
+  // Hanya stempel resmi, diposisikan tepat di tengah blok pengesahan.
   const urlCap = "https://i.ibb.co.com/4Rj7crsz/edited-image.png";
-  const urlTtd = "https://i.ibb.co.com/wh4kc6RF/Whats-App-Image-2026-11-13-at-17-52-33.jpg";
-
   try {
     const tujuanCap = new URL(urlCap);
     if (tujuanCap.protocol !== "https:" ||
@@ -3797,51 +3792,23 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     if (!bufferCap.length || bufferCap.length > 2 * 1024 * 1024) {
       throw new Error("Ukuran berkas stempel tidak valid.");
     }
-    doc.image(bufferCap, xKanan + 18, yTtd + 28, {
+    doc.image(bufferCap, xTengah + (lebarTtd - 82) / 2, yTtd + 34, {
       fit: [82, 54], align: "center", valign: "center"
     });
   } catch (e) {
     console.error("GAMBAR CAP RT GAGAL DIMUAT:", e?.message || e);
   }
 
-  try {
-    const tujuan = new URL(urlTtd);
-    if (tujuan.protocol !== "https:" ||
-        tujuan.hostname !== "i.ibb.co.com" ||
-        tujuan.pathname !== "/wh4kc6RF/Whats-App-Image-2026-11-13-at-17-52-33.jpg") {
-      throw new Error("Alamat gambar tanda tangan tidak diizinkan.");
-    }
-    const response = await fetch(tujuan, {
-      headers: { "Accept": "image/jpeg,image/png" },
-      signal: AbortSignal.timeout(8000)
-    });
-    const tipe = response.headers.get("content-type") || "";
-    const panjang = Number(response.headers.get("content-length") || 0);
-    if (!response.ok || !/^image\/(jpeg|png)$/.test(tipe) ||
-        (panjang && panjang > 2 * 1024 * 1024)) {
-      throw new Error("Berkas tanda tangan tidak valid atau terlalu besar.");
-    }
-    const bufferTtd = Buffer.from(await response.arrayBuffer());
-    if (!bufferTtd.length || bufferTtd.length > 2 * 1024 * 1024) {
-      throw new Error("Ukuran berkas tanda tangan tidak valid.");
-    }
-    // Digambar setelah stempel agar tanda tangan tampak berada di atasnya.
-    doc.image(bufferTtd, xKanan + 78, yTtd + 25, {
-      fit: [100, 43], align: "center", valign: "center"
-    });
-  } catch (e) {
-    console.error("GAMBAR TTD KETUA RT GAGAL DIMUAT:", e?.message || e);
-  }
-
-  doc.font(namaRT ? FONT_TEBAL : FONT).fontSize(UKURAN).fillColor("#000000")
-    .text(namaRT ? namaRT.toUpperCase() : garisNama, xKanan, yNama, {
-      width: lebarTtd,
-      align: "center",
-      underline: Boolean(namaRT)
+  const yNama = yTtd + 98;
+  doc.font(FONT_TEBAL).fontSize(UKURAN).fillColor("#000000")
+    .text(namaRT.toUpperCase(), xTengah, yNama, {
+      width: lebarTtd, align: "center", underline: true
     });
 
   doc.font("Helvetica-Oblique").fontSize(6.5).fillColor("#444444")
-    .text("Kode verifikasi aplikasi: " + kodeVerifikasiSurat(id, letter), xKanan, yNama + 23, { width: lebarTtd, align: "center" });
+    .text("Kode verifikasi aplikasi: " + kodeVerifikasiSurat(id, letter), xTengah, yNama + 23, {
+      width: lebarTtd, align: "center"
+    });
   doc.fillColor("#000000");
 }
 /* === AKHIR TEMPLATE SURAT RT 004 / RW 001 === */
