@@ -3771,26 +3771,42 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xKanan, yTtd, { width: lebarTtd, align: "center" });
   doc.text(`Ketua RT ${W.rt} / RW ${W.rw}`, xKanan, yTtd + 15, { width: lebarTtd, align: "center" });
 
-  // Cap resmi tetap memakai aset lokal; tanda tangan memakai tautan gambar
-  // langsung yang diberikan Ketua RT. Host dan path dibatasi agar tidak menjadi SSRF.
-  const fileCap = path.join(__dirname, "cap-rt.png");
+  // Gambar cap dan tanda tangan memakai tautan langsung yang diberikan Ketua RT.
+  // Host dan path dibatasi agar tidak menjadi SSRF.
+  const urlCap = "https://i.ibb.co.com/Z6mMMgkX/Whats-App-Image-2026-11-13-at-13-16-56.jpg";
   const urlTtd = "https://i.ibb.co.com/wh4kc6RF/Whats-App-Image-2026-11-13-at-17-52-33.jpg";
 
-  // Stempel di kiri dan tanda tangan di kanan, dengan jarak agar tidak bertumpuk.
-  if (fs.existsSync(fileCap)) {
-    try {
-      doc.save();
-      doc.opacity(0.88);
-      doc.image(fileCap, xKanan + 18, yTtd + 24, {
-        fit: [58, 52], align: "center", valign: "center"
-      });
-      doc.restore();
-    } catch (e) {
-      try { doc.restore(); } catch (_) {}
-      console.error("GAMBAR CAP RT GAGAL DIMUAT:", e?.message || e);
+  // Stempel asli di kiri; tanda tangan di kanan, tidak saling menimpa.
+  try {
+    const tujuanCap = new URL(urlCap);
+    if (tujuanCap.protocol !== "https:" ||
+        tujuanCap.hostname !== "i.ibb.co.com" ||
+        tujuanCap.pathname !== "/Z6mMMgkX/Whats-App-Image-2026-11-13-at-13-16-56.jpg") {
+      throw new Error("Alamat gambar stempel tidak diizinkan.");
     }
-  } else {
-    console.warn("CAP RT RESMI BELUM TERSEDIA: cap-rt.png");
+    const responseCap = await fetch(tujuanCap, {
+      headers: { "Accept": "image/jpeg,image/png" },
+      signal: AbortSignal.timeout(8000)
+    });
+    const tipeCap = responseCap.headers.get("content-type") || "";
+    const panjangCap = Number(responseCap.headers.get("content-length") || 0);
+    if (!responseCap.ok || !/^image\/(jpeg|png)$/.test(tipeCap) ||
+        (panjangCap && panjangCap > 2 * 1024 * 1024)) {
+      throw new Error("Berkas stempel tidak valid atau terlalu besar.");
+    }
+    const bufferCap = Buffer.from(await responseCap.arrayBuffer());
+    if (!bufferCap.length || bufferCap.length > 2 * 1024 * 1024) {
+      throw new Error("Ukuran berkas stempel tidak valid.");
+    }
+    doc.save();
+    doc.opacity(0.88);
+    doc.image(bufferCap, xKanan + 18, yTtd + 24, {
+      fit: [58, 52], align: "center", valign: "center"
+    });
+    doc.restore();
+  } catch (e) {
+    try { doc.restore(); } catch (_) {}
+    console.error("GAMBAR CAP RT GAGAL DIMUAT:", e?.message || e);
   }
 
   try {
