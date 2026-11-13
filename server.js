@@ -3219,7 +3219,7 @@ app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
       identity = {
         nama_pemohon: warga.nama_lengkap || null,
         nik_pemohon: warga.nik || null,
-        no_kk_pemohon: warga.no_kk || null,
+        no_kk_pemohon: kkRequired ? (warga.no_kk || null) : null,
         alamat_pemohon: warga.alamat || null,
         tempat_lahir_pemohon: warga.tempat_lahir || null,
         tanggal_lahir_pemohon: warga.tanggal_lahir || null,
@@ -3229,6 +3229,10 @@ app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
         no_hp_pemohon: warga.no_hp || null,
         sumber_pengajuan: "dibantu_rt_data_warga"
       };
+    }
+
+    if (kkRequired && !/^\d{16}$/.test(String(identity.no_kk_pemohon || "").replace(/\s/g, ""))) {
+      return res.status(400).json({ ok: false, message: "Jenis surat ini mewajibkan nomor KK 16 digit. Lengkapi nomor KK pada Data Warga atau isi manual." });
     }
 
     const inserted = await supabaseRequest("pengajuan_surat", {
