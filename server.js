@@ -3814,7 +3814,7 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     if (!bufferTtd.length || bufferTtd.length > 2 * 1024 * 1024) {
       throw new Error("Ukuran berkas tanda tangan tidak valid.");
     }
-    doc.image(bufferTtd, xKanan + 91, yTtd + 29, {
+    doc.image(bufferTtd, xKanan + 76, yTtd + 29, {
       fit: [100, 43], align: "center", valign: "center"
     });
   } catch (e) {
