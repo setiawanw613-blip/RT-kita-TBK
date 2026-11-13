@@ -3849,6 +3849,12 @@ function changeLetterApplicantMode(){
   const picker=document.getElementById("adminLetterResidentPicker");
   const residentSelect=document.getElementById("adminLetterResident");
   if(picker) picker.style.display=mode==="data"?"block":"none";
+  ["Name","Nik","NoKk","BirthPlace","BirthDate","Marital","Job","Address","Phone"].forEach(k=>{
+    const el=document.getElementById("adminLetter"+k);
+    if(el) el.readOnly=mode==="data";
+  });
+  const gender=document.getElementById("adminLetterGender");
+  if(gender) gender.disabled=mode==="data";
   if(mode==="manual"){
     if(residentSelect) residentSelect.value="";
     ["Name","Nik","NoKk","BirthPlace","BirthDate","Gender","Marital","Job","Address","Phone"].forEach(k=>{
@@ -3949,6 +3955,7 @@ async function letters(){
       <div class="card" style="margin-bottom:12px">
         <b>📄 ${esc(x.type || x.jenis_surat || "Surat")}</b>
         <div style="margin-top:8px"><b>Pengaju:</b> ${esc(x.nama || "(nama belum tercatat)")}</div>
+        ${x.sumber_pengajuan && x.sumber_pengajuan !== "warga" ? "<div class='muted' style='font-size:12px'>Dibantu Ketua RT · " + (x.sumber_pengajuan === "dibantu_rt_manual" ? "identitas diisi dari KTP" : "data dari Data Warga") + "</div>" : ""}
         ${x.nik ? `<div class="muted" style="font-size:13px">NIK: ${esc(x.nik)}</div>` : ""}
         ${x.alamat ? `<div class="muted" style="font-size:13px">Alamat: ${esc(x.alamat)}</div>` : ""}
         ${x.no_hp ? `<div class="muted" style="font-size:13px">HP: ${esc(x.no_hp)}</div>` : ""}
