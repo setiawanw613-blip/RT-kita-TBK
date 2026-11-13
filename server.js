@@ -3173,6 +3173,7 @@ app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
       const nama = String(req.body?.nama || "").trim();
       const nik = String(req.body?.nik || "").replace(/\s/g, "");
       const noKk = String(req.body?.no_kk || "").replace(/\s/g, "");
+      const kkRequired = ["Surat Keterangan Domisili", "Surat Keterangan Tidak Mampu"].includes(type);
       const alamat = String(req.body?.alamat || "").trim();
       const tempatLahir = String(req.body?.tempat_lahir || "").trim();
       const tanggalLahir = String(req.body?.tanggal_lahir || "").trim();
@@ -3184,8 +3185,11 @@ app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
       if (!nama || !/^\d{16}$/.test(nik) || !alamat) {
         return res.status(400).json({ ok: false, message: "Nama, NIK 16 digit, dan alamat sesuai KTP wajib diisi." });
       }
-      if (noKk && !/^\d{16}$/.test(noKk)) {
-        return res.status(400).json({ ok: false, message: "Nomor KK harus 16 digit jika diisi." });
+      if (kkRequired && !/^\d{16}$/.test(noKk)) {
+        return res.status(400).json({ ok: false, message: "Jenis surat ini mewajibkan nomor KK 16 digit." });
+      }
+      if (!kkRequired && noKk) {
+        return res.status(400).json({ ok: false, message: "Nomor KK tidak diperlukan untuk jenis surat ini." });
       }
       if (tanggalLahir && !/^\d{4}-\d{2}-\d{2}$/.test(tanggalLahir)) {
         return res.status(400).json({ ok: false, message: "Format tanggal lahir tidak valid." });
