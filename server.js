@@ -3765,7 +3765,7 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   const yTtd = Math.min(yAkhir + 18, 652);
   const lebarTtd = 200;
   const xKanan = X + LEBAR - lebarTtd;
-  const yNama = yTtd + 15 + 62;
+  const yNama = yTtd + 90;
 
   doc.font(FONT).fontSize(UKURAN).fillColor("#000000");
   doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xKanan, yTtd, { width: lebarTtd, align: "center" });
@@ -3797,7 +3797,7 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     if (!bufferCap.length || bufferCap.length > 2 * 1024 * 1024) {
       throw new Error("Ukuran berkas stempel tidak valid.");
     }
-    doc.image(bufferCap, xKanan + 18, yTtd + 24, {
+    doc.image(bufferCap, xKanan + 18, yTtd + 28, {
       fit: [82, 54], align: "center", valign: "center"
     });
   } catch (e) {
@@ -3826,7 +3826,7 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
       throw new Error("Ukuran berkas tanda tangan tidak valid.");
     }
     // Digambar setelah stempel agar tanda tangan tampak berada di atasnya.
-    doc.image(bufferTtd, xKanan + 78, yTtd + 17, {
+    doc.image(bufferTtd, xKanan + 78, yTtd + 25, {
       fit: [100, 43], align: "center", valign: "center"
     });
   } catch (e) {
