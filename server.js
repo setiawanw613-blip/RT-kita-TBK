@@ -3771,9 +3771,10 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xKanan, yTtd, { width: lebarTtd, align: "center" });
   doc.text(`Ketua RT ${W.rt} / RW ${W.rw}`, xKanan, yTtd + 15, { width: lebarTtd, align: "center" });
 
-  // Gunakan hanya berkas resmi lokal. Tidak memakai URL gambar yang belum terverifikasi.
-  const fileTtd = path.join(__dirname, "ttd-ketua-rt.png");
+  // Cap resmi tetap memakai aset lokal; tanda tangan memakai tautan gambar
+  // langsung yang diberikan Ketua RT. Host dan path dibatasi agar tidak menjadi SSRF.
   const fileCap = path.join(__dirname, "cap-rt.png");
+  const urlTtd = "https://i.ibb.co.com/wh4kc6RF/Whats-App-Image-2026-11-13-at-17-52-33.jpg";
 
   // Stempel di kiri dan tanda tangan di kanan, dengan jarak agar tidak bertumpuk.
   if (fs.existsSync(fileCap)) {
@@ -3792,16 +3793,32 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     console.warn("CAP RT RESMI BELUM TERSEDIA: cap-rt.png");
   }
 
-  if (fs.existsSync(fileTtd)) {
-    try {
-      doc.image(fileTtd, xKanan + 91, yTtd + 29, {
-        fit: [100, 43], align: "center", valign: "center"
-      });
-    } catch (e) {
-      console.error("GAMBAR TTD KETUA RT GAGAL DIMUAT:", e?.message || e);
+  try {
+    const tujuan = new URL(urlTtd);
+    if (tujuan.protocol !== "https:" ||
+        tujuan.hostname !== "i.ibb.co.com" ||
+        tujuan.pathname !== "/wh4kc6RF/Whats-App-Image-2026-11-13-at-17-52-33.jpg") {
+      throw new Error("Alamat gambar tanda tangan tidak diizinkan.");
     }
-  } else {
-    console.warn("TTD KETUA RT RESMI BELUM TERSEDIA: ttd-ketua-rt.png");
+    const response = await fetch(tujuan, {
+      headers: { "Accept": "image/jpeg,image/png" },
+      signal: AbortSignal.timeout(8000)
+    });
+    const tipe = response.headers.get("content-type") || "";
+    const panjang = Number(response.headers.get("content-length") || 0);
+    if (!response.ok || !/^image\/(jpeg|png)$/.test(tipe) ||
+        (panjang && panjang > 2 * 1024 * 1024)) {
+      throw new Error("Berkas tanda tangan tidak valid atau terlalu besar.");
+    }
+    const bufferTtd = Buffer.from(await response.arrayBuffer());
+    if (!bufferTtd.length || bufferTtd.length > 2 * 1024 * 1024) {
+      throw new Error("Ukuran berkas tanda tangan tidak valid.");
+    }
+    doc.image(bufferTtd, xKanan + 91, yTtd + 29, {
+      fit: [100, 43], align: "center", valign: "center"
+    });
+  } catch (e) {
+    console.error("GAMBAR TTD KETUA RT GAGAL DIMUAT:", e?.message || e);
   }
 
   doc.font(namaRT ? FONT_TEBAL : FONT).fontSize(UKURAN).fillColor("#000000")
