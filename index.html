@@ -1447,7 +1447,7 @@ function filterResidents(){
             ${esc(w.hubungan_keluarga || "Hubungan belum diisi")}
           </div>
           <div style="font-size:11px;color:#64748b;margin-top:3px">
-            KK: ${esc(w.no_kk ? "•••• " + String(w.no_kk).slice(-4) : "Belum diisi")}
+            No. KK: ${esc(w.no_kk || "Belum diisi")}
           </div>
           <span style="display:inline-block;margin-top:5px;padding:3px 8px;border-radius:20px;font-size:10px;${warnaStatus}">
             ${esc(w.status_warga || "Status belum diisi")}
@@ -2382,6 +2382,7 @@ function editResident(w){
       id="edit_${key}"
       name="${key}"
       ${key === "tanggal_lahir" ? 'type="date"' : ""}
+      ${key === "no_kk" ? 'type="text" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit Nomor KK"' : ""}
       value="${esc(key === "tanggal_lahir" ? String(w[key] || "").slice(0,10) : (w[key] || ""))}"
       style="width:100%;box-sizing:border-box;padding:10px"
     />
@@ -2459,7 +2460,16 @@ async function saveResident(event,id){
     const el = document.getElementById("edit_"+key);
 
     if(el){
-      const value = el.value.trim();
+      let value = el.value.trim();
+
+      if(key === "no_kk"){
+        value = value.replace(/\\D/g, "");
+        if(value && !/^\\d{16}$/.test(value)){
+          alert("Nomor KK harus terdiri dari 16 digit angka.");
+          el.focus();
+          return;
+        }
+      }
 
       if(el.tagName === "SELECT" && !value){
         continue;
