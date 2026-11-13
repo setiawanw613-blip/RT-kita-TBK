@@ -3789,7 +3789,7 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     });
     const tipeCap = responseCap.headers.get("content-type") || "";
     const panjangCap = Number(responseCap.headers.get("content-length") || 0);
-    if (!responseCap.ok || !/^image\\/(png|jpeg)$/.test(tipeCap) ||
+    if (!responseCap.ok || !/^image\/(png|jpeg)$/.test(tipeCap) ||
         (panjangCap && panjangCap > 2 * 1024 * 1024)) {
       throw new Error("Berkas stempel tidak valid atau terlalu besar.");
     }
@@ -3817,7 +3817,7 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     });
     const tipe = response.headers.get("content-type") || "";
     const panjang = Number(response.headers.get("content-length") || 0);
-    if (!response.ok || !/^image\\/(jpeg|png)$/.test(tipe) ||
+    if (!response.ok || !/^image\/(jpeg|png)$/.test(tipe) ||
         (panjang && panjang > 2 * 1024 * 1024)) {
       throw new Error("Berkas tanda tangan tidak valid atau terlalu besar.");
     }
