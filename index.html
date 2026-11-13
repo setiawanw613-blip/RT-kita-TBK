@@ -3869,7 +3869,7 @@ function changeLetterApplicantMode(){
   const picker=document.getElementById("adminLetterResidentPicker");
   const residentSelect=document.getElementById("adminLetterResident");
   if(picker) picker.style.display=mode==="data"?"block":"none";
-  ["Name","Nik","BirthPlace","BirthDate","Marital","Job","Address","Phone"].forEach(k=>{
+  ["Name","Nik","NoKk","BirthPlace","BirthDate","Marital","Job","Address","Phone"].forEach(k=>{
     const el=document.getElementById("adminLetter"+k);
     if(el) el.readOnly=mode==="data";
   });
