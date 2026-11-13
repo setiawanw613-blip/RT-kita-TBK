@@ -3771,26 +3771,60 @@ async function saveCash(){
 
 let adminLetterSubmitting = false;
 
+let adminLetterSubmitting = false;
+window._adminLetterResidents = [];
+
 async function createLetterForResident(){
   layout("Bantu Ajukan Surat Warga", `
     <div class="card" id="adminLetterForm">Memuat Data Warga...</div>
   `);
   try{
     const warga = await api("/api/residents");
-    const aktif = (Array.isArray(warga) ? warga : []).filter(w => w.status_warga !== "nonaktif");
+    window._adminLetterResidents = Array.isArray(warga) ? warga.filter(w => w.status_warga !== "nonaktif") : [];
     const box = document.getElementById("adminLetterForm");
     if(!box) return;
-    if(!aktif.length){
-      box.innerHTML = "<p class='muted'>Belum ada data warga yang dapat dipilih.</p><button class='btn secondary' onclick='adminHome()'>Kembali</button>";
-      return;
-    }
     box.innerHTML = `
-      <p class="muted">Gunakan formulir ini jika warga belum memahami cara mengajukan surat melalui akunnya. Pengajuan akan tercatat atas nama warga yang dipilih dan tetap menunggu proses persetujuan.</p>
-      <label>Nama warga</label>
-      <select id="adminLetterResident">
-        <option value="">-- Pilih warga --</option>
-        ${aktif.map(w => `<option value="${Number(w.id)}">${esc(w.nama_lengkap || w.nama || "Tanpa nama")} · ${esc(w.alamat || "-")}</option>`).join("")}
+      <p class="muted">Ketua RT dapat memilih data yang sudah terdaftar atau mengetik identitas langsung dengan melihat KTP warga. Data manual hanya disimpan pada pengajuan surat, tidak otomatis menambah Data Warga.</p>
+      <label>Sumber identitas pemohon</label>
+      <select id="adminLetterMode" onchange="changeLetterApplicantMode()">
+        <option value="data">Pilih dari Data Warga</option>
+        <option value="manual">Isi manual berdasarkan KTP</option>
       </select>
+      <div id="adminLetterResidentPicker">
+        <label>Pilih nama warga</label>
+        <select id="adminLetterResident" onchange="fillLetterResidentDetails()">
+          <option value="">-- Pilih warga --</option>
+          ${window._adminLetterResidents.map(w => `<option value="${Number(w.id)}">${esc(w.nama_lengkap || w.nama || "Tanpa nama")} · ${esc(w.alamat || "-")}</option>`).join("")}
+        </select>
+        ${window._adminLetterResidents.length ? "" : "<p class='muted'>Data warga belum tersedia. Bapak tetap bisa memilih Isi manual berdasarkan KTP.</p>"}
+      </div>
+      <div id="adminLetterIdentityFields">
+        <h3 style="margin:14px 0 6px">Identitas sesuai KTP</h3>
+        <label>Nama lengkap</label>
+        <input id="adminLetterName" maxlength="150" placeholder="Nama sesuai KTP">
+        <label>NIK (16 digit)</label>
+        <input id="adminLetterNik" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit NIK">
+        <label>Nomor KK (opsional)</label>
+        <input id="adminLetterNoKk" inputmode="numeric" maxlength="16" placeholder="Masukkan nomor KK jika tersedia">
+        <label>Tempat lahir</label>
+        <input id="adminLetterBirthPlace" maxlength="100" placeholder="Tempat lahir">
+        <label>Tanggal lahir</label>
+        <input id="adminLetterBirthDate" type="date">
+        <label>Jenis kelamin</label>
+        <select id="adminLetterGender">
+          <option value="">-- Pilih --</option>
+          <option value="Laki-laki">Laki-laki</option>
+          <option value="Perempuan">Perempuan</option>
+        </select>
+        <label>Status perkawinan</label>
+        <input id="adminLetterMarital" maxlength="40" placeholder="Contoh: Belum Kawin / Kawin">
+        <label>Pekerjaan</label>
+        <input id="adminLetterJob" maxlength="100" placeholder="Pekerjaan">
+        <label>Alamat lengkap sesuai KTP</label>
+        <textarea id="adminLetterAddress" maxlength="500" placeholder="Alamat lengkap sesuai KTP"></textarea>
+        <label>Nomor HP (opsional)</label>
+        <input id="adminLetterPhone" inputmode="tel" maxlength="25" placeholder="Nomor HP warga">
+      </div>
       <label>Jenis surat</label>
       <select id="adminLetterType">
         <option value="">-- Pilih jenis surat --</option>
@@ -3805,29 +3839,85 @@ async function createLetterForResident(){
       <button class="btn" id="adminLetterSubmit" style="margin-top:14px" onclick="submitLetterForResident()">Kirim Pengajuan Surat</button>
       <button class="btn secondary" style="margin-top:8px" onclick="letters()">Kembali ke Pengajuan Surat</button>
     `;
+    changeLetterApplicantMode();
   }catch(e){
     const box=document.getElementById("adminLetterForm");
     if(box) box.innerHTML=`<div class="error">${esc(e.message || "Gagal memuat data warga")}</div><button class="btn secondary" onclick="adminHome()">Kembali</button>`;
   }
 }
 
+function changeLetterApplicantMode(){
+  const mode=document.getElementById("adminLetterMode")?.value || "data";
+  const picker=document.getElementById("adminLetterResidentPicker");
+  const residentSelect=document.getElementById("adminLetterResident");
+  if(picker) picker.style.display=mode==="data"?"block":"none";
+  if(mode==="manual"){
+    if(residentSelect) residentSelect.value="";
+    ["Name","Nik","NoKk","BirthPlace","BirthDate","Gender","Marital","Job","Address","Phone"].forEach(k=>{
+      const el=document.getElementById("adminLetter"+k);
+      if(el) el.value="";
+    });
+  }
+}
+
+function fillLetterResidentDetails(){
+  const id=Number(document.getElementById("adminLetterResident")?.value);
+  const w=(window._adminLetterResidents||[]).find(x=>Number(x.id)===id);
+  if(!w) return;
+  const values={
+    Name:w.nama_lengkap||w.nama||"",
+    Nik:w.nik||"",
+    NoKk:w.no_kk||"",
+    BirthPlace:w.tempat_lahir||"",
+    BirthDate:w.tanggal_lahir||"",
+    Gender:w.jenis_kelamin||"",
+    Marital:w.status_perkawinan||"",
+    Job:w.pekerjaan||"",
+    Address:w.alamat||"",
+    Phone:w.no_hp||""
+  };
+  Object.entries(values).forEach(([key,value])=>{
+    const el=document.getElementById("adminLetter"+key);
+    if(el) el.value=value;
+  });
+}
+
 async function submitLetterForResident(){
   if(adminLetterSubmitting) return;
-  const warga_id = Number(document.getElementById("adminLetterResident")?.value);
-  const type = document.getElementById("adminLetterType")?.value || "";
-  const purpose = (document.getElementById("adminLetterPurpose")?.value || "").trim();
-  if(!warga_id){ alert("Pilih warga terlebih dahulu."); return; }
-  if(!type){ alert("Pilih jenis surat."); return; }
-  if(!purpose){ alert("Keperluan surat wajib diisi."); return; }
-  if(!confirm("Buat pengajuan surat atas nama warga yang dipilih?")) return;
+  const mode=document.getElementById("adminLetterMode")?.value || "data";
+  const warga_id=mode==="data" ? Number(document.getElementById("adminLetterResident")?.value) : null;
+  const type=document.getElementById("adminLetterType")?.value || "";
+  const purpose=(document.getElementById("adminLetterPurpose")?.value || "").trim();
+  const applicant={
+    nama:(document.getElementById("adminLetterName")?.value || "").trim(),
+    nik:(document.getElementById("adminLetterNik")?.value || "").replace(/\s/g,""),
+    no_kk:(document.getElementById("adminLetterNoKk")?.value || "").replace(/\s/g,""),
+    tempat_lahir:(document.getElementById("adminLetterBirthPlace")?.value || "").trim(),
+    tanggal_lahir:document.getElementById("adminLetterBirthDate")?.value || "",
+    jenis_kelamin:document.getElementById("adminLetterGender")?.value || "",
+    status_perkawinan:(document.getElementById("adminLetterMarital")?.value || "").trim(),
+    pekerjaan:(document.getElementById("adminLetterJob")?.value || "").trim(),
+    alamat:(document.getElementById("adminLetterAddress")?.value || "").trim(),
+    no_hp:(document.getElementById("adminLetterPhone")?.value || "").trim()
+  };
+  if(mode==="data" && !warga_id){alert("Pilih warga dari Data Warga.");return;}
+  if(!applicant.nama || !/^\d{16}$/.test(applicant.nik) || !applicant.alamat){
+    alert("Nama lengkap, NIK 16 digit, dan alamat wajib diisi sesuai KTP.");return;
+  }
+  if(applicant.no_kk && !/^\d{16}$/.test(applicant.no_kk)){
+    alert("Nomor KK harus 16 digit jika diisi.");return;
+  }
+  if(!type){alert("Pilih jenis surat.");return;}
+  if(!purpose){alert("Keperluan surat wajib diisi.");return;}
+  if(!confirm("Buat pengajuan surat atas nama "+applicant.nama+"?"))return;
 
-  adminLetterSubmitting = true;
+  adminLetterSubmitting=true;
   const btn=document.getElementById("adminLetterSubmit");
   if(btn){btn.disabled=true;btn.textContent="Mengirim...";}
   try{
     const result=await api("/api/letters/for-resident",{
       method:"POST",
-      body:JSON.stringify({warga_id,type,purpose})
+      body:JSON.stringify({mode,warga_id,type,purpose,...applicant})
     });
     alert(result.message || "Pengajuan surat berhasil dibuat.");
     await letters();
