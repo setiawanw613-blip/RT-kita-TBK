@@ -3822,7 +3822,7 @@ async function createLetterForResident(){
         <input id="adminLetterPhone" inputmode="tel" maxlength="25" placeholder="Nomor HP warga">
       </div>
       <label>Jenis surat</label>
-      <select id="adminLetterType">
+      <select id="adminLetterType" onchange="updateAdminLetterKkRequirement()">
         <option value="">-- Pilih jenis surat --</option>
         <option>Surat Pengantar</option>
         <option>Surat Keterangan Domisili</option>
@@ -3830,6 +3830,11 @@ async function createLetterForResident(){
         <option>Surat Keterangan Usaha</option>
         <option>Surat Pengantar SKCK</option>
       </select>
+      <div id="adminLetterKkWrap" style="display:none">
+        <label>Nomor KK (wajib untuk jenis surat ini)</label>
+        <input id="adminLetterNoKk" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit nomor KK">
+        <small class="muted">Nomor KK diminta untuk Surat Keterangan Domisili dan Surat Keterangan Tidak Mampu.</small>
+      </div>
       <label>Keperluan surat</label>
       <textarea id="adminLetterPurpose" maxlength="1000" placeholder="Tuliskan keperluan surat sesuai keterangan warga"></textarea>
       <button class="btn" id="adminLetterSubmit" style="margin-top:14px" onclick="submitLetterForResident()">Kirim Pengajuan Surat</button>
@@ -3839,6 +3844,23 @@ async function createLetterForResident(){
   }catch(e){
     const box=document.getElementById("adminLetterForm");
     if(box) box.innerHTML=`<div class="error">${esc(e.message || "Gagal memuat data warga")}</div><button class="btn secondary" onclick="adminHome()">Kembali</button>`;
+  }
+}
+
+function updateAdminLetterKkRequirement(){
+  const type=document.getElementById("adminLetterType")?.value || "";
+  const required=["Surat Keterangan Domisili","Surat Keterangan Tidak Mampu"].includes(type);
+  const wrap=document.getElementById("adminLetterKkWrap");
+  const field=document.getElementById("adminLetterNoKk");
+  if(wrap) wrap.style.display=required?"block":"none";
+  if(field){
+    field.required=required;
+    if(!required) field.value="";
+    else if((document.getElementById("adminLetterMode")?.value || "data")==="data"){
+      const id=Number(document.getElementById("adminLetterResident")?.value);
+      const w=(window._adminLetterResidents||[]).find(x=>Number(x.id)===id);
+      field.value=(w?.no_kk||"").replace(/\\s/g,"");
+    }
   }
 }
 
@@ -3853,6 +3875,14 @@ function changeLetterApplicantMode(){
   });
   const gender=document.getElementById("adminLetterGender");
   if(gender) gender.disabled=mode==="data";
+  const kk=document.getElementById("adminLetterNoKk");
+  if(kk && mode==="manual") kk.value="";
+  if(kk && mode==="data"){
+    const id=Number(residentSelect?.value);
+    const w=(window._adminLetterResidents||[]).find(x=>Number(x.id)===id);
+    kk.value=(w?.no_kk||"").replace(/\\s/g,"");
+  }
+  updateAdminLetterKkRequirement();
   if(mode==="manual"){
     if(residentSelect) residentSelect.value="";
     ["Name","Nik","BirthPlace","BirthDate","Gender","Marital","Job","Address","Phone"].forEach(k=>{
@@ -3881,6 +3911,8 @@ function fillLetterResidentDetails(){
     const el=document.getElementById("adminLetter"+key);
     if(el) el.value=value;
   });
+  const kk=document.getElementById("adminLetterNoKk");
+  if(kk) kk.value=(w.no_kk||"").replace(/\\s/g,"");
 }
 
 async function submitLetterForResident(){
@@ -3905,6 +3937,10 @@ async function submitLetterForResident(){
     alert("Nama lengkap, NIK 16 digit, dan alamat wajib diisi sesuai KTP.");return;
   }
   if(!type){alert("Pilih jenis surat.");return;}
+  const kkRequired=["Surat Keterangan Domisili","Surat Keterangan Tidak Mampu"].includes(type);
+  if(kkRequired && !/^\\d{16}$/.test(applicant.no_kk)){
+    alert("Jenis surat ini mewajibkan nomor KK 16 digit.");return;
+  }
   if(!purpose){alert("Keperluan surat wajib diisi.");return;}
   if(!confirm("Buat pengajuan surat atas nama "+applicant.nama+"?"))return;
 
