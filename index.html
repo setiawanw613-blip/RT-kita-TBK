@@ -3802,8 +3802,6 @@ async function createLetterForResident(){
         <input id="adminLetterName" maxlength="150" placeholder="Nama sesuai KTP">
         <label>NIK (16 digit)</label>
         <input id="adminLetterNik" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit NIK">
-        <label>Nomor KK (opsional)</label>
-        <input id="adminLetterNoKk" inputmode="numeric" maxlength="16" placeholder="Masukkan nomor KK jika tersedia">
         <label>Tempat lahir</label>
         <input id="adminLetterBirthPlace" maxlength="100" placeholder="Tempat lahir">
         <label>Tanggal lahir</label>
@@ -3849,7 +3847,7 @@ function changeLetterApplicantMode(){
   const picker=document.getElementById("adminLetterResidentPicker");
   const residentSelect=document.getElementById("adminLetterResident");
   if(picker) picker.style.display=mode==="data"?"block":"none";
-  ["Name","Nik","NoKk","BirthPlace","BirthDate","Marital","Job","Address","Phone"].forEach(k=>{
+  ["Name","Nik","BirthPlace","BirthDate","Marital","Job","Address","Phone"].forEach(k=>{
     const el=document.getElementById("adminLetter"+k);
     if(el) el.readOnly=mode==="data";
   });
@@ -3857,7 +3855,7 @@ function changeLetterApplicantMode(){
   if(gender) gender.disabled=mode==="data";
   if(mode==="manual"){
     if(residentSelect) residentSelect.value="";
-    ["Name","Nik","NoKk","BirthPlace","BirthDate","Gender","Marital","Job","Address","Phone"].forEach(k=>{
+    ["Name","Nik","BirthPlace","BirthDate","Gender","Marital","Job","Address","Phone"].forEach(k=>{
       const el=document.getElementById("adminLetter"+k);
       if(el) el.value="";
     });
@@ -3871,7 +3869,6 @@ function fillLetterResidentDetails(){
   const values={
     Name:w.nama_lengkap||w.nama||"",
     Nik:w.nik||"",
-    NoKk:w.no_kk||"",
     BirthPlace:w.tempat_lahir||"",
     BirthDate:w.tanggal_lahir||"",
     Gender:w.jenis_kelamin||"",
@@ -3895,7 +3892,6 @@ async function submitLetterForResident(){
   const applicant={
     nama:(document.getElementById("adminLetterName")?.value || "").trim(),
     nik:(document.getElementById("adminLetterNik")?.value || "").replace(/\s/g,""),
-    no_kk:(document.getElementById("adminLetterNoKk")?.value || "").replace(/\s/g,""),
     tempat_lahir:(document.getElementById("adminLetterBirthPlace")?.value || "").trim(),
     tanggal_lahir:document.getElementById("adminLetterBirthDate")?.value || "",
     jenis_kelamin:document.getElementById("adminLetterGender")?.value || "",
@@ -3907,9 +3903,6 @@ async function submitLetterForResident(){
   if(mode==="data" && !warga_id){alert("Pilih warga dari Data Warga.");return;}
   if(!applicant.nama || !/^\d{16}$/.test(applicant.nik) || !applicant.alamat){
     alert("Nama lengkap, NIK 16 digit, dan alamat wajib diisi sesuai KTP.");return;
-  }
-  if(applicant.no_kk && !/^\d{16}$/.test(applicant.no_kk)){
-    alert("Nomor KK harus 16 digit jika diisi.");return;
   }
   if(!type){alert("Pilih jenis surat.");return;}
   if(!purpose){alert("Keperluan surat wajib diisi.");return;}
