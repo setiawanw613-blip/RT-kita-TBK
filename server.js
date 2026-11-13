@@ -4335,17 +4335,18 @@ app.get("/api/my-iuran", requireWarga, async (req, res) => {
 
     const warga = Array.isArray(wargaData) ? wargaData[0] : null;
 
-    if (!warga || !warga.keluarga_id) {
-      return res.status(400).json({
-        ok: false,
-        message: "Data keluarga belum terhubung. Hubungi Ketua RT."
-      });
+    if (!warga) {
+      return res.status(404).json({ ok: false, message: "Data warga tidak ditemukan." });
     }
+
+    const scopeFilter = warga.keluarga_id
+      ? `&or=(keluarga_id.eq.${encodeURIComponent(String(warga.keluarga_id))},warga_id.eq.${encodeURIComponent(String(warga.id))})`
+      : `&warga_id=eq.${encodeURIComponent(String(warga.id))}`;
 
     const data = await supabaseRequest("iuran_warga", {
       query:
-       "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at" +
-        `&keluarga_id=eq.${encodeURIComponent(String(warga.keluarga_id))}` +
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,midtrans_notifikasi_at" +
+        scopeFilter +
         "&order=bulan.desc"
     });
 
@@ -4680,21 +4681,25 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
 
     const warga = Array.isArray(wargaData) ? wargaData[0] : null;
 
-    if (!warga || !warga.keluarga_id) {
-      return res.status(400).json({
+    if (!warga) {
+      return res.status(404).json({
         ok: false,
-        message: "Data keluarga belum terhubung. Hubungi Ketua RT."
+        message: "Data warga tidak ditemukan. Hubungi Ketua RT."
       });
     }
 
-    const keluargaId = String(warga.keluarga_id);
+    // KK menghubungkan pembayaran keluarga, tetapi bukan syarat membayar.
+    const keluargaId = warga.keluarga_id ? String(warga.keluarga_id) : null;
+    const scopeFilter = keluargaId
+      ? `&or=(keluarga_id.eq.${encodeURIComponent(keluargaId)},warga_id.eq.${encodeURIComponent(String(warga.id))})`
+      : `&warga_id=eq.${encodeURIComponent(String(warga.id))}`;
 
-  const dataLama = await supabaseRequest("iuran_warga", {
-  query:
-    "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer" +
-    `&keluarga_id=eq.${encodeURIComponent(keluargaId)}` +
-    "&order=bulan.asc"
-});
+    const dataLama = await supabaseRequest("iuran_warga", {
+      query:
+        "select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer" +
+        scopeFilter +
+        "&order=bulan.asc"
+    });
 
     const catatan = Array.isArray(dataLama) ? dataLama : [];
     const peta = new Map(
