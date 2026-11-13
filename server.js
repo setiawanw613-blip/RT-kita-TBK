@@ -3771,26 +3771,25 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xKanan, yTtd, { width: lebarTtd, align: "center" });
   doc.text(`Ketua RT ${W.rt} / RW ${W.rw}`, xKanan, yTtd + 15, { width: lebarTtd, align: "center" });
 
-  // Gambar cap dan tanda tangan memakai tautan langsung yang diberikan Ketua RT.
-  // Host dan path dibatasi agar tidak menjadi SSRF.
-  const urlCap = "https://i.ibb.co.com/Z6mMMgkX/Whats-App-Image-2026-11-13-at-13-16-56.jpg";
+  // Stempel memakai file edited-image.png yang diberikan Ketua RT.
+  // Stempel diletakkan di kiri; tanda tangan di kanan dan sedikit menimpa sisi stempel.
+  const urlCap = "https://i.ibb.co.com/4Rj7crsz/edited-image.png";
   const urlTtd = "https://i.ibb.co.com/wh4kc6RF/Whats-App-Image-2026-11-13-at-17-52-33.jpg";
 
-  // Stempel asli di kiri; tanda tangan di kanan, tidak saling menimpa.
   try {
     const tujuanCap = new URL(urlCap);
     if (tujuanCap.protocol !== "https:" ||
         tujuanCap.hostname !== "i.ibb.co.com" ||
-        tujuanCap.pathname !== "/Z6mMMgkX/Whats-App-Image-2026-11-13-at-13-16-56.jpg") {
+        tujuanCap.pathname !== "/4Rj7crsz/edited-image.png") {
       throw new Error("Alamat gambar stempel tidak diizinkan.");
     }
     const responseCap = await fetch(tujuanCap, {
-      headers: { "Accept": "image/jpeg,image/png" },
+      headers: { "Accept": "image/png,image/jpeg" },
       signal: AbortSignal.timeout(8000)
     });
     const tipeCap = responseCap.headers.get("content-type") || "";
     const panjangCap = Number(responseCap.headers.get("content-length") || 0);
-    if (!responseCap.ok || !/^image\/(jpeg|png)$/.test(tipeCap) ||
+    if (!responseCap.ok || !/^image\\/(png|jpeg)$/.test(tipeCap) ||
         (panjangCap && panjangCap > 2 * 1024 * 1024)) {
       throw new Error("Berkas stempel tidak valid atau terlalu besar.");
     }
@@ -3798,16 +3797,10 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     if (!bufferCap.length || bufferCap.length > 2 * 1024 * 1024) {
       throw new Error("Ukuran berkas stempel tidak valid.");
     }
-    // Pertahankan bidang putih asli stempel: jangan beri opacity pada gambar.
-    // Bidang putih di belakang juga mencegah elemen surat terlihat melalui area stempel.
-    doc.save();
-    doc.fillColor("#FFFFFF").rect(xKanan + 18, yTtd + 24, 58, 52).fill();
     doc.image(bufferCap, xKanan + 18, yTtd + 24, {
-      fit: [58, 52], align: "center", valign: "center"
+      fit: [82, 54], align: "center", valign: "center"
     });
-    doc.restore();
   } catch (e) {
-    try { doc.restore(); } catch (_) {}
     console.error("GAMBAR CAP RT GAGAL DIMUAT:", e?.message || e);
   }
 
@@ -3824,7 +3817,7 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     });
     const tipe = response.headers.get("content-type") || "";
     const panjang = Number(response.headers.get("content-length") || 0);
-    if (!response.ok || !/^image\/(jpeg|png)$/.test(tipe) ||
+    if (!response.ok || !/^image\\/(jpeg|png)$/.test(tipe) ||
         (panjang && panjang > 2 * 1024 * 1024)) {
       throw new Error("Berkas tanda tangan tidak valid atau terlalu besar.");
     }
@@ -3832,7 +3825,8 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     if (!bufferTtd.length || bufferTtd.length > 2 * 1024 * 1024) {
       throw new Error("Ukuran berkas tanda tangan tidak valid.");
     }
-    doc.image(bufferTtd, xKanan + 76, yTtd + 29, {
+    // Digambar setelah stempel agar tanda tangan tampak berada di atasnya.
+    doc.image(bufferTtd, xKanan + 78, yTtd + 17, {
       fit: [100, 43], align: "center", valign: "center"
     });
   } catch (e) {
