@@ -3749,19 +3749,8 @@ function kodeVerifikasiSurat(id, letter) {
 async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   const fs = require("fs");
   const path = require("path");
-  const ambilGambarResmi = async (fileLokal, url) => {
-    if (fs.existsSync(fileLokal)) return fileLokal;
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(7000) });
-      if (!response.ok) throw new Error("HTTP " + response.status);
-      return Buffer.from(await response.arrayBuffer());
-    } catch (e) {
-      console.error("GAGAL MEMUAT GAMBAR RESMI SURAT:", e?.message || e);
-      return null;
-    }
-  };
   const W = SURAT_WILAYAH;
-  const clean = (v) => (v == null ? "" : String(v).replace(/\s+/g, " ").trim());
+  const clean = (v) => (v == null ? "" : String(v).replace(/\\s+/g, " ").trim());
   const X = 72;
   const LEBAR = 451;
   const UKURAN = 11;
@@ -3769,39 +3758,30 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   const FONT_TEBAL = "Times-Bold";
   const { tanggalSurat } = infoTanggalSurat(letter);
 
-  // ---------- Tanda tangan ----------
+  // ---------- Tanda tangan Ketua RT ----------
   const namaRT = clean(process.env.KETUA_RT_NAMA);
-  const namaRW = clean(process.env.KETUA_RW_NAMA);
   const garisNama = "(.......................................)";
 
   const yTtd = Math.min(yAkhir + 18, 652);
   const lebarTtd = 200;
-  const xKiri = X;
   const xKanan = X + LEBAR - lebarTtd;
-  const ruangTtd = 62;
-  const yNama = yTtd + 15 + ruangTtd;
+  const yNama = yTtd + 15 + 62;
 
   doc.font(FONT).fontSize(UKURAN).fillColor("#000000");
-
-  // Kanan: Ketua RT
   doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xKanan, yTtd, { width: lebarTtd, align: "center" });
   doc.text(`Ketua RT ${W.rt} / RW ${W.rw}`, xKanan, yTtd + 15, { width: lebarTtd, align: "center" });
 
-  // Cap asli RT dan tanda tangan Ketua RT yang diberikan pemilik akun.
-  // Cap diletakkan lebih dahulu; tanda tangan ditampilkan di atasnya.
+  // Gunakan hanya berkas resmi lokal. Tidak memakai URL gambar yang belum terverifikasi.
   const fileTtd = path.join(__dirname, "ttd-ketua-rt.png");
   const fileCap = path.join(__dirname, "cap-rt.png");
-  const [gambarCap, gambarTtd] = await Promise.all([
-    ambilGambarResmi(fileCap, "https://i.ibb.co.com/rGswwp10/Whats-App-Image-2026-11-13-at-13-16-56.jpg"),
-    ambilGambarResmi(fileTtd, "https://i.ibb.co.com/svGNbr7k/Whats-App-Image-2026-11-13-at-13-18-56.jpg")
-  ]);
 
-  if (gambarCap) {
+  // Stempel di kiri dan tanda tangan di kanan, dengan jarak agar tidak bertumpuk.
+  if (fs.existsSync(fileCap)) {
     try {
       doc.save();
       doc.opacity(0.88);
-      doc.image(gambarCap, xKanan + lebarTtd / 2 - 49, yTtd + 24, {
-        fit: [98, 54], align: "center", valign: "center"
+      doc.image(fileCap, xKanan + 18, yTtd + 24, {
+        fit: [58, 52], align: "center", valign: "center"
       });
       doc.restore();
     } catch (e) {
@@ -3809,19 +3789,19 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
       console.error("GAMBAR CAP RT GAGAL DIMUAT:", e?.message || e);
     }
   } else {
-    console.warn("CAP RT RESMI TIDAK BERHASIL DIMUAT.");
+    console.warn("CAP RT RESMI BELUM TERSEDIA: cap-rt.png");
   }
 
-  if (gambarTtd) {
+  if (fs.existsSync(fileTtd)) {
     try {
-      doc.image(gambarTtd, xKanan + lebarTtd / 2 - 62, yTtd + 28, {
-        fit: [124, 46], align: "center", valign: "center"
+      doc.image(fileTtd, xKanan + 91, yTtd + 29, {
+        fit: [100, 43], align: "center", valign: "center"
       });
     } catch (e) {
       console.error("GAMBAR TTD KETUA RT GAGAL DIMUAT:", e?.message || e);
     }
   } else {
-    console.warn("TTD KETUA RT TIDAK BERHASIL DIMUAT.");
+    console.warn("TTD KETUA RT RESMI BELUM TERSEDIA: ttd-ketua-rt.png");
   }
 
   doc.font(namaRT ? FONT_TEBAL : FONT).fontSize(UKURAN).fillColor("#000000")
@@ -3834,17 +3814,6 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   doc.font("Helvetica-Oblique").fontSize(6.5).fillColor("#444444")
     .text("Kode verifikasi aplikasi: " + kodeVerifikasiSurat(id, letter), xKanan, yNama + 23, { width: lebarTtd, align: "center" });
   doc.fillColor("#000000");
-
-  // Kiri: Mengetahui Ketua RW
-  doc.font(FONT).fontSize(UKURAN)
-    .text("Mengetahui,", xKiri, yTtd, { width: lebarTtd, align: "center" });
-  doc.text(`Ketua RW ${W.rw}`, xKiri, yTtd + 15, { width: lebarTtd, align: "center" });
-  doc.font(namaRW ? FONT_TEBAL : FONT)
-    .text(namaRW ? namaRW.toUpperCase() : garisNama, xKiri, yNama, {
-      width: lebarTtd,
-      align: "center",
-      underline: Boolean(namaRW)
-    });
 }
 /* === AKHIR TEMPLATE SURAT RT 004 / RW 001 === */
 
