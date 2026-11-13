@@ -944,14 +944,17 @@ function keteranganKasRapi(row, info) {
 /* PENDAFTARAN MANDIRI WARGA: tidak mensyaratkan data KK/KTP diinput Ketua RT terlebih dahulu. */
 app.post("/api/register-warga", async (req, res) => {
   try {
-    const nama_lengkap = String(req.body?.nama_lengkap || "").trim().replace(/\s+/g, " ").slice(0,120);
+    const nama_lengkap = String(req.body?.nama_lengkap || req.body?.nama || req.body?.nama_warga || "").trim().replace(/\s+/g, " ").slice(0,120);
+    const session = getSession(req);
+    const didaftarkanKetuaRT = session?.role === "admin";
     const nik = String(req.body?.nik || "").replace(/\D/g, "");
     const alamat = String(req.body?.alamat || "").trim().slice(0,300);
     const no_hp = String(req.body?.no_hp || "").trim().replace(/[\s-]/g, "");
     const password = req.body?.password;
 
     if (nama_lengkap.length < 3) {
-      return res.status(400).json({ok:false,message:"Nama lengkap wajib diisi (minimal 3 karakter)."});
+      console.warn("REGISTER NAME VALIDATION:", {bodyKeys:Object.keys(req.body || {}), nameLength:nama_lengkap.length, admin:didaftarkanKetuaRT});
+      return res.status(400).json({ok:false,message:"Nama lengkap belum terbaca. Ketik nama lengkap minimal 3 karakter pada kolom Nama lengkap sesuai KTP."});
     }
     if (!/^\d{16}$/.test(nik)) {
       return res.status(400).json({ok:false,message:"NIK harus terdiri dari 16 digit sesuai KTP."});
@@ -1012,7 +1015,7 @@ app.post("/api/register-warga", async (req, res) => {
           alamat: alamat || undefined,
           no_hp,
           password:hashPassword(password),
-          status_warga:"menunggu_verifikasi"
+          status_warga:didaftarkanKetuaRT ? "aktif" : "menunggu_verifikasi"
         }
       });
       saved = Array.isArray(updatedRows) ? updatedRows[0] : updatedRows;
@@ -1025,7 +1028,7 @@ app.post("/api/register-warga", async (req, res) => {
           alamat: alamat || null,
           no_hp,
           password:hashPassword(password),
-          status_warga:"menunggu_verifikasi"
+          status_warga:didaftarkanKetuaRT ? "aktif" : "menunggu_verifikasi"
         }
       });
       saved = Array.isArray(insertedRows) ? insertedRows[0] : insertedRows;
@@ -1037,8 +1040,8 @@ app.post("/api/register-warga", async (req, res) => {
 
     return res.status(201).json({
       ok:true,
-      message:"Pendaftaran berhasil. Akun menunggu verifikasi Ketua RT.",
-      user:{id:saved.id,nama_lengkap:saved.nama_lengkap || nama_lengkap,no_hp,status_warga:"menunggu_verifikasi"}
+      message:didaftarkanKetuaRT ? "Akun warga berhasil dibuat dan diaktifkan oleh Ketua RT." : "Pendaftaran berhasil. Akun menunggu verifikasi Ketua RT.",
+      user:{id:saved.id,nama_lengkap:saved.nama_lengkap || nama_lengkap,no_hp,status_warga:didaftarkanKetuaRT ? "aktif" : "menunggu_verifikasi"}
     });
   } catch (error) {
     console.error("REGISTER WARGA ERROR:", error?.message || error);
