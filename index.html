@@ -3859,7 +3859,7 @@ function updateAdminLetterKkRequirement(){
     else if((document.getElementById("adminLetterMode")?.value || "data")==="data"){
       const id=Number(document.getElementById("adminLetterResident")?.value);
       const w=(window._adminLetterResidents||[]).find(x=>Number(x.id)===id);
-      field.value=(w?.no_kk||"").replace(/\\s/g,"");
+      field.value=(w?.no_kk||"").replace(/\s/g,"");
     }
   }
 }
@@ -3880,7 +3880,7 @@ function changeLetterApplicantMode(){
   if(kk && mode==="data"){
     const id=Number(residentSelect?.value);
     const w=(window._adminLetterResidents||[]).find(x=>Number(x.id)===id);
-    kk.value=(w?.no_kk||"").replace(/\\s/g,"");
+    kk.value=(w?.no_kk||"").replace(/\s/g,"");
   }
   updateAdminLetterKkRequirement();
   if(mode==="manual"){
@@ -3912,7 +3912,7 @@ function fillLetterResidentDetails(){
     if(el) el.value=value;
   });
   const kk=document.getElementById("adminLetterNoKk");
-  if(kk) kk.value=(w.no_kk||"").replace(/\\s/g,"");
+  if(kk) kk.value=(w.no_kk||"").replace(/\s/g,"");
 }
 
 async function submitLetterForResident(){
@@ -3938,7 +3938,7 @@ async function submitLetterForResident(){
   }
   if(!type){alert("Pilih jenis surat.");return;}
   const kkRequired=["Surat Keterangan Domisili","Surat Keterangan Tidak Mampu"].includes(type);
-  if(kkRequired && !/^\\d{16}$/.test(applicant.no_kk)){
+  if(kkRequired && !/^\d{16}$/.test(applicant.no_kk)){
     alert("Jenis surat ini mewajibkan nomor KK 16 digit.");return;
   }
   if(!purpose){alert("Keperluan surat wajib diisi.");return;}
