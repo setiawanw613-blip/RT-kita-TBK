@@ -3107,7 +3107,7 @@ app.get("/api/letters", requireSecretary, async (req, res) => {
   try {
     const data = await supabaseRequest("pengajuan_surat", {
       query:
-        "select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at&order=created_at.desc"
+        "select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at,nama_pemohon,nik_pemohon,no_kk_pemohon,alamat_pemohon,tempat_lahir_pemohon,tanggal_lahir_pemohon,jenis_kelamin_pemohon,pekerjaan_pemohon,status_perkawinan_pemohon,no_hp_pemohon,sumber_pengajuan&order=created_at.desc"
     });
 
     const list = Array.isArray(data) ? data : [];
@@ -3125,10 +3125,16 @@ app.get("/api/letters", requireSecretary, async (req, res) => {
         ...row,
         type: row.jenis_surat,
         purpose: row.keperluan,
-        nama: w?.nama_lengkap || "",
-        nik: w?.nik || "",
-        alamat: w?.alamat || "",
-        no_hp: w?.no_hp || ""
+        nama: w?.nama_lengkap || row.nama_pemohon || "",
+        nik: w?.nik || row.nik_pemohon || "",
+        alamat: w?.alamat || row.alamat_pemohon || "",
+        no_hp: w?.no_hp || row.no_hp_pemohon || "",
+        no_kk: w?.no_kk || row.no_kk_pemohon || "",
+        tempat_lahir: w?.tempat_lahir || row.tempat_lahir_pemohon || "",
+        tanggal_lahir: w?.tanggal_lahir || row.tanggal_lahir_pemohon || "",
+        jenis_kelamin: w?.jenis_kelamin || row.jenis_kelamin_pemohon || "",
+        pekerjaan: w?.pekerjaan || row.pekerjaan_pemohon || "",
+        sumber_pengajuan: row.sumber_pengajuan || "warga"
       };
     });
 
@@ -3143,12 +3149,14 @@ app.get("/api/letters", requireSecretary, async (req, res) => {
   }
 });
 
-/* AJUKAN SURAT DIBANTU KETUA RT — hanya akun admin yang boleh membuat atas nama warga */
+/* AJUKAN SURAT DIBANTU KETUA RT — pilih Data Warga atau isi identitas sesuai KTP */
 app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
   try {
-    const wargaId = Number(req.body?.warga_id);
     const type = String(req.body?.type || "").trim();
     const purpose = String(req.body?.purpose || "").trim();
+    const wargaIdRaw = req.body?.warga_id;
+    const wargaId = wargaIdRaw == null || wargaIdRaw === "" ? null : Number(wargaIdRaw);
+    const manual = req.body?.mode === "manual";
     const jenisDiizinkan = [
       "Surat Pengantar",
       "Surat Keterangan Domisili",
@@ -3156,47 +3164,106 @@ app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
       "Surat Keterangan Usaha",
       "Surat Pengantar SKCK"
     ];
-
-    if (!Number.isSafeInteger(wargaId) || wargaId <= 0 || !jenisDiizinkan.includes(type) || !purpose || purpose.length > 1000) {
-      return res.status(400).json({ ok: false, message: "Pilih warga, jenis surat, dan isi keperluan dengan benar." });
+    if (!jenisDiizinkan.includes(type) || !purpose || purpose.length > 1000) {
+      return res.status(400).json({ ok: false, message: "Jenis surat dan keperluan wajib diisi dengan benar." });
     }
 
-    const wargaRows = await supabaseRequest("warga", {
-      query: "select=id,nama_lengkap&id=eq." + encodeURIComponent(wargaId) + "&limit=1"
-    });
-    const warga = Array.isArray(wargaRows) ? wargaRows[0] : null;
-    if (!warga) return res.status(404).json({ ok: false, message: "Data warga tidak ditemukan." });
+    let identity = {};
+    if (manual) {
+      const nama = String(req.body?.nama || "").trim();
+      const nik = String(req.body?.nik || "").replace(/\s/g, "");
+      const noKk = String(req.body?.no_kk || "").replace(/\s/g, "");
+      const alamat = String(req.body?.alamat || "").trim();
+      const tempatLahir = String(req.body?.tempat_lahir || "").trim();
+      const tanggalLahir = String(req.body?.tanggal_lahir || "").trim();
+      const jenisKelamin = String(req.body?.jenis_kelamin || "").trim();
+      const pekerjaan = String(req.body?.pekerjaan || "").trim();
+      const statusPerkawinan = String(req.body?.status_perkawinan || "").trim();
+      const noHp = String(req.body?.no_hp || "").trim();
+
+      if (!nama || !/^\d{16}$/.test(nik) || !alamat) {
+        return res.status(400).json({ ok: false, message: "Nama, NIK 16 digit, dan alamat sesuai KTP wajib diisi." });
+      }
+      if (noKk && !/^\d{16}$/.test(noKk)) {
+        return res.status(400).json({ ok: false, message: "Nomor KK harus 16 digit jika diisi." });
+      }
+      if (tanggalLahir && !/^\d{4}-\d{2}-\d{2}$/.test(tanggalLahir)) {
+        return res.status(400).json({ ok: false, message: "Format tanggal lahir tidak valid." });
+      }
+      identity = {
+        nama_pemohon: nama,
+        nik_pemohon: nik,
+        no_kk_pemohon: noKk || null,
+        alamat_pemohon: alamat,
+        tempat_lahir_pemohon: tempatLahir || null,
+        tanggal_lahir_pemohon: tanggalLahir || null,
+        jenis_kelamin_pemohon: jenisKelamin || null,
+        pekerjaan_pemohon: pekerjaan || null,
+        status_perkawinan_pemohon: statusPerkawinan || null,
+        no_hp_pemohon: noHp || null,
+        sumber_pengajuan: "dibantu_rt_manual"
+      };
+    } else {
+      if (!Number.isSafeInteger(wargaId) || wargaId <= 0) {
+        return res.status(400).json({ ok: false, message: "Pilih warga dari Data Warga atau pilih pengisian manual." });
+      }
+      const wargaRows = await supabaseRequest("warga", {
+        query: "select=id,nama_lengkap,nik,no_kk,alamat,tempat_lahir,tanggal_lahir,jenis_kelamin,pekerjaan,status_perkawinan,no_hp&id=eq." + encodeURIComponent(wargaId) + "&limit=1"
+      });
+      const warga = Array.isArray(wargaRows) ? wargaRows[0] : null;
+      if (!warga) return res.status(404).json({ ok: false, message: "Data warga tidak ditemukan." });
+      identity = {
+        nama_pemohon: warga.nama_lengkap || null,
+        nik_pemohon: warga.nik || null,
+        no_kk_pemohon: warga.no_kk || null,
+        alamat_pemohon: warga.alamat || null,
+        tempat_lahir_pemohon: warga.tempat_lahir || null,
+        tanggal_lahir_pemohon: warga.tanggal_lahir || null,
+        jenis_kelamin_pemohon: warga.jenis_kelamin || null,
+        pekerjaan_pemohon: warga.pekerjaan || null,
+        status_perkawinan_pemohon: warga.status_perkawinan || null,
+        no_hp_pemohon: warga.no_hp || null,
+        sumber_pengajuan: "dibantu_rt_data_warga"
+      };
+    }
 
     const inserted = await supabaseRequest("pengajuan_surat", {
       method: "POST",
       body: {
-        warga_id: wargaId,
+        warga_id: manual ? null : wargaId,
         jenis_surat: type,
         keperluan: purpose,
-        status: "diajukan"
+        status: "diajukan",
+        ...identity
       }
     });
     const row = Array.isArray(inserted) ? inserted[0] : inserted;
 
-    try {
-      await supabaseRequest("notifikasi", {
-        method: "POST",
-        body: {
-          penerima_peran: "warga",
-          penerima_warga_id: wargaId,
-          judul: "Pengajuan Surat Dibantu Ketua RT",
-          pesan: "Ketua RT membantu mengajukan " + type + " atas nama Anda. Status: menunggu persetujuan.",
-          jenis: "surat",
-          tautan: "/",
-          referensi_id: row.id,
-          sudah_dibaca: false
-        }
-      });
-    } catch (notificationError) {
-      console.error("NOTIFIKASI SURAT BANTUAN ERROR:", notificationError?.message || notificationError);
+    if (!manual && wargaId) {
+      try {
+        await supabaseRequest("notifikasi", {
+          method: "POST",
+          body: {
+            penerima_peran: "warga",
+            penerima_warga_id: wargaId,
+            judul: "Pengajuan Surat Dibantu Ketua RT",
+            pesan: "Ketua RT membantu mengajukan " + type + " atas nama Anda. Status: menunggu persetujuan.",
+            jenis: "surat",
+            tautan: "/",
+            referensi_id: row.id,
+            sudah_dibaca: false
+          }
+        });
+      } catch (notificationError) {
+        console.error("NOTIFIKASI SURAT BANTUAN ERROR:", notificationError?.message || notificationError);
+      }
     }
 
-    return res.json({ ok: true, data: row, message: "Pengajuan surat atas nama " + (warga.nama_lengkap || "warga") + " berhasil dibuat." });
+    return res.json({
+      ok: true,
+      data: row,
+      message: "Pengajuan surat atas nama " + (identity.nama_pemohon || "warga") + " berhasil dibuat."
+    });
   } catch (error) {
     console.error("ADMIN CREATE LETTER ERROR:", error);
     return res.status(500).json({ ok: false, message: "Gagal membuat pengajuan surat untuk warga." });
@@ -3761,7 +3828,7 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
         // Surat diambil berdasarkan ID; akses warga dibatasi ke pemiliknya.
     const letters = await supabaseRequest("pengajuan_surat", {
       query:
-        "select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at" +
+        "select=id,warga_id,jenis_surat,keperluan,status,catatan,created_at,nama_pemohon,nik_pemohon,no_kk_pemohon,alamat_pemohon,tempat_lahir_pemohon,tanggal_lahir_pemohon,jenis_kelamin_pemohon,pekerjaan_pemohon,status_perkawinan_pemohon" +
         "&id=eq." + encodeURIComponent(id) +
         (isAdmin
           ? ""
@@ -3786,20 +3853,32 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
 
 
     // Ambil data pemilik surat yang dipilih.
-    const residents = await supabaseRequest("warga", {
-      query:
-        "select=id,nama_lengkap,nik,no_kk,alamat,rt,rw,jenis_kelamin,tempat_lahir,tanggal_lahir,status_perkawinan,pekerjaan,status_hunian" +
-        "&id=eq." + encodeURIComponent(letter.warga_id)
-    });
-
-    if (!Array.isArray(residents) || residents.length === 0) {
-      return res.status(404).json({
-        ok: false,
-        message: "Data warga pemilik surat tidak ditemukan"
+    let warga = null;
+    if (letter.warga_id) {
+      const residents = await supabaseRequest("warga", {
+        query:
+          "select=id,nama_lengkap,nik,no_kk,alamat,rt,rw,jenis_kelamin,tempat_lahir,tanggal_lahir,status_perkawinan,pekerjaan,status_hunian" +
+          "&id=eq." + encodeURIComponent(letter.warga_id)
       });
+      if (Array.isArray(residents) && residents.length) warga = residents[0];
     }
-
-    const warga = residents[0];
+    // Pengajuan manual menyimpan snapshot identitas sesuai KTP agar PDF tetap dapat dibuat
+    // tanpa membuat atau mengubah baris Data Warga.
+    warga = {
+      ...(warga || {}),
+      nama_lengkap: warga?.nama_lengkap || letter.nama_pemohon || "",
+      nik: warga?.nik || letter.nik_pemohon || "",
+      no_kk: warga?.no_kk || letter.no_kk_pemohon || "",
+      alamat: warga?.alamat || letter.alamat_pemohon || "",
+      tempat_lahir: warga?.tempat_lahir || letter.tempat_lahir_pemohon || "",
+      tanggal_lahir: warga?.tanggal_lahir || letter.tanggal_lahir_pemohon || "",
+      jenis_kelamin: warga?.jenis_kelamin || letter.jenis_kelamin_pemohon || "",
+      pekerjaan: warga?.pekerjaan || letter.pekerjaan_pemohon || "",
+      status_perkawinan: warga?.status_perkawinan || letter.status_perkawinan_pemohon || ""
+    };
+    if (!warga.nama_lengkap) {
+      return res.status(404).json({ ok: false, message: "Identitas pemohon surat tidak ditemukan." });
+    }
     const clean = (value) =>
       value == null ? "" : String(value).trim();
     const PDFDocument = require("pdfkit");
