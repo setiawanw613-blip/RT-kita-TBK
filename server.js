@@ -941,16 +941,20 @@ function keteranganKasRapi(row, info) {
   return `Iuran ${kategori} ${info.periode_label} - dari ${info.nama_warga || "warga"}`;
 }
 
-/* DAFTAR AKUN WARGA: cocokkan NIK + No. KK dengan data yang sudah dimasukkan Ketua RT. */
+/* PENDAFTARAN MANDIRI WARGA: tidak mensyaratkan data KK/KTP diinput Ketua RT terlebih dahulu. */
 app.post("/api/register-warga", async (req, res) => {
   try {
+    const nama_lengkap = String(req.body?.nama_lengkap || "").trim().replace(/\s+/g, " ").slice(0,120);
     const nik = String(req.body?.nik || "").replace(/\D/g, "");
-    const no_kk = String(req.body?.no_kk || "").replace(/\D/g, "");
+    const alamat = String(req.body?.alamat || "").trim().slice(0,300);
     const no_hp = String(req.body?.no_hp || "").trim().replace(/[\s-]/g, "");
     const password = req.body?.password;
 
-    if (!/^\d{16}$/.test(nik) || !/^\d{16}$/.test(no_kk)) {
-      return res.status(400).json({ok:false,message:"NIK dan nomor KK harus masing-masing 16 digit."});
+    if (nama_lengkap.length < 3) {
+      return res.status(400).json({ok:false,message:"Nama lengkap wajib diisi (minimal 3 karakter)."});
+    }
+    if (!/^\d{16}$/.test(nik)) {
+      return res.status(400).json({ok:false,message:"NIK harus terdiri dari 16 digit sesuai KTP."});
     }
     if (!/^\+?\d{9,18}$/.test(no_hp)) {
       return res.status(400).json({ok:false,message:"Nomor HP tidak valid. Gunakan nomor HP aktif."});
@@ -988,54 +992,58 @@ app.post("/api/register-warga", async (req, res) => {
     }
 
     const identityRows = await supabaseRequest("warga", {
-      query:"select=id,nama_lengkap,nik,no_kk,keluarga_id,no_hp,status_warga&nik=eq." + encodeURIComponent(nik) + "&limit=2"
+      query:"select=id,nama_lengkap,nik,no_hp,status_warga&nik=eq." + encodeURIComponent(nik) + "&limit=2"
     });
-    if (!Array.isArray(identityRows) || identityRows.length === 0) {
-      return res.status(404).json({ok:false,message:"Data NIK belum ditemukan. Pastikan Ketua RT sudah memasukkan KK dan KTP Anda."});
-    }
-    if (identityRows.length > 1) {
-      return res.status(409).json({ok:false,message:"Data NIK tercatat lebih dari satu kali. Hubungi Ketua RT untuk pemeriksaan."});
+    if (Array.isArray(identityRows) && identityRows.length > 1) {
+      return res.status(409).json({ok:false,message:"NIK tercatat lebih dari satu kali. Hubungi Ketua RT untuk pemeriksaan."});
     }
 
-    const resident = identityRows[0];
-    let registeredFamilyNumber = String(resident.no_kk || "").replace(/\D/g, "");
-    if (!registeredFamilyNumber && resident.keluarga_id) {
-      const familyRows = await supabaseRequest("keluarga", {
-        query:"select=no_kk&id=eq." + encodeURIComponent(String(resident.keluarga_id)) + "&limit=1"
-      });
-      const family = Array.isArray(familyRows) ? familyRows[0] : null;
-      registeredFamilyNumber = String(family?.no_kk || "").replace(/\D/g, "");
-    }
-    if (registeredFamilyNumber !== no_kk) {
-      return res.status(400).json({ok:false,message:"NIK ditemukan, tetapi tidak cocok dengan nomor KK. Periksa kembali atau hubungi Ketua RT."});
-    }
-    if (resident.no_hp) {
-      return res.status(409).json({ok:false,message:"Data warga ini sudah memiliki akun/nomor HP. Jika lupa akses, hubungi Ketua RT."});
-    }
-
-    const updatedRows = await supabaseRequest("warga", {
-      method:"PATCH",
-      query:"id=eq." + encodeURIComponent(String(resident.id)),
-      body:{
-        no_hp,
-        password:hashPassword(password),
-        status_warga:"menunggu_verifikasi"
+    const existing = Array.isArray(identityRows) ? identityRows[0] : null;
+    let saved;
+    if (existing) {
+      if (existing.no_hp) {
+        return res.status(409).json({ok:false,message:"NIK ini sudah memiliki akun. Silakan login atau hubungi Ketua RT jika lupa akses."});
       }
-    });
-    const updated = Array.isArray(updatedRows) ? updatedRows[0] : updatedRows;
-    if (!updated || !updated.id) {
-      throw new Error("Pembaruan akun warga tidak dikonfirmasi oleh database");
+      const updatedRows = await supabaseRequest("warga", {
+        method:"PATCH",
+        query:"id=eq." + encodeURIComponent(String(existing.id)),
+        body:{
+          nama_lengkap: existing.nama_lengkap || nama_lengkap,
+          alamat: alamat || undefined,
+          no_hp,
+          password:hashPassword(password),
+          status_warga:"menunggu_verifikasi"
+        }
+      });
+      saved = Array.isArray(updatedRows) ? updatedRows[0] : updatedRows;
+    } else {
+      const insertedRows = await supabaseRequest("warga", {
+        method:"POST",
+        body:{
+          nama_lengkap,
+          nik,
+          alamat: alamat || null,
+          no_hp,
+          password:hashPassword(password),
+          status_warga:"menunggu_verifikasi"
+        }
+      });
+      saved = Array.isArray(insertedRows) ? insertedRows[0] : insertedRows;
+    }
+
+    if (!saved || !saved.id) {
+      throw new Error("Pembuatan akun warga tidak dikonfirmasi oleh database");
     }
 
     return res.status(201).json({
       ok:true,
-      message:"Pendaftaran akun berhasil dan menunggu verifikasi Ketua RT.",
-      user:{id:resident.id,nama_lengkap:resident.nama_lengkap,no_hp,status_warga:"menunggu_verifikasi"}
+      message:"Pendaftaran berhasil. Akun menunggu verifikasi Ketua RT.",
+      user:{id:saved.id,nama_lengkap:saved.nama_lengkap || nama_lengkap,no_hp,status_warga:"menunggu_verifikasi"}
     });
   } catch (error) {
     console.error("REGISTER WARGA ERROR:", error?.message || error);
     if (getSupabaseErrorCode(error) === "23505") {
-      return res.status(409).json({ok:false,message:"Nomor HP atau identitas sudah digunakan. Periksa kembali data pendaftaran."});
+      return res.status(409).json({ok:false,message:"NIK atau nomor HP sudah terdaftar. Periksa kembali data pendaftaran."});
     }
     return res.status(500).json({ok:false,message:"Gagal mendaftarkan akun warga. Silakan coba kembali."});
   }
