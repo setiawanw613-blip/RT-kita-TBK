@@ -3755,21 +3755,21 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   const FONT_TEBAL = "Times-Bold";
   const { tanggalSurat } = infoTanggalSurat(letter);
 
-  // Blok pengesahan dibuat rata tengah: tanpa gambar tanda tangan.
+  // Blok pengesahan tetap di sisi kanan; tanpa gambar tanda tangan.
   const yTtd = Math.min(yAkhir + 18, 652);
   const lebarTtd = 200;
-  const xTengah = X + (LEBAR - lebarTtd) / 2;
+  const xKanan = X + LEBAR - lebarTtd;
   const namaRT = "Wawan Setiawan";
 
   doc.font(FONT).fontSize(UKURAN).fillColor("#000000");
-  doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xTengah, yTtd, {
+  doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xKanan, yTtd, {
     width: lebarTtd, align: "center"
   });
-  doc.text(`Ketua RT ${W.rt} / RW ${W.rw}`, xTengah, yTtd + 15, {
+  doc.text(`Ketua RT ${W.rt} / RW ${W.rw}`, xKanan, yTtd + 15, {
     width: lebarTtd, align: "center"
   });
 
-  // Hanya stempel resmi, diposisikan tepat di tengah blok pengesahan.
+  // Hanya stempel resmi, di tengah blok pengesahan yang berada di kanan halaman.
   const urlCap = "https://i.ibb.co.com/4Rj7crsz/edited-image.png";
   try {
     const tujuanCap = new URL(urlCap);
@@ -3792,7 +3792,7 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     if (!bufferCap.length || bufferCap.length > 2 * 1024 * 1024) {
       throw new Error("Ukuran berkas stempel tidak valid.");
     }
-    doc.image(bufferCap, xTengah + (lebarTtd - 82) / 2, yTtd + 34, {
+    doc.image(bufferCap, xKanan + (lebarTtd - 82) / 2, yTtd + 34, {
       fit: [82, 54], align: "center", valign: "center"
     });
   } catch (e) {
@@ -3801,12 +3801,12 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
 
   const yNama = yTtd + 98;
   doc.font(FONT_TEBAL).fontSize(UKURAN).fillColor("#000000")
-    .text(namaRT.toUpperCase(), xTengah, yNama, {
+    .text(namaRT.toUpperCase(), xKanan, yNama, {
       width: lebarTtd, align: "center", underline: true
     });
 
   doc.font("Helvetica-Oblique").fontSize(6.5).fillColor("#444444")
-    .text("Kode verifikasi aplikasi: " + kodeVerifikasiSurat(id, letter), xTengah, yNama + 23, {
+    .text("Kode verifikasi aplikasi: " + kodeVerifikasiSurat(id, letter), xKanan, yNama + 23, {
       width: lebarTtd, align: "center"
     });
   doc.fillColor("#000000");
