@@ -801,51 +801,82 @@ async function bukaNotifikasiHeader() {
 function panduanPenggunaan(){
   const apk="https://github.com/setiawanw613-blip/RT-kita-TBK/releases/download/v1.0.3/RT-TBK.apk";
   const warga=[
-    ["Data Saya","Periksa data pribadi dan keluarga yang terhubung. Jika keliru, hubungi Ketua RT."],
-    ["Ajukan Surat","Pilih jenis surat, lengkapi data, lalu kirim. Pantau proses di Surat Saya."],
-    ["Surat Saya","Lihat status pengajuan. Jika disetujui, buka dan unduh PDF surat."],
-    ["Pengaduan","Laporkan masalah lingkungan dengan uraian jelas. Kirim satu kali dan tunggu tindak lanjut."],
-    ["Riwayat Pengaduan","Pantau laporan yang pernah dikirim dan status tindak lanjutnya."],
-    ["Aspirasi Warga","Kirim usulan kegiatan atau perbaikan lingkungan."],
-    ["Pengumuman","Baca informasi resmi dan pemberitahuan pengurus RT."],
-    ["Iuran Warga","Pilih bulan dan ikuti petunjuk pembayaran. Iuran Rp35.000/bulan: keamanan Rp15.000, sampah Rp15.000, kas RT Rp5.000. Pantau status pembayaran."],
-    ["Kas RT","Lihat ringkasan pemasukan, pengeluaran, dan saldo kas."],
-    ["Transparansi Dana QRIS","Lihat informasi transaksi dan penyaluran dana QRIS yang tersedia."]
+    ["1. Beranda","Halaman awal setelah berhasil masuk. Gunakan untuk melihat ringkasan layanan dan informasi terbaru yang ditampilkan."],
+    ["2. Data Saya","Periksa identitas dan data keluarga yang tercatat. Jika nama, NIK, alamat, atau data keluarga keliru, hubungi Ketua RT untuk koreksi; jangan membuat data baru yang duplikat."],
+    ["3. Pengajuan Surat","Pilih jenis surat yang diperlukan. Isi semua kolom sesuai keadaan sebenarnya, periksa kembali sebelum menekan Kirim, lalu tunggu proses pemeriksaan pengurus."],
+    ["4. Surat Saya / Riwayat Surat","Buka untuk melihat perkembangan permohonan surat. Jika status sudah selesai/disetujui, buka surat lalu gunakan tombol unduh dokumen yang tersedia."],
+    ["5. Pengaduan","Sampaikan masalah lingkungan secara jelas: lokasi, kejadian, dan waktu. Lampirkan foto bila tersedia. Tekan kirim satu kali, lalu tunggu tanggapan pengurus."],
+    ["6. Riwayat Pengaduan","Lihat laporan yang pernah dikirim dan status penanganannya. Buka laporan terkait untuk membaca pembaruan."],
+    ["7. Aspirasi Warga","Kirim saran atau usulan untuk perbaikan lingkungan/kegiatan RT. Tulis singkat, sopan, dan jelas; kirim satu kali."],
+    ["8. Pengumuman / Info","Baca pengumuman resmi, jadwal kegiatan, dan pemberitahuan dari pengurus RT."],
+    ["9. Iuran Warga","Pilih bulan iuran yang ingin diperiksa. Rincian iuran bulanan adalah Rp35.000: keamanan Rp15.000, sampah Rp15.000, dan kas RT Rp5.000. Periksa bulan serta jumlah tagihan sebelum melanjutkan pembayaran."],
+    ["10. Pembayaran QRIS","Jika tombol/QR pembayaran tersedia, buka instruksi pembayaran dari menu iuran. Pindai QR melalui aplikasi pembayaran yang mendukung QRIS, cocokkan nama penerima dan nominal, lalu konfirmasi di aplikasi pembayaran. Simpan bukti transaksi."],
+    ["11. Kas RT","Lihat ringkasan saldo, pemasukan, dan pengeluaran kas yang ditampilkan untuk warga."],
+    ["12. Transparansi Dana QRIS","Periksa informasi transaksi atau rekap penyaluran dana QRIS yang tersedia. Cocokkan periode dan keterangan transaksi."],
+    ["13. Notifikasi","Buka ikon lonceng untuk membaca pemberitahuan. Ketuk notifikasi yang relevan bila tersedia agar mengetahui layanan atau status yang diperbarui."]
   ];
   const admin=[
-    ["Data Warga & Daftarkan Akun Warga","Cari/kelola data warga. Ketua RT dapat membantu membuat akun; warga juga bisa mendaftar mandiri."],
-    ["Data Keluarga & Arsip KK/KTP","Kelola anggota keluarga dan dokumen identitas. Jaga kerahasiaan dokumen."],
-    ["Pengajuan Surat & Bantu Ajukan Surat","Periksa permohonan dan proses persetujuan. Menu bantu ajukan digunakan saat warga memerlukan bantuan."],
-    ["Riwayat Pengaduan & Aspirasi","Baca laporan/usulan, tindak lanjuti, dan perbarui status sesuai kondisi."],
-    ["Pengumuman","Buat dan kelola informasi resmi untuk warga."],
-    ["Iuran, Kas RT & Transparansi QRIS","Pantau pembayaran, verifikasi bila diperlukan, catat transaksi, dan periksa laporan."],
-    ["Akun Petugas RT","Ketua RT mengatur petugas. Bendahara mengelola keuangan; Sekretaris membantu surat/pengumuman; Ketua Gang mencatat penerimaan tunai warga dan setoran QRIS ke bendahara."]
+    ["Ketua RT / Admin","Mengelola data warga dan keluarga, membantu pendaftaran akun warga, memeriksa pengajuan surat, menindaklanjuti pengaduan/aspirasi, membuat pengumuman, serta memantau iuran dan kas."],
+    ["Bendahara","Mengelola pencatatan keuangan RT, memeriksa pembayaran iuran, mencatat pemasukan/pengeluaran, dan menjaga laporan kas tetap sesuai bukti transaksi."],
+    ["Sekretaris","Membantu administrasi RT, pengelolaan surat, arsip, dan penyampaian pengumuman sesuai kewenangan yang diberikan."],
+    ["Ketua Gang","Mencatat penerimaan iuran tunai dari warga di wilayah gang, memilih nama warga dan bulan pembayaran dengan teliti, kemudian menyetorkan dana kepada bendahara melalui alur QRIS yang ditetapkan pengurus."],
+    ["Catatan akses petugas","Pada halaman login, pilih peran petugas yang sesuai. Masukkan username dan password petugas. Warga masuk memakai nomor HP dan password. Setiap petugas hanya menggunakan akun dan kewenangannya sendiri."]
   ];
-  const row=x=>'<div style="padding:10px 0;border-bottom:1px solid #e5edf6"><b>'+x[0]+'</b><div style="font-size:13px;color:#52647a;margin-top:4px;line-height:1.5">'+x[1]+'</div></div>';
+  const row=x=>'<div style="padding:11px 0;border-bottom:1px solid #e5edf6"><b>'+x[0]+'</b><div style="font-size:13px;color:#52647a;margin-top:5px;line-height:1.6">'+x[1]+'</div></div>';
   const masuk=!!currentUser;
-  layout("Panduan Aplikasi RT TBK",`
-    <div class="card"><h2>📲 Unduh Aplikasi Android</h2><p>Unduh APK resmi RT TBK versi 1.0.3.</p>
-      <a class="btn" href="${apk}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;margin:12px 0">⬇️ Unduh RT TBK (APK)</a>
-      <p class="muted" style="font-size:12px">Setelah selesai, buka file RT-TBK.apk dari notifikasi atau folder Download, lalu tekan Instal. Jika diminta, izinkan pemasangan dari browser. Konfirmasi keamanan Android tetap harus dilakukan di perangkat.</p>
+  layout("Panduan Penggunaan RT TBK",`
+    <div class="card"><h2>📲 Unduh Aplikasi Android</h2>
+      <p>Gunakan tautan resmi untuk mengunduh aplikasi RT TBK Android versi 1.0.3.</p>
+      <a class="btn" href="${apk}" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;margin:12px 0">⬇️ UNDUH APLIKASI RT TBK</a>
+      <ol style="padding-left:20px;line-height:1.65">
+        <li>Tekan tombol unduh dan tunggu file <b>RT-TBK.apk</b> selesai diunduh.</li>
+        <li>Buka file dari notifikasi unduhan atau folder Download.</li>
+        <li>Jika Android meminta izin instalasi dari browser, izinkan untuk proses ini.</li>
+        <li>Tekan <b>Instal</b>, tunggu sampai selesai, lalu tekan <b>Buka</b>.</li>
+      </ol>
+      <p class="muted" style="font-size:12px">Catatan: satu ketukan memulai unduhan. Android tetap meminta konfirmasi Instal pada perangkat.</p>
     </div>
-    <div class="card"><h2>📝 Cara Daftar Warga</h2><ol style="padding-left:20px;line-height:1.7">
-      <li>Pada halaman login, pilih peran <b>Warga</b>.</li><li>Tekan <b>Daftar sebagai Warga</b>.</li>
-      <li>Isi nama sesuai KTP, NIK 16 digit, alamat, nomor HP aktif, dan password minimal 8 karakter.</li>
-      <li>Kirim pendaftaran. Akun mandiri menunggu verifikasi Ketua RT.</li>
-      <li>Setelah disetujui, login memakai nomor HP dan password yang dibuat.</li></ol>
-      <p class="muted" style="font-size:12px">Ketua RT juga dapat membuat akun warga melalui menu Daftarkan Akun Warga. Jangan membagikan password.</p>
+    <div class="card"><h2>📝 Cara Daftar Akun Warga</h2>
+      <ol style="padding-left:20px;line-height:1.7">
+        <li>Buka aplikasi dan pada pilihan <b>Masuk sebagai</b>, pilih <b>Warga</b>.</li>
+        <li>Tekan tombol <b>Daftar sebagai Warga</b>.</li>
+        <li>Isi nama lengkap sesuai KTP.</li>
+        <li>Masukkan NIK tepat 16 digit.</li>
+        <li>Isi alamat tempat tinggal (kolom ini boleh dikosongkan jika memang tidak diminta).</li>
+        <li>Masukkan nomor HP aktif. Nomor ini akan digunakan sebagai username saat login.</li>
+        <li>Buat password minimal 8 karakter. Jangan berikan password kepada siapa pun.</li>
+        <li>Tekan <b>Daftar Akun</b>. Pendaftaran mandiri akan menunggu verifikasi Ketua RT.</li>
+        <li>Setelah mendapat persetujuan/akun aktif, masuk kembali menggunakan nomor HP dan password tadi.</li>
+      </ol>
+      <p class="muted" style="font-size:12px">Jika Ketua RT yang mendaftarkan melalui menu pengurus, akun langsung aktif dan warga dapat login menggunakan nomor HP serta password yang dibuat saat pendaftaran.</p>
     </div>
-    <div class="card"><h2>🔐 Cara Login</h2><ol style="padding-left:20px;line-height:1.7">
-      <li>Pilih peran yang benar: Warga, Ketua RT/Admin, Bendahara, Sekretaris, atau Ketua Gang.</li>
-      <li>Masukkan nomor HP untuk warga atau username untuk petugas, lalu password.</li>
-      <li>Tekan Masuk aplikasi. Jika gagal, periksa peran dan data login.</li><li>Tekan Keluar setelah selesai, terutama pada HP bersama.</li></ol></div>
-    <div class="card"><h2>📚 Semua Menu Warga</h2>${warga.map(row).join("")}</div>
-    <div class="card"><h2>🛡️ Menu Pengurus</h2>${admin.map(row).join("")}</div>
-    <div class="card"><h2>💡 Bantuan</h2><p>Jika akun belum aktif, data tidak sesuai, atau menu bermasalah, hubungi Ketua RT. Jangan mengirim password melalui grup WhatsApp.</p></div>
+    <div class="card"><h2>🔐 Cara Login</h2>
+      <ol style="padding-left:20px;line-height:1.7">
+        <li>Pada <b>Masuk sebagai</b>, pilih jenis akun: Warga, Ketua RT/Admin, Bendahara, Sekretaris, atau Ketua Gang.</li>
+        <li>Untuk <b>Warga</b>, masukkan nomor HP dan password.</li>
+        <li>Untuk <b>Petugas</b>, masukkan username dan password petugas.</li>
+        <li>Tekan <b>Masuk aplikasi</b>.</li>
+        <li>Jika gagal, pastikan pilihan peran benar, nomor HP/username tidak salah ketik, dan akun sudah aktif.</li>
+        <li>Setelah selesai memakai aplikasi, tekan Keluar terutama jika HP digunakan bersama.</li>
+      </ol>
+    </div>
+    <div class="card"><h2>📚 Petunjuk Setiap Menu Warga</h2>
+      <p class="muted" style="font-size:13px">Ikuti petunjuk sesuai nama menu yang tampil pada halaman warga. Beberapa menu hanya menampilkan informasi jika sudah ada data atau transaksi.</p>
+      ${warga.map(row).join("")}
+    </div>
+    <div class="card"><h2>🛡️ Petunjuk Menu Pengurus</h2>${admin.map(row).join("")}</div>
+    <div class="card"><h2>🔒 Keamanan dan Bantuan</h2>
+      <ul style="padding-left:20px;line-height:1.7">
+        <li>Jangan membagikan password atau kode OTP kepada siapa pun.</li>
+        <li>Pastikan data surat benar sebelum dikirim dan pastikan nominal iuran benar sebelum membayar.</li>
+        <li>Gunakan QR/instruksi pembayaran yang tampil di aplikasi, bukan QR dari pesan yang tidak jelas sumbernya.</li>
+        <li>Jika pendaftaran belum disetujui, data tidak cocok, atau menu bermasalah, hubungi Ketua RT.</li>
+        <li>Jangan mengirim foto KTP/KK atau informasi pribadi ke grup umum.</li>
+      </ul>
+    </div>
     <button class="btn secondary" style="width:100%" onclick="${masuk?"renderHomeByRole()":"loginPage()"}">← Kembali</button>
   `,false);
 }
-
 function loginPage(error=""){
   document.getElementById("app").innerHTML=`
     <div style="
