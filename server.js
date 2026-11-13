@@ -3798,8 +3798,10 @@ async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     if (!bufferCap.length || bufferCap.length > 2 * 1024 * 1024) {
       throw new Error("Ukuran berkas stempel tidak valid.");
     }
+    // Pertahankan bidang putih asli stempel: jangan beri opacity pada gambar.
+    // Bidang putih di belakang juga mencegah elemen surat terlihat melalui area stempel.
     doc.save();
-    doc.opacity(0.88);
+    doc.fillColor("#FFFFFF").rect(xKanan + 18, yTtd + 24, 58, 52).fill();
     doc.image(bufferCap, xKanan + 18, yTtd + 24, {
       fit: [58, 52], align: "center", valign: "center"
     });
