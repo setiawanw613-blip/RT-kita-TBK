@@ -963,6 +963,15 @@ if(role==="warga"){
 }
 
   function registerWarga(){
+  renderFormDaftarWarga(false);
+}
+
+function registerWargaKetuaRT(){
+  if(currentUser?.role!=="admin"){alert("Menu ini khusus Ketua RT.");return;}
+  renderFormDaftarWarga(true);
+}
+
+function renderFormDaftarWarga(dibantuKetuaRT=false){
   document.getElementById("app").innerHTML=`
     <div class="wrap">
       <div class="logo">
@@ -971,8 +980,8 @@ if(role==="warga"){
       </div>
 
       <div class="card">
-        <h2>📝 Daftar Akun Warga</h2>
-        <p class="muted">Warga dapat mendaftar sendiri. Tidak perlu menunggu Ketua RT memasukkan data KK atau KTP terlebih dahulu. Akun akan diperiksa Ketua RT sebelum dapat digunakan.</p>
+        <h2>📝 ${dibantuKetuaRT ? "Daftarkan Akun Warga" : "Daftar Akun Warga"}</h2>
+        <p class="muted">${dibantuKetuaRT ? "Ketua RT dapat membantu warga membuat akun. Akun yang didaftarkan Ketua RT langsung aktif." : "Warga dapat mendaftar sendiri tanpa menunggu input KK/KTP. Akun akan menunggu verifikasi Ketua RT."}</p>
 
         <label>Nama lengkap sesuai KTP</label>
         <input id="regNama" autocomplete="name" maxlength="120" placeholder="Masukkan nama lengkap">
@@ -992,23 +1001,31 @@ if(role==="warga"){
 
         <button class="btn" style="width:100%;margin-top:16px"
           onclick="submitRegisterWarga()">
-          Daftar Akun
+          ${dibantuKetuaRT ? "Simpan & Aktifkan Akun" : "Daftar Akun"}
         </button>
 
         <button class="btn secondary" style="width:100%;margin-top:10px"
-          onclick="loginPage()">
-          Kembali ke Login
+          onclick="${dibantuKetuaRT ? "adminHome()" : "loginPage()"}">
+          ${dibantuKetuaRT ? "Kembali ke Dashboard RT" : "Kembali ke Login"}
         </button>
       </div>
     </div>`;
 }
 
 async function submitRegisterWarga(){
-  const nama_lengkap=document.getElementById("regNama").value.trim();
-  const nik=document.getElementById("regNik").value.replace(/\D/g,"");
-  const alamat=document.getElementById("regAlamat").value.trim();
-  const no_hp=document.getElementById("regHp").value.trim();
-  const password=document.getElementById("regPassword").value;
+  const ambil=(id)=>document.querySelector("#"+id);
+  const namaInput=ambil("regNama");
+  const nikInput=ambil("regNik");
+  const alamatInput=ambil("regAlamat");
+  const hpInput=ambil("regHp");
+  const passwordInput=ambil("regPassword");
+  if(!namaInput||!nikInput||!alamatInput||!hpInput||!passwordInput){alert("Form pendaftaran tidak termuat sempurna. Muat ulang halaman lalu coba kembali.");return;}
+  const nama_lengkap=String(namaInput.value||"").trim().replace(/\\s+/g," ");
+  const nik=String(nikInput.value||"").replace(/\\D/g,"");
+  const alamat=String(alamatInput.value||"").trim();
+  const no_hp=String(hpInput.value||"").trim();
+  const password=passwordInput.value;
+  const dibantuKetuaRT=currentUser?.role==="admin";
 
   if(nama_lengkap.length<3){
     alert("Masukkan nama lengkap sesuai KTP.");
@@ -1030,9 +1047,10 @@ async function submitRegisterWarga(){
   try{
     await api("/api/register-warga",{
       method:"POST",
-      body:JSON.stringify({nama_lengkap,nik,alamat,no_hp,password})
+      body:JSON.stringify({nama_lengkap,nama:nama_lengkap,nik,alamat,no_hp,password})
     });
-    alert("Pendaftaran berhasil dikirim. Akun menunggu verifikasi Ketua RT. Setelah disetujui, login menggunakan nomor HP dan password.");
+    alert(dibantuKetuaRT ? "Akun warga berhasil dibuat dan langsung aktif. Warga dapat login dengan nomor HP dan password yang dibuat." : "Pendaftaran berhasil dikirim. Akun menunggu verifikasi Ketua RT. Setelah disetujui, warga dapat login dengan nomor HP dan password.");
+    if(dibantuKetuaRT){adminHome();return;}
     loginPage();
     document.getElementById("role").value="warga";
     changeLoginForm();
@@ -1227,6 +1245,10 @@ async function adminHome(){
       <button onclick="residents()">
   <span style="font-size:26px">👥</span>
   <span>Data Warga</span>
+</button>
+<button onclick="registerWargaKetuaRT()">
+  <span style="font-size:26px">📝</span>
+  <span>Daftarkan Akun Warga</span>
 </button>
 
 <button onclick="keluargaAdmin()">
