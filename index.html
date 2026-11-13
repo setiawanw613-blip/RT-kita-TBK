@@ -1240,6 +1240,11 @@ async function adminHome(){
   <span>Pengajuan Surat Warga</span>
 </button>
 
+<button onclick="createLetterForResident()">
+  <span style="font-size:26px">📝</span>
+  <span>Bantu Ajukan Surat Warga</span>
+</button>
+
 <button data-menu-notif="pengaduan" onclick="complaints()">
   <span style="font-size:26px">📢</span>
   <span>Riwayat Pengaduan</span>
@@ -3764,8 +3769,82 @@ async function saveCash(){
 }
 
 
+let adminLetterSubmitting = false;
+
+async function createLetterForResident(){
+  layout("Bantu Ajukan Surat Warga", `
+    <div class="card" id="adminLetterForm">Memuat Data Warga...</div>
+  `);
+  try{
+    const warga = await api("/api/residents");
+    const aktif = (Array.isArray(warga) ? warga : []).filter(w => w.status_warga !== "nonaktif");
+    const box = document.getElementById("adminLetterForm");
+    if(!box) return;
+    if(!aktif.length){
+      box.innerHTML = "<p class='muted'>Belum ada data warga yang dapat dipilih.</p><button class='btn secondary' onclick='adminHome()'>Kembali</button>";
+      return;
+    }
+    box.innerHTML = `
+      <p class="muted">Gunakan formulir ini jika warga belum memahami cara mengajukan surat melalui akunnya. Pengajuan akan tercatat atas nama warga yang dipilih dan tetap menunggu proses persetujuan.</p>
+      <label>Nama warga</label>
+      <select id="adminLetterResident">
+        <option value="">-- Pilih warga --</option>
+        ${aktif.map(w => `<option value="${Number(w.id)}">${esc(w.nama_lengkap || w.nama || "Tanpa nama")} · ${esc(w.alamat || "-")}</option>`).join("")}
+      </select>
+      <label>Jenis surat</label>
+      <select id="adminLetterType">
+        <option value="">-- Pilih jenis surat --</option>
+        <option>Surat Pengantar</option>
+        <option>Surat Keterangan Domisili</option>
+        <option>Surat Keterangan Tidak Mampu</option>
+        <option>Surat Keterangan Usaha</option>
+        <option>Surat Pengantar SKCK</option>
+      </select>
+      <label>Keperluan surat</label>
+      <textarea id="adminLetterPurpose" maxlength="1000" placeholder="Tuliskan keperluan surat sesuai keterangan warga"></textarea>
+      <button class="btn" id="adminLetterSubmit" style="margin-top:14px" onclick="submitLetterForResident()">Kirim Pengajuan Surat</button>
+      <button class="btn secondary" style="margin-top:8px" onclick="letters()">Kembali ke Pengajuan Surat</button>
+    `;
+  }catch(e){
+    const box=document.getElementById("adminLetterForm");
+    if(box) box.innerHTML=`<div class="error">${esc(e.message || "Gagal memuat data warga")}</div><button class="btn secondary" onclick="adminHome()">Kembali</button>`;
+  }
+}
+
+async function submitLetterForResident(){
+  if(adminLetterSubmitting) return;
+  const warga_id = Number(document.getElementById("adminLetterResident")?.value);
+  const type = document.getElementById("adminLetterType")?.value || "";
+  const purpose = (document.getElementById("adminLetterPurpose")?.value || "").trim();
+  if(!warga_id){ alert("Pilih warga terlebih dahulu."); return; }
+  if(!type){ alert("Pilih jenis surat."); return; }
+  if(!purpose){ alert("Keperluan surat wajib diisi."); return; }
+  if(!confirm("Buat pengajuan surat atas nama warga yang dipilih?")) return;
+
+  adminLetterSubmitting = true;
+  const btn=document.getElementById("adminLetterSubmit");
+  if(btn){btn.disabled=true;btn.textContent="Mengirim...";}
+  try{
+    const result=await api("/api/letters/for-resident",{
+      method:"POST",
+      body:JSON.stringify({warga_id,type,purpose})
+    });
+    alert(result.message || "Pengajuan surat berhasil dibuat.");
+    await letters();
+  }catch(e){
+    alert(e.message || "Gagal membuat pengajuan surat.");
+    if(btn){btn.disabled=false;btn.textContent="Kirim Pengajuan Surat";}
+  }finally{
+    adminLetterSubmitting=false;
+  }
+}
+
 async function letters(){
   layout("Pengajuan Surat Warga",`
+    <div class="card" style="margin-bottom:12px">
+      <p class="muted" style="margin-top:0">Periksa pengajuan dari warga atau bantu buat pengajuan atas nama warga yang belum memahami aplikasi.</p>
+      <button class="btn" onclick="createLetterForResident()">＋ Bantu Ajukan Surat untuk Warga</button>
+    </div>
     <div class="card" id="letterList">Memuat...</div>
   `);
 
