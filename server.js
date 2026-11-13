@@ -3180,11 +3180,11 @@ app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
     }
 
     let identity = {};
+    const kkRequired = ["Surat Keterangan Domisili", "Surat Keterangan Tidak Mampu"].includes(type);
     if (manual) {
       const nama = String(req.body?.nama || "").trim();
       const nik = String(req.body?.nik || "").replace(/\s/g, "");
       const noKk = String(req.body?.no_kk || "").replace(/\s/g, "");
-      const kkRequired = ["Surat Keterangan Domisili", "Surat Keterangan Tidak Mampu"].includes(type);
       const alamat = String(req.body?.alamat || "").trim();
       const tempatLahir = String(req.body?.tempat_lahir || "").trim();
       const tanggalLahir = String(req.body?.tanggal_lahir || "").trim();
