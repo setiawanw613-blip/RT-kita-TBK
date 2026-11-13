@@ -3417,7 +3417,7 @@ function kenaliJenisSurat(jenis) {
   return "pengantar";
 }
 
-function tulisIsiSuratPdf(doc, data) {
+async function tulisIsiSuratPdf(doc, data) {
   // Ukur dulu di dokumen bayangan; jika isi terlalu panjang, huruf diperkecil
   // sedikit agar isi + tanda tangan tetap muat dalam satu halaman bingkai.
   const BATAS_ISI = 632;
@@ -3429,7 +3429,7 @@ function tulisIsiSuratPdf(doc, data) {
     if (yAkhir <= BATAS_ISI) break;
   }
   const yAkhir = tulisKontenSurat(doc, data, skala);
-  tulisTandaTanganSurat(doc, data, yAkhir);
+  await tulisTandaTanganSurat(doc, data, yAkhir);
 }
 
 function infoTanggalSurat(letter) {
@@ -3746,9 +3746,20 @@ function kodeVerifikasiSurat(id, letter) {
   return `RT004-${hex.slice(0, 5)}-${hex.slice(5)}`;
 }
 
-function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
+async function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   const fs = require("fs");
   const path = require("path");
+  const ambilGambarResmi = async (fileLokal, url) => {
+    if (fs.existsSync(fileLokal)) return fileLokal;
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(7000) });
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      return Buffer.from(await response.arrayBuffer());
+    } catch (e) {
+      console.error("GAGAL MEMUAT GAMBAR RESMI SURAT:", e?.message || e);
+      return null;
+    }
+  };
   const W = SURAT_WILAYAH;
   const clean = (v) => (v == null ? "" : String(v).replace(/\s+/g, " ").trim());
   const X = 72;
@@ -3776,33 +3787,41 @@ function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
   doc.text(`${W.kotaTtd}, ${tanggalSurat}`, xKanan, yTtd, { width: lebarTtd, align: "center" });
   doc.text(`Ketua RT ${W.rt} / RW ${W.rw}`, xKanan, yTtd + 15, { width: lebarTtd, align: "center" });
 
-  // Tanda tangan otomatis: pakai gambar ttd-ketua-rt.png bila ada di repo.
+  // Cap asli RT dan tanda tangan Ketua RT yang diberikan pemilik akun.
+  // Cap diletakkan lebih dahulu; tanda tangan ditampilkan di atasnya.
   const fileTtd = path.join(__dirname, "ttd-ketua-rt.png");
-  if (fs.existsSync(fileTtd)) {
+  const fileCap = path.join(__dirname, "cap-rt.png");
+  const [gambarCap, gambarTtd] = await Promise.all([
+    ambilGambarResmi(fileCap, "https://i.ibb.co.com/rGswwp10/Whats-App-Image-2026-11-13-at-13-16-56.jpg"),
+    ambilGambarResmi(fileTtd, "https://i.ibb.co.com/svGNbr7k/Whats-App-Image-2026-11-13-at-13-18-56.jpg")
+  ]);
+
+  if (gambarCap) {
     try {
-      doc.image(fileTtd, xKanan + lebarTtd / 2 - 55, yTtd + 30, { fit: [130, 48], align: "center", valign: "center" });
+      doc.save();
+      doc.opacity(0.88);
+      doc.image(gambarCap, xKanan + lebarTtd / 2 - 49, yTtd + 24, {
+        fit: [98, 54], align: "center", valign: "center"
+      });
+      doc.restore();
+    } catch (e) {
+      try { doc.restore(); } catch (_) {}
+      console.error("GAMBAR CAP RT GAGAL DIMUAT:", e?.message || e);
+    }
+  } else {
+    console.warn("CAP RT RESMI TIDAK BERHASIL DIMUAT.");
+  }
+
+  if (gambarTtd) {
+    try {
+      doc.image(gambarTtd, xKanan + lebarTtd / 2 - 62, yTtd + 28, {
+        fit: [124, 46], align: "center", valign: "center"
+      });
     } catch (e) {
       console.error("GAMBAR TTD KETUA RT GAGAL DIMUAT:", e?.message || e);
     }
-  }
-
-  // Gunakan hanya gambar cap RT asli jika berkas resmi tersedia.
-  const fileCap = path.join(__dirname, "cap-rt.png");
-  let capAsliTerpasang = false;
-  if (fs.existsSync(fileCap)) {
-    try {
-      doc.save();
-      doc.opacity(0.9);
-      doc.image(fileCap, xKanan + lebarTtd / 2 - 84, yTtd + 18, { fit: [80, 80], align: "center", valign: "center" });
-      doc.restore();
-      capAsliTerpasang = true;
-    } catch (e) {
-      doc.restore();
-      console.error("GAMBAR CAP RT GAGAL DIMUAT:", e?.message || e);
-    }
-  }
-  if (!capAsliTerpasang) {
-    console.warn("CAP RT RESMI BELUM TERSEDIA; PDF DIBUAT TANPA CAP.");
+  } else {
+    console.warn("TTD KETUA RT TIDAK BERHASIL DIMUAT.");
   }
 
   doc.font(namaRT ? FONT_TEBAL : FONT).fontSize(UKURAN).fillColor("#000000")
@@ -3813,7 +3832,6 @@ function tulisTandaTanganSurat(doc, { id, letter }, yAkhir) {
     });
 
   doc.font("Helvetica-Oblique").fontSize(6.5).fillColor("#444444")
-    .text("Tanda tangan manual Ketua RT tetap diperlukan", xKanan, yNama + 15, { width: lebarTtd, align: "center" })
     .text("Kode verifikasi aplikasi: " + kodeVerifikasiSurat(id, letter), xKanan, yNama + 23, { width: lebarTtd, align: "center" });
   doc.fillColor("#000000");
 
@@ -4004,7 +4022,7 @@ app.get("/api/my-letters/:id/pdf", requireLogin, async (req, res) => {
     doc.restore();
 
     // Isi surat tetap mengikuti jenis surat dan data pengajuan yang disetujui.
-    tulisIsiSuratPdf(doc, { id, letter, warga });
+    await tulisIsiSuratPdf(doc, { id, letter, warga });
 
     doc.end();
 
