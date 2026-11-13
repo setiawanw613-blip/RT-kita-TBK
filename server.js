@@ -3143,6 +3143,66 @@ app.get("/api/letters", requireSecretary, async (req, res) => {
   }
 });
 
+/* AJUKAN SURAT DIBANTU KETUA RT — hanya akun admin yang boleh membuat atas nama warga */
+app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
+  try {
+    const wargaId = Number(req.body?.warga_id);
+    const type = String(req.body?.type || "").trim();
+    const purpose = String(req.body?.purpose || "").trim();
+    const jenisDiizinkan = [
+      "Surat Pengantar",
+      "Surat Keterangan Domisili",
+      "Surat Keterangan Tidak Mampu",
+      "Surat Keterangan Usaha",
+      "Surat Pengantar SKCK"
+    ];
+
+    if (!Number.isSafeInteger(wargaId) || wargaId <= 0 || !jenisDiizinkan.includes(type) || !purpose || purpose.length > 1000) {
+      return res.status(400).json({ ok: false, message: "Pilih warga, jenis surat, dan isi keperluan dengan benar." });
+    }
+
+    const wargaRows = await supabaseRequest("warga", {
+      query: "select=id,nama_lengkap&id=eq." + encodeURIComponent(wargaId) + "&limit=1"
+    });
+    const warga = Array.isArray(wargaRows) ? wargaRows[0] : null;
+    if (!warga) return res.status(404).json({ ok: false, message: "Data warga tidak ditemukan." });
+
+    const inserted = await supabaseRequest("pengajuan_surat", {
+      method: "POST",
+      body: {
+        warga_id: wargaId,
+        jenis_surat: type,
+        keperluan: purpose,
+        status: "diajukan"
+      }
+    });
+    const row = Array.isArray(inserted) ? inserted[0] : inserted;
+
+    try {
+      await supabaseRequest("notifikasi", {
+        method: "POST",
+        body: {
+          penerima_peran: "warga",
+          penerima_warga_id: wargaId,
+          judul: "Pengajuan Surat Dibantu Ketua RT",
+          pesan: "Ketua RT membantu mengajukan " + type + " atas nama Anda. Status: menunggu persetujuan.",
+          jenis: "surat",
+          tautan: "/",
+          referensi_id: row.id,
+          sudah_dibaca: false
+        }
+      });
+    } catch (notificationError) {
+      console.error("NOTIFIKASI SURAT BANTUAN ERROR:", notificationError?.message || notificationError);
+    }
+
+    return res.json({ ok: true, data: row, message: "Pengajuan surat atas nama " + (warga.nama_lengkap || "warga") + " berhasil dibuat." });
+  } catch (error) {
+    console.error("ADMIN CREATE LETTER ERROR:", error);
+    return res.status(500).json({ ok: false, message: "Gagal membuat pengajuan surat untuk warga." });
+  }
+});
+
 /* AJUKAN SURAT - WARGA */
 app.post("/api/letters", requireWarga, async (req, res) => {
   try {
