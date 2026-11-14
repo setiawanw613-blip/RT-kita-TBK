@@ -6480,6 +6480,45 @@ doc.end();
   }
 });
 
+/* PANDUAN INSTAL RT TBK DI IPHONE — halaman khusus untuk warga iPhone. */
+app.get("/iphone", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+  res.send(`<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1267c9">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RT TBK">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>Pasang RT TBK di iPhone</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:24px 16px 40px;font-family:-apple-system,BlinkMacSystemFont,Arial,sans-serif;background:#edf3f9;color:#172033}.wrap{max-width:520px;margin:auto}.card{background:white;border-radius:18px;padding:22px;margin:14px 0;box-shadow:0 3px 14px #16365b12}h1{font-size:25px;color:#1267c9;margin:0 0 8px}h2{font-size:18px;margin:0 0 12px}.muted{color:#65748a;line-height:1.5}.step{display:flex;gap:12px;margin:15px 0;line-height:1.5}.num{flex:0 0 30px;height:30px;border-radius:50%;background:#e7f1ff;color:#1267c9;display:grid;place-items:center;font-weight:800}.btn{display:block;text-align:center;text-decoration:none;background:#1267c9;color:white;padding:15px;border-radius:12px;font-weight:700;margin-top:18px}.note{font-size:13px;color:#65748a;line-height:1.5}.brand{text-align:center;font-weight:800;color:#1267c9;margin-bottom:18px}
+</style>
+</head>
+<body><main class="wrap">
+<div class="brand">RT TBK · PELAYANAN WARGA DIGITAL</div>
+<section class="card">
+<h1>Pasang RT TBK di iPhone</h1>
+<p class="muted">Ikuti langkah berikut agar ikon RT TBK muncul di layar utama iPhone seperti aplikasi.</p>
+<a class="btn" href="/">Buka Aplikasi RT TBK</a>
+</section>
+<section class="card">
+<h2>Cara menambahkan ke Layar Utama</h2>
+<div class="step"><span class="num">1</span><span>Buka halaman ini menggunakan <b>Safari</b> di iPhone (ikon kompas). Jangan gunakan Chrome untuk panduan ini.</span></div>
+<div class="step"><span class="num">2</span><span>Tekan tombol <b>Bagikan</b> (ikon kotak dengan panah ke atas) di Safari.</span></div>
+<div class="step"><span class="num">3</span><span>Gulir menu, lalu pilih <b>Tambahkan ke Layar Utama</b> / <b>Add to Home Screen</b>. Jika belum terlihat, gulir ke bawah pada daftar tindakan.</span></div>
+<div class="step"><span class="num">4</span><span>Pastikan nama <b>RT TBK</b>, lalu tekan <b>Tambah</b> / <b>Add</b>.</span></div>
+<p class="note">Selesai. Ikon RT TBK akan muncul di layar utama iPhone. Ketuk ikon tersebut untuk membuka aplikasi. Tidak perlu mengunduh APK atau memasang melalui App Store.</p>
+<a class="btn" href="/">Lanjut ke RT TBK</a>
+</section>
+<p class="note" style="text-align:center">RT TBK · Taman Bali Kahuripan</p>
+</main></body></html>`);
+});
+
 /* UNDUH APK RESMI RT TBK — tautan publik pendek untuk warga.
    File diambil dari rilis GitHub terbaru lalu dikirim sebagai attachment,
    sehingga warga tidak perlu membuka halaman rilis atau mencari tombol aset. */
