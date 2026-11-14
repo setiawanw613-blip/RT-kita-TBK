@@ -5,7 +5,7 @@
   "display": "standalone",
   "background_color": "#f3f6fa",
   "theme_color": "#1267c9",
-  "description": "Aplikasi layanan dan administrasi warga RT TBK",
+  "description": "Aplikasi layanan dan administrasi warga RT TBK. Dapat dipasang di Android dan iPhone.",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -19,5 +19,8 @@
       "type": "image/png",
       "purpose": "any maskable"
     }
-  ]
+  ],
+  "id": "/",
+  "scope": "/",
+  "lang": "id-ID"
 }
