@@ -3173,7 +3173,8 @@ app.post("/api/letters/for-resident", requireAdmin, async (req, res) => {
       "Surat Keterangan Domisili",
       "Surat Keterangan Tidak Mampu",
       "Surat Keterangan Usaha",
-      "Surat Pengantar SKCK"
+      "Surat Pengantar SKCK",
+      "Surat Pengantar Mengadakan Acara"
     ];
     if (!jenisDiizinkan.includes(type) || !purpose || purpose.length > 1000) {
       return res.status(400).json({ ok: false, message: "Jenis surat dan keperluan wajib diisi dengan benar." });
@@ -3298,10 +3299,18 @@ app.post("/api/letters", requireWarga, async (req, res) => {
       return res.status(400).json({ ok: false, message: "Nomor KK harus 16 digit jika diisi." });
     }
 
-    if (!type || !purpose) {
+    const jenisDiizinkan = [
+      "Surat Pengantar",
+      "Surat Keterangan Domisili",
+      "Surat Keterangan Tidak Mampu",
+      "Surat Keterangan Usaha",
+      "Surat Pengantar SKCK",
+      "Surat Pengantar Mengadakan Acara"
+    ];
+    if (!jenisDiizinkan.includes(type) || !purpose || String(purpose).length > 1000) {
       return res.status(400).json({
         ok: false,
-        message: "Jenis surat dan keperluan wajib diisi"
+        message: "Jenis surat dan keperluan wajib diisi dengan benar."
       });
     }
 
@@ -3380,7 +3389,12 @@ const LABEL_RINCIAN_SURAT = [
   "Usaha Sejak",
   "Tinggal Sejak",
   "Penghasilan per Bulan",
-  "Jumlah Tanggungan"
+  "Jumlah Tanggungan",
+  "Nama Acara",
+  "Hari/Tanggal Acara",
+  "Waktu Acara",
+  "Lokasi Acara",
+  "Penanggung Jawab"
 ];
 
 function uraikanKeperluanSurat(teks) {
@@ -3413,6 +3427,7 @@ function kenaliJenisSurat(jenis) {
     .trim();
 
   if (j.includes("skck")) return "skck";
+  if (j.includes("acara")) return "acara";
   if (j.includes("tidak mampu") || j.includes("sktm")) return "sktm";
   if (j.includes("usaha") || j.includes("sku")) return "usaha";
   if (j.includes("domisili")) return "domisili";
@@ -3559,6 +3574,28 @@ function tulisKontenSurat(doc, { id, letter, warga }, skala = 1) {
       setelahKeperluan:
         "Mohon kiranya pihak Kepolisian dapat memberikan pelayanan sebagaimana mestinya kepada yang bersangkutan.",
       penutup: "Demikian surat pengantar ini kami buat dengan sebenarnya untuk dapat dipergunakan sebagaimana mestinya."
+    },
+
+    acara: {
+      judul: "SURAT PENGANTAR MENGADAKAN ACARA",
+      kode: "SP-A",
+      pembuka: "memberikan pengantar kepada:",
+      isi: [
+        `Orang tersebut di atas adalah benar warga ${wilayahLengkap}.`,
+        "Yang bersangkutan bermaksud menyelenggarakan kegiatan/acara dengan rincian sebagai berikut:"
+      ],
+      rincian: [
+        ["Nama Acara", rincian["Nama Acara"] || "-"],
+        ["Hari/Tanggal Acara", rincian["Hari/Tanggal Acara"] || "-"],
+        ["Waktu Acara", rincian["Waktu Acara"] || "-"],
+        ["Lokasi Acara", rincian["Lokasi Acara"] || "-"],
+        ["Penanggung Jawab", rincian["Penanggung Jawab"] || "-"]
+      ],
+      isiSetelahRincian:
+        "Surat pengantar ini dibuat sebagai pemberitahuan dan pengantar kepada pihak terkait mengenai rencana kegiatan tersebut.",
+      setelahKeperluan:
+        "Kami berharap kegiatan dapat dilaksanakan dengan tertib, menjaga keamanan, kebersihan, dan kenyamanan lingkungan serta tidak mengganggu warga sekitar.",
+      penutup: "Demikian surat pengantar ini kami buat untuk dapat dipergunakan sebagaimana mestinya."
     }
   };
 
