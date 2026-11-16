@@ -948,6 +948,7 @@ app.post("/api/register-warga", async (req, res) => {
     const session = getSession(req);
     const didaftarkanKetuaRT = session?.role === "admin";
     const nik = String(req.body?.nik || "").replace(/\D/g, "");
+    const no_kk = String(req.body?.no_kk || "").replace(/\D/g, "");
     const alamat = String(req.body?.alamat || "").trim().slice(0,300);
     const no_hp = String(req.body?.no_hp || "").trim().replace(/[\s-]/g, "");
     const password = req.body?.password;
@@ -958,6 +959,9 @@ app.post("/api/register-warga", async (req, res) => {
     }
     if (!/^\d{16}$/.test(nik)) {
       return res.status(400).json({ok:false,message:"NIK harus terdiri dari 16 digit sesuai KTP."});
+    }
+    if (no_kk && !/^\d{16}$/.test(no_kk)) {
+      return res.status(400).json({ok:false,message:"Nomor KK harus terdiri dari 16 digit jika diisi."});
     }
     if (!/^\+?\d{9,18}$/.test(no_hp)) {
       return res.status(400).json({ok:false,message:"Nomor HP tidak valid. Gunakan nomor HP aktif."});
@@ -1012,7 +1016,8 @@ app.post("/api/register-warga", async (req, res) => {
         query:"id=eq." + encodeURIComponent(String(existing.id)),
         body:{
           nama_lengkap: existing.nama_lengkap || nama_lengkap,
-          alamat: alamat || undefined,
+          ...(alamat ? { alamat } : {}),
+          ...(no_kk ? { no_kk } : {}),
           no_hp,
           password:hashPassword(password),
           status_warga:didaftarkanKetuaRT ? "aktif" : "menunggu_verifikasi"
@@ -1025,6 +1030,7 @@ app.post("/api/register-warga", async (req, res) => {
         body:{
           nama_lengkap,
           nik,
+          ...(no_kk ? { no_kk } : {}),
           alamat: alamat || null,
           no_hp,
           password:hashPassword(password),
@@ -2561,6 +2567,10 @@ app.patch("/api/my-data", requireWarga, async (req, res) => {
   pekerjaan,
   status_hunian
 } = req.body;
+    const no_kk = String(req.body?.no_kk || "").replace(/\D/g, "");
+    if (no_kk && !/^\d{16}$/.test(no_kk)) {
+      return res.status(400).json({ok:false,message:"Nomor KK harus terdiri dari 16 digit jika diisi."});
+    }
 
     const data = await supabaseRequest("warga", {
       method: "PATCH",
@@ -2575,6 +2585,8 @@ app.patch("/api/my-data", requireWarga, async (req, res) => {
         rw: rw || "01",
         status_perkawinan: status_perkawinan || null,
         pekerjaan: pekerjaan || null,
+        // Nomor KK hanya diperbarui jika warga mengisi 16 digit.
+        ...(no_kk ? { no_kk } : {}),
         // Status hunian hanya diubah jika diisi, agar data lama tidak terhapus.
         ...(status_hunian ? { status_hunian } : {})
       }
