@@ -34,8 +34,8 @@ const JENIS_SURAT_INFO = {
     ]
   },
   "Surat Pengantar SKCK": {
-    info: "Pengantar dari RT untuk pemberitahuan rencana mengadakan kegiatan/acara.",
-    contoh: "Contoh: Permohonan pengantar untuk mengadakan acara syukuran warga",
+    info: "Pengantar dari RT sebagai syarat membuat SKCK di Polsek/Polres.",
+    contoh: "Contoh: Persyaratan melamar pekerjaan di PT ...",
     rincian: []
   },
   "Surat Pengantar Mengadakan Acara": {
