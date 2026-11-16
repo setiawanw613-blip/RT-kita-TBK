@@ -2478,12 +2478,8 @@ async function saveResident(event,id){
       let value = el.value.trim();
 
       if(key === "no_kk"){
-        value = value.replace(/\D/g, "");
-        if(value && !/^\d{16}$/.test(value)){
-          alert("Nomor KK harus terdiri dari 16 digit angka.");
-          el.focus();
-          return;
-        }
+        // Kirim hanya angka; validasi final dilakukan server agar tidak tertahan validasi browser lama.
+        value = Array.from(value).filter(ch => ch >= "0" && ch <= "9").join("");
       }
 
       if(el.tagName === "SELECT" && !value){
@@ -5779,7 +5775,7 @@ async function simpanAspirasiAdmin(id){
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js?v=11")
+    navigator.serviceWorker.register("/sw.js?v=12")
       .then(() => console.log("Service Worker aktif"))
       .catch(error => console.error("Service Worker gagal:", error));
   });
