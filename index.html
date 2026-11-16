@@ -2478,8 +2478,8 @@ async function saveResident(event,id){
       let value = el.value.trim();
 
       if(key === "no_kk"){
-        value = value.replace(/\\D/g, "");
-        if(value && !/^\\d{16}$/.test(value)){
+        value = value.replace(/\D/g, "");
+        if(value && !/^\d{16}$/.test(value)){
           alert("Nomor KK harus terdiri dari 16 digit angka.");
           el.focus();
           return;
