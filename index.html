@@ -998,6 +998,10 @@ function renderFormDaftarWarga(dibantuKetuaRT=false){
         <label>NIK sesuai KTP</label>
         <input id="regNik" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit NIK">
 
+        <label>Nomor KK (opsional)</label>
+        <input id="regNoKk" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit Nomor KK">
+        <div class="muted" style="font-size:12px;margin-top:4px">Boleh dikosongkan. Jika diisi, masukkan 16 digit angka sesuai Kartu Keluarga.</div>
+
         <label>Alamat tempat tinggal</label>
         <input id="regAlamat" maxlength="300" autocomplete="street-address" placeholder="Masukkan alamat rumah (opsional)">
 
@@ -1025,12 +1029,14 @@ async function submitRegisterWarga(){
   const ambil=(id)=>document.querySelector("#"+id);
   const namaInput=ambil("regNama");
   const nikInput=ambil("regNik");
+  const noKkInput=ambil("regNoKk");
   const alamatInput=ambil("regAlamat");
   const hpInput=ambil("regHp");
   const passwordInput=ambil("regPassword");
   if(!namaInput||!nikInput||!alamatInput||!hpInput||!passwordInput){alert("Form pendaftaran tidak termuat sempurna. Muat ulang halaman lalu coba kembali.");return;}
   const nama_lengkap=String(namaInput.value||"").trim().replace(/\s+/g," ");
   const nik=String(nikInput.value||"").replace(/\D/g,"");
+  const no_kk=String(noKkInput?.value||"").replace(/\D/g,"");
   const alamat=String(alamatInput.value||"").trim();
   const no_hp=String(hpInput.value||"").trim();
   const password=passwordInput.value;
@@ -1042,6 +1048,10 @@ async function submitRegisterWarga(){
   }
   if(!/^\d{16}$/.test(nik)){
     alert("NIK harus terdiri dari 16 digit sesuai KTP.");
+    return;
+  }
+  if(no_kk && !/^\d{16}$/.test(no_kk)){
+    alert("Nomor KK harus terdiri dari 16 digit jika diisi.");
     return;
   }
   if(!no_hp || !password){
@@ -1056,7 +1066,7 @@ async function submitRegisterWarga(){
   try{
     await api("/api/register-warga",{
       method:"POST",
-      body:JSON.stringify({nama_lengkap,nama:nama_lengkap,nik,alamat,no_hp,password})
+      body:JSON.stringify({nama_lengkap,nama:nama_lengkap,nik,no_kk,alamat,no_hp,password})
     });
     alert(dibantuKetuaRT ? "Akun warga berhasil dibuat dan langsung aktif. Warga dapat login dengan nomor HP dan password yang dibuat." : "Pendaftaran berhasil dikirim. Akun menunggu verifikasi Ketua RT. Setelah disetujui, warga dapat login dengan nomor HP dan password.");
     if(dibantuKetuaRT){adminHome();return;}
@@ -5133,6 +5143,11 @@ async function uploadFotoProfil(){
 
 
 async function saveMyData(){
+  const no_kk=String(document.getElementById("editNoKk")?.value||"").replace(/\D/g,"");
+  if(no_kk && !/^\d{16}$/.test(no_kk)){
+    alert("Nomor KK harus terdiri dari 16 digit jika diisi.");
+    return;
+  }
   const jenis_kelamin=document.getElementById("editJenisKelamin").value;
   const tempat_lahir=document.getElementById("editTempatLahir").value.trim();
   const tanggal_lahir=document.getElementById("editTanggalLahir").value;
@@ -5152,6 +5167,7 @@ async function saveMyData(){
     await api("/api/my-data",{
       method:"PATCH",
       body:JSON.stringify({
+        no_kk,
         jenis_kelamin,
         tempat_lahir,
         tanggal_lahir,
@@ -5214,6 +5230,10 @@ async function editMyData(){
     layout("Lengkapi Data",`
       <div class="card">
 
+        <label>Nomor KK (opsional)</label>
+        <input id="editNoKk" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit Nomor KK">
+        <small class="muted">Boleh dikosongkan. Jika diisi, masukkan 16 digit angka sesuai Kartu Keluarga.</small>
+
         <label>Jenis Kelamin</label>
         <select id="editJenisKelamin">
           <option value="">-- Pilih --</option>
@@ -5272,7 +5292,10 @@ async function editMyData(){
 
       </div>
     `);
-        document.getElementById("editJenisKelamin").value =
+        document.getElementById("editNoKk").value =
+      w.no_kk || "";
+
+    document.getElementById("editJenisKelamin").value =
       w.jenis_kelamin || "";
 
     document.getElementById("editTempatLahir").value =
