@@ -4958,6 +4958,35 @@ async function myData(){
       ["Nomor HP", w.no_hp]
     ];
 
+    const anggotaKeluarga = Array.isArray(w.anggota_keluarga) ? w.anggota_keluarga : [];
+    const keluargaHtml = `
+      <section style="margin-top:20px;padding:15px;border:1px solid #dbeafe;border-radius:15px;background:#f8fbff">
+        <div style="font-size:16px;font-weight:800;color:#1d4ed8">👨‍👩‍👧‍👦 Data Keluarga</div>
+        <div style="font-size:12px;color:#64748b;margin:5px 0 12px">
+          Anggota yang terdaftar dengan Nomor KK yang sama.
+          ${w.no_kk ? "Nomor KK cocok." : "Isi Nomor KK agar anggota keluarga dapat dikelompokkan otomatis."}
+        </div>
+        ${anggotaKeluarga.length ? anggotaKeluarga.map((anggota) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #e2e8f0">
+            <div style="width:42px;height:42px;flex:0 0 42px;border-radius:50%;overflow:hidden;background:#e2e8f0;display:flex;align-items:center;justify-content:center">
+              ${anggota.foto_url ? `<img src="${esc(anggota.foto_url)}" alt="" style="width:100%;height:100%;object-fit:cover">` : "👤"}
+            </div>
+            <div style="min-width:0;flex:1">
+              <div style="font-weight:750;color:#172554;overflow-wrap:anywhere">${esc(anggota.nama_lengkap || "Nama belum tersedia")}${String(anggota.id) === String(w.id) ? " (Anda)" : ""}</div>
+              <div style="font-size:12px;color:#64748b;margin-top:3px">
+                ${esc(anggota.hubungan_keluarga || "Hubungan belum diisi")}${anggota.jenis_kelamin ? " · " + esc(anggota.jenis_kelamin) : ""}
+              </div>
+            </div>
+            <span style="font-size:11px;padding:5px 8px;border-radius:20px;background:${String(anggota.status_warga || "").toLowerCase()==="aktif" ? "#dcfce7" : "#f1f5f9"};color:${String(anggota.status_warga || "").toLowerCase()==="aktif" ? "#166534" : "#475569"}">${esc(anggota.status_warga || "Belum diverifikasi")}</span>
+          </div>
+        `).join("") : `
+          <div style="padding:12px;background:#fff;border-radius:10px;color:#64748b;font-size:13px">
+            Belum ada anggota keluarga lain yang terdaftar dengan Nomor KK ini.
+          </div>
+        `}
+      </section>
+    `;
+
     box.innerHTML = `
       <div style="
         padding:24px 18px;
@@ -5046,6 +5075,8 @@ async function myData(){
             </div>
           `).join("")}
         </div>
+
+        ${keluargaHtml}
         
         <input
           type="file"
