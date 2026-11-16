@@ -1679,7 +1679,13 @@ app.patch("/api/residents/:id", requireAdmin, async (req, res) => {
     }
 
     if (body.no_kk !== undefined) {
-      body.no_kk = String(body.no_kk).trim();
+      body.no_kk = String(body.no_kk).replace(/\D/g, "");
+      if (body.no_kk && !/^\d{16}$/.test(body.no_kk)) {
+        return res.status(400).json({
+          ok: false,
+          message: "Nomor KK harus terdiri dari 16 digit angka."
+        });
+      }
     }
 
     if (body.gang !== undefined) {
