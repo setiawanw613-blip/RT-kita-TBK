@@ -2521,14 +2521,23 @@ app.get("/api/my-data", requireWarga, async (req, res) => {
 
     let anggotaKeluarga = [];
 
-    if (row.keluarga_id) {
+    // Nomor KK menjadi penghubung utama anggota satu keluarga.
+    // Jika Nomor KK belum diisi, pertahankan pengelompokan lama via keluarga_id.
+    if (row.no_kk && /^\\d{16}$/.test(String(row.no_kk))) {
       const anggota = await supabaseRequest("warga", {
         query:
-         `select=id,nama_lengkap,foto_profil,hubungan_keluarga,jenis_kelamin,status_warga` +
-          `&keluarga_id=eq.${encodeURIComponent(row.keluarga_id)}` +
-          `&order=created_at.asc`
+          "select=id,nama_lengkap,foto_profil,hubungan_keluarga,jenis_kelamin,status_warga,created_at" +
+          `&no_kk=eq.${encodeURIComponent(row.no_kk)}` +
+          "&order=created_at.asc"
       });
-
+      anggotaKeluarga = Array.isArray(anggota) ? anggota : [];
+    } else if (row.keluarga_id) {
+      const anggota = await supabaseRequest("warga", {
+        query:
+          "select=id,nama_lengkap,foto_profil,hubungan_keluarga,jenis_kelamin,status_warga,created_at" +
+          `&keluarga_id=eq.${encodeURIComponent(row.keluarga_id)}` +
+          "&order=created_at.asc"
+      });
       anggotaKeluarga = Array.isArray(anggota) ? anggota : [];
     }
 
