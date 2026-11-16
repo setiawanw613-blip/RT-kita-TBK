@@ -6631,7 +6631,7 @@ function kirimHalamanUtama(req, res) {
   const fs = require("fs");
   try {
     const html = fs.readFileSync(path.join(__dirname, "index.html"), "utf8");
-    const tambahan = '<script src="/aspirasi-rab.js?v=1"></script><script src="/surat-form.js?v=2"></script>';
+    const tambahan = '<script src="/aspirasi-rab.js?v=1"></script><script src="/surat-form.js?v=3"></script>';
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
     res.send(
