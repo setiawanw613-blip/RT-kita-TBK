@@ -34,9 +34,20 @@ const JENIS_SURAT_INFO = {
     ]
   },
   "Surat Pengantar SKCK": {
-    info: "Pengantar dari RT sebagai syarat membuat SKCK di Polsek/Polres.",
-    contoh: "Contoh: Persyaratan melamar pekerjaan di PT ...",
+    info: "Pengantar dari RT untuk pemberitahuan rencana mengadakan kegiatan/acara.",
+    contoh: "Contoh: Permohonan pengantar untuk mengadakan acara syukuran warga",
     rincian: []
+  },
+  "Surat Pengantar Mengadakan Acara": {
+    info: "Surat pengantar dari RT untuk pemberitahuan rencana mengadakan acara di lingkungan warga.",
+    contoh: "Contoh: Mengadakan acara syukuran keluarga di lingkungan RT 004",
+    rincian: [
+      { label: "Nama Acara", placeholder: "Contoh: Syukuran keluarga", wajib: true },
+      { label: "Hari/Tanggal Acara", placeholder: "Contoh: Sabtu, 21 November 2026", wajib: true },
+      { label: "Waktu Acara", placeholder: "Contoh: 19.00 WIB sampai selesai", wajib: true },
+      { label: "Lokasi Acara", placeholder: "Contoh: Blok C 8 No. 30", wajib: true },
+      { label: "Penanggung Jawab", placeholder: "Nama penanggung jawab acara", wajib: false }
+    ]
   }
 };
 
