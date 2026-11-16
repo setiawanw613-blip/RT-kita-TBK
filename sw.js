@@ -1,4 +1,4 @@
-// RT TBK: v10 - paksa pemeriksaan worker baru agar aplikasi terpasang mengambil halaman terbaru.
+// RT TBK: v11 - paksa pemeriksaan worker baru agar aplikasi terpasang mengambil halaman terbaru.
 self.addEventListener("install", event => {
   event.waitUntil(self.skipWaiting());
 });
