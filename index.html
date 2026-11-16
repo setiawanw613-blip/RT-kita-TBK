@@ -4021,7 +4021,7 @@ async function submitLetterForResident(){
         alert(label+" wajib diisi.");return;
       }
     }
-    purpose=[purpose,...detail.filter(([,value])=>String(value||"").trim()).map(([label,value])=>label+": "+String(value).trim())].filter(Boolean).join("\\n");
+    purpose=[purpose,...detail.filter(([,value])=>String(value||"").trim()).map(([label,value])=>label+": "+String(value).trim())].filter(Boolean).join("\n");
   }
   if(!purpose){alert("Keperluan surat wajib diisi.");return;}
   if(!confirm("Buat pengajuan surat atas nama "+applicant.nama+"?"))return;
