@@ -5230,9 +5230,12 @@ async function editMyData(){
     layout("Lengkapi Data Warga",`
       <div class="card">
 
-        <label>Nomor KK (opsional)</label>
-        <input id="editNoKk" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit Nomor KK">
-        <small class="muted">Boleh dikosongkan. Jika diisi, masukkan 16 digit angka sesuai Kartu Keluarga.</small>
+        <div style="margin-bottom:18px;padding:16px;border:2px solid #2563eb;border-radius:14px;background:#eff6ff">
+          <div style="font-weight:800;font-size:16px;color:#1746a2;margin-bottom:8px">🪪 NOMOR KARTU KELUARGA (KK)</div>
+          <label for="editNoKk" style="display:block;font-weight:750;color:#172554">Nomor KK — opsional</label>
+          <input id="editNoKk" type="text" inputmode="numeric" autocomplete="off" maxlength="16" placeholder="Masukkan 16 digit Nomor KK" style="width:100%;box-sizing:border-box;border:2px solid #93c5fd;background:#fff;padding:13px;border-radius:10px;font-size:16px">
+          <small style="display:block;margin-top:7px;color:#1e40af">Boleh dikosongkan. Jika diisi, masukkan 16 digit angka sesuai Kartu Keluarga.</small>
+        </div>
 
         <label>Jenis Kelamin</label>
         <select id="editJenisKelamin">
