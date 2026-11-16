@@ -3871,19 +3871,21 @@ async function createLetterForResident(){
         <input id="adminLetterPhone" inputmode="tel" maxlength="25" placeholder="Nomor HP warga">
       </div>
       <label>Jenis surat</label>
-      <select id="adminLetterType" onchange="updateAdminLetterKkRequirement()">
+      <select id="adminLetterType" onchange="updateAdminLetterKkRequirement();renderAdminLetterEventFields()">
         <option value="">-- Pilih jenis surat --</option>
         <option>Surat Pengantar</option>
         <option>Surat Keterangan Domisili</option>
         <option>Surat Keterangan Tidak Mampu</option>
         <option>Surat Keterangan Usaha</option>
         <option>Surat Pengantar SKCK</option>
+        <option>Surat Pengantar Mengadakan Acara</option>
       </select>
       <div id="adminLetterKkWrap">
         <label>Nomor KK (opsional)</label>
         <input id="adminLetterNoKk" inputmode="numeric" maxlength="16" placeholder="Masukkan 16 digit nomor KK jika tersedia">
         <small class="muted">Boleh dikosongkan. Jika diisi, masukkan 16 digit angka.</small>
       </div>
+      <div id="adminLetterEventFields"></div>
       <label>Keperluan surat</label>
       <textarea id="adminLetterPurpose" maxlength="1000" placeholder="Tuliskan keperluan surat sesuai keterangan warga"></textarea>
       <button class="btn" id="adminLetterSubmit" style="margin-top:14px" onclick="submitLetterForResident()">Kirim Pengajuan Surat</button>
@@ -3894,6 +3896,29 @@ async function createLetterForResident(){
     const box=document.getElementById("adminLetterForm");
     if(box) box.innerHTML=`<div class="error">${esc(e.message || "Gagal memuat data warga")}</div><button class="btn secondary" onclick="adminHome()">Kembali</button>`;
   }
+}
+
+function renderAdminLetterEventFields(){
+  const box=document.getElementById("adminLetterEventFields");
+  const type=document.getElementById("adminLetterType")?.value || "";
+  if(!box) return;
+  if(type!=="Surat Pengantar Mengadakan Acara"){
+    box.innerHTML="";
+    return;
+  }
+  box.innerHTML=`
+    <h3 style="margin:14px 0 6px">Detail Acara</h3>
+    <label>Nama acara</label>
+    <input id="adminEventName" maxlength="120" placeholder="Contoh: Syukuran keluarga">
+    <label>Hari/Tanggal acara</label>
+    <input id="adminEventDate" maxlength="80" placeholder="Contoh: Sabtu, 21 November 2026">
+    <label>Waktu acara</label>
+    <input id="adminEventTime" maxlength="80" placeholder="Contoh: 19.00 WIB sampai selesai">
+    <label>Lokasi acara</label>
+    <input id="adminEventLocation" maxlength="180" placeholder="Alamat/lokasi acara">
+    <label>Penanggung jawab (opsional)</label>
+    <input id="adminEventPIC" maxlength="120" placeholder="Nama penanggung jawab acara">
+  `;
 }
 
 function updateAdminLetterKkRequirement(){
@@ -3961,7 +3986,7 @@ async function submitLetterForResident(){
   const mode=document.getElementById("adminLetterMode")?.value || "data";
   const warga_id=mode==="data" ? Number(document.getElementById("adminLetterResident")?.value) : null;
   const type=document.getElementById("adminLetterType")?.value || "";
-  const purpose=(document.getElementById("adminLetterPurpose")?.value || "").trim();
+  let purpose=(document.getElementById("adminLetterPurpose")?.value || "").trim();
   const applicant={
     nama:(document.getElementById("adminLetterName")?.value || "").trim(),
     nik:(document.getElementById("adminLetterNik")?.value || "").replace(/\s/g,""),
@@ -3981,6 +4006,22 @@ async function submitLetterForResident(){
   if(!type){alert("Pilih jenis surat.");return;}
   if(applicant.no_kk && !/^\d{16}$/.test(applicant.no_kk)){
     alert("Nomor KK harus 16 digit jika diisi.");return;
+  }
+  if(type==="Surat Pengantar Mengadakan Acara"){
+    const detail=[
+      ["Nama Acara",document.getElementById("adminEventName")?.value],
+      ["Hari/Tanggal Acara",document.getElementById("adminEventDate")?.value],
+      ["Waktu Acara",document.getElementById("adminEventTime")?.value],
+      ["Lokasi Acara",document.getElementById("adminEventLocation")?.value],
+      ["Penanggung Jawab",document.getElementById("adminEventPIC")?.value]
+    ];
+    const wajib=["Nama Acara","Hari/Tanggal Acara","Waktu Acara","Lokasi Acara"];
+    for(const [label,value] of detail){
+      if(wajib.includes(label)&&!String(value||"").trim()){
+        alert(label+" wajib diisi.");return;
+      }
+    }
+    purpose=[purpose,...detail.filter(([,value])=>String(value||"").trim()).map(([label,value])=>label+": "+String(value).trim())].filter(Boolean).join("\\n");
   }
   if(!purpose){alert("Keperluan surat wajib diisi.");return;}
   if(!confirm("Buat pengajuan surat atas nama "+applicant.nama+"?"))return;
