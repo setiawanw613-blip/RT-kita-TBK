@@ -4266,6 +4266,7 @@ function wargaHome(){
       <h3>Layanan Warga</h3>
       <div class="menu">
         <button onclick="myData()">👤 Data Saya</button>
+        <button onclick="keluargaWarga()">👨‍👩‍👧‍👦 Data Keluarga</button>
         <button onclick="newLetter()">📄 Ajukan Surat</button>
         <button data-menu-notif="surat" onclick="myLetters()">📋 Surat Saya</button>
         <button onclick="newComplaint()">📢 Pengaduan</button>
@@ -5120,6 +5121,39 @@ async function myData(){
   }
 }
 
+async function keluargaWarga(){
+  layout("Data Keluarga", `
+    <div class="card" id="keluargaWargaBox" style="padding:18px">
+      <div style="text-align:center;padding:20px">Memuat data keluarga...</div>
+    </div>
+    <button class="btn secondary" style="width:100%;margin-top:12px" onclick="wargaHome()">← Kembali</button>
+  `);
+  try{
+    const w=await api("/api/my-data");
+    const box=document.getElementById("keluargaWargaBox");
+    if(!box)return;
+    const anggota=Array.isArray(w?.anggota_keluarga)?w.anggota_keluarga:[];
+    box.innerHTML=`
+      <h3 style="margin:0 0 6px">👨‍👩‍👧‍👦 Anggota Keluarga</h3>
+      <p class="muted" style="font-size:13px">Anggota keluarga yang terdaftar dengan Nomor KK yang sama.</p>
+      ${!w?.no_kk?`<div class="card">Nomor KK Anda belum diisi. Silakan buka <b>Data Saya → Lengkapi Data Warga</b>, lalu isi Nomor KK agar keluarga dapat ditampilkan.</div>`:anggota.length?anggota.map(a=>`
+        <div style="display:flex;align-items:center;gap:11px;padding:12px 0;border-top:1px solid #e2e8f0">
+          <div style="width:44px;height:44px;flex:0 0 44px;border-radius:50%;overflow:hidden;background:#e2e8f0;display:flex;align-items:center;justify-content:center">
+            ${a.foto_url?`<img src="${esc(a.foto_url)}" alt="" style="width:100%;height:100%;object-fit:cover">`:"👤"}
+          </div>
+          <div style="min-width:0;flex:1">
+            <div style="font-weight:750;overflow-wrap:anywhere">${esc(a.nama_lengkap||"Nama belum tersedia")}${String(a.id)===String(w.id)?" (Anda)":""}</div>
+            <div class="muted" style="font-size:12px;margin-top:3px">${esc(a.hubungan_keluarga||"Hubungan belum diisi")}${a.jenis_kelamin?" · "+esc(a.jenis_kelamin):""}</div>
+          </div>
+          <span class="badge">${esc(a.status_warga||"Belum diverifikasi")}</span>
+        </div>`).join(""):`<div class="card">Belum ada anggota keluarga lain yang terdaftar dengan Nomor KK ini. Pastikan anggota keluarga sudah mendaftar dan mengisi Nomor KK yang sama.</div>`}
+      `;
+  }catch(e){
+    const box=document.getElementById("keluargaWargaBox");
+    if(box)box.innerHTML=`<div class="error">${esc(e.message||"Gagal memuat data keluarga.")}</div>`;
+  }
+}
+
 async function uploadFotoProfil(){
   const input = document.getElementById("fotoProfilInput");
   const file = input?.files?.[0];
@@ -5806,7 +5840,7 @@ async function simpanAspirasiAdmin(id){
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("/sw.js?v=12")
+    navigator.serviceWorker.register("/sw.js?v=13")
       .then(() => console.log("Service Worker aktif"))
       .catch(error => console.error("Service Worker gagal:", error));
   });
