@@ -1,4 +1,4 @@
-// RT TBK: cache lama dibersihkan agar dashboard selalu mengikuti versi server.
+// RT TBK: v9 - paksa pemeriksaan worker baru agar aplikasi terpasang mengambil halaman terbaru.
 self.addEventListener("install", event => {
   event.waitUntil(self.skipWaiting());
 });
