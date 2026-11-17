@@ -2579,6 +2579,23 @@ res.json({
   }
 });
 
+/* DAFTAR WARGA AKTIF UNTUK PORTAL WARGA */
+app.get("/api/warga-aktif", requireWarga, async (req, res) => {
+  try {
+    const rows = await supabaseRequest("warga", {
+      query: "select=id,nama_lengkap,alamat,gang,status_warga&status_warga=eq.aktif&order=nama_lengkap.asc&limit=1000"
+    });
+    const daftar = Array.isArray(rows) ? rows : [];
+    res.setHeader("Cache-Control", "private, no-store, max-age=0");
+    res.json(daftar.map(({id,nama_lengkap,alamat,gang,status_warga}) => ({
+      id, nama_lengkap, alamat, gang, status_warga
+    })));
+  } catch (error) {
+    console.error("DAFTAR WARGA AKTIF ERROR:", error);
+    res.status(500).json({ok:false,message:"Gagal memuat daftar warga aktif."});
+  }
+});
+
 /* UPDATE DATA SAYA - WARGA */
 app.patch("/api/my-data", requireWarga, async (req, res) => {
   try {
