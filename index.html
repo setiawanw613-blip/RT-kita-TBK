@@ -5107,6 +5107,72 @@ document.getElementById("kasDetailModal").scrollIntoView({behavior:"smooth",bloc
 
 
 
+function toggleMyPasswordVisibility(show) {
+  ["myCurrentPassword", "myNewPassword", "myConfirmPassword"].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.type = show ? "text" : "password";
+  });
+}
+
+async function submitChangeMyPassword() {
+  const current = document.getElementById("myCurrentPassword");
+  const next = document.getElementById("myNewPassword");
+  const confirm = document.getElementById("myConfirmPassword");
+  const message = document.getElementById("myPasswordMessage");
+  const button = document.getElementById("changeMyPasswordButton");
+  if (!current || !next || !confirm || !message || !button) return;
+
+  message.className = "";
+  message.textContent = "";
+  if (!current.value) {
+    message.className = "error";
+    message.textContent = "Masukkan password saat ini.";
+    current.focus();
+    return;
+  }
+  if (next.value.length < 8 || next.value.length > 128) {
+    message.className = "error";
+    message.textContent = "Password baru harus 8–128 karakter.";
+    next.focus();
+    return;
+  }
+  if (next.value !== confirm.value) {
+    message.className = "error";
+    message.textContent = "Ulangan password baru belum sama.";
+    confirm.focus();
+    return;
+  }
+  if (next.value === current.value) {
+    message.className = "error";
+    message.textContent = "Password baru harus berbeda dari password saat ini.";
+    next.focus();
+    return;
+  }
+
+  button.disabled = true;
+  button.textContent = "Menyimpan...";
+  try {
+    const result = await api("/api/account/change-password", {
+      method: "PATCH",
+      body: JSON.stringify({ currentPassword: current.value, newPassword: next.value })
+    });
+    message.className = "success";
+    message.textContent = result?.message || "Password berhasil diganti.";
+    current.value = "";
+    next.value = "";
+    confirm.value = "";
+    const show = document.getElementById("showMyPassword");
+    if (show) show.checked = false;
+    toggleMyPasswordVisibility(false);
+  } catch (error) {
+    message.className = "error";
+    message.textContent = error?.message || "Gagal mengganti password. Silakan coba kembali.";
+  } finally {
+    button.disabled = false;
+    button.textContent = "Simpan Password Baru";
+  }
+}
+
 async function myData(){
   layout("Data Saya", `
     <div id="myDataBox" class="card"
@@ -5301,6 +5367,22 @@ async function myData(){
           onclick="editMyData()">
           ✏️ Lengkapi Data Warga
         </button>
+
+        <section style="margin-top:20px;padding:15px;border:1px solid #dbeafe;border-radius:15px;background:#f8fbff">
+          <div style="font-size:16px;font-weight:800;color:#1d4ed8">🔐 Ganti Password Login</div>
+          <p style="font-size:12px;line-height:1.5;color:#64748b;margin:6px 0 12px">Ganti password akun Anda kapan saja. Password baru minimal 8 karakter.</p>
+          <label for="myCurrentPassword">Password saat ini</label>
+          <input id="myCurrentPassword" type="password" autocomplete="current-password" maxlength="1024" placeholder="Masukkan password saat ini">
+          <label for="myNewPassword">Password baru</label>
+          <input id="myNewPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="Minimal 8 karakter">
+          <label for="myConfirmPassword">Ulangi password baru</label>
+          <input id="myConfirmPassword" type="password" autocomplete="new-password" minlength="8" maxlength="128" placeholder="Ketik ulang password baru">
+          <label style="display:flex;align-items:center;gap:8px;font-weight:500;font-size:13px;margin:10px 0">
+            <input id="showMyPassword" type="checkbox" style="width:auto" onchange="toggleMyPasswordVisibility(this.checked)"> Tampilkan password
+          </label>
+          <div id="myPasswordMessage" aria-live="polite"></div>
+          <button class="btn" id="changeMyPasswordButton" type="button" style="width:100%;margin-top:8px" onclick="submitChangeMyPassword()">Simpan Password Baru</button>
+        </section>
 
         <div style="
           margin-top:14px;text-align:center;
