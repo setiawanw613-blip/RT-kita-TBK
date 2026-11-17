@@ -4673,6 +4673,11 @@ app.post("/api/iuran/terima-tunai-manual", requireIuranStaff, async (req, res) =
     const gang = String(req.body?.gang || "").trim();
     const alamat = String(req.body?.alamat || "").trim();
     const inputBulan = String(req.body?.bulan || "").trim();
+    const metode = String(req.body?.metode_pembayaran || "tunai").trim().toLowerCase();
+    const referensiMerchant = String(req.body?.referensi_merchant || "").trim().slice(0,120);
+    const konfirmasiMerchant = req.body?.sudah_cek_merchant === true;
+    if (!["tunai","qris"].includes(metode)) return res.status(400).json({ok:false,message:"Pilih metode pembayaran tunai atau QRIS."});
+    if (metode === "qris" && (!konfirmasiMerchant || referensiMerchant.length < 3)) return res.status(400).json({ok:false,message:"Cocokkan transaksi di GoPay Merchant dan isi nomor/referensi transaksi terlebih dahulu."});
     if (nama.length < 2 || nama.length > 120) {
       return res.status(400).json({ ok:false, message:"Nama warga harus 2–120 karakter." });
     }
@@ -4695,7 +4700,9 @@ app.post("/api/iuran/terima-tunai-manual", requireIuranStaff, async (req, res) =
         p_alamat:alamat,
         p_bulan:inputBulan + "-01",
         p_petugas_id:idPetugas,
-        p_petugas_nama:namaPetugas
+        p_petugas_nama:namaPetugas,
+        p_metode_pembayaran:metode,
+        p_referensi_merchant:referensiMerchant || null
       }
     });
     const row = Array.isArray(saved) ? saved[0] : saved;
@@ -4710,7 +4717,9 @@ app.post("/api/iuran/terima-tunai-manual", requireIuranStaff, async (req, res) =
         alamat:row.alamat || "",
         bulan:inputBulan,
         total_amount:35000,
-        status:"DITERIMA — MANUAL",
+        metode_pembayaran:metode,
+        referensi_merchant:referensiMerchant || null,
+        status:metode === "qris" ? "LUNAS — QRIS TERVERIFIKASI" : "LUNAS — TUNAI DITERIMA",
         petugas_nama:row.petugas_nama,
         dibayar_at:row.created_at
       }
@@ -4727,7 +4736,7 @@ app.post("/api/iuran/terima-tunai-manual", requireIuranStaff, async (req, res) =
 app.get("/api/iuran/riwayat-manual", requireIuranStaff, async (req, res) => {
   try {
     const rows = await supabaseRequest("iuran_warga_manual", {
-      query:"select=id,nama_warga,gang,alamat,bulan,total_amount,status,petugas_nama,kas_rt_id,created_at&order=created_at.desc&limit=300"
+      query:"select=id,nama_warga,gang,alamat,bulan,total_amount,status,metode_pembayaran,referensi_merchant,petugas_nama,kas_rt_id,created_at&order=created_at.desc&limit=300"
     });
     return res.json(Array.isArray(rows) ? rows : []);
   } catch (error) {
