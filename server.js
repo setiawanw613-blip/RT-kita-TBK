@@ -1670,6 +1670,58 @@ app.patch("/api/residents/:id/password", requireAdmin, async (req, res) => {
   }
 });
 
+/* GANTI PASSWORD SENDIRI - KHUSUS AKUN WARGA */
+app.patch("/api/account/change-password", requireLogin, async (req, res) => {
+  try {
+    if (req.session.role !== "warga" || !req.session.wargaId) {
+      return res.status(403).json({ ok: false, message: "Fitur ini hanya tersedia untuk akun warga." });
+    }
+
+    const currentPassword = req.body?.currentPassword;
+    const newPassword = req.body?.newPassword;
+    if (typeof currentPassword !== "string" || currentPassword.length < 1 || currentPassword.length > 1024) {
+      return res.status(400).json({ ok: false, message: "Masukkan password saat ini dengan benar." });
+    }
+    if (!isValidNewResidentPassword(newPassword) || newPassword.length > 128) {
+      return res.status(400).json({ ok: false, message: "Password baru harus terdiri dari 8–128 karakter." });
+    }
+
+    const wargaId = String(req.session.wargaId);
+    if (!/^\\d+$/.test(wargaId)) {
+      return res.status(403).json({ ok: false, message: "Identitas akun warga tidak valid." });
+    }
+
+    const rows = await supabaseRequest("warga", {
+      query: "select=id,password,status_warga&id=eq." + encodeURIComponent(wargaId) + "&limit=1"
+    });
+    const warga = Array.isArray(rows) ? rows[0] : null;
+    if (!warga || warga.status_warga !== "aktif") {
+      return res.status(403).json({ ok: false, message: "Akun warga tidak ditemukan atau belum aktif." });
+    }
+    if (!verifyPassword(currentPassword, warga.password)) {
+      return res.status(400).json({ ok: false, message: "Password saat ini tidak sesuai." });
+    }
+    if (verifyPassword(newPassword, warga.password)) {
+      return res.status(400).json({ ok: false, message: "Password baru harus berbeda dari password saat ini." });
+    }
+
+    const updated = await supabaseRequest("warga", {
+      method: "PATCH",
+      query: "id=eq." + encodeURIComponent(wargaId) + "&status_warga=eq.aktif",
+      headers: { Prefer: "return=representation" },
+      body: { password: hashPassword(newPassword) }
+    });
+    if (!Array.isArray(updated) || !updated.length) {
+      return res.status(409).json({ ok: false, message: "Password belum berubah. Silakan muat ulang dan coba kembali." });
+    }
+
+    return res.json({ ok: true, message: "Password berhasil diganti. Gunakan password baru saat login berikutnya." });
+  } catch (error) {
+    console.error("GANTI PASSWORD WARGA ERROR:", error?.message || error);
+    return res.status(500).json({ ok: false, message: "Gagal mengganti password. Silakan coba kembali." });
+  }
+});
+
 /* VERIFIKASI WARGA - KETUA RT */
 app.patch("/api/residents/:id/verify", requireAdmin, async (req, res) => {
   try {
