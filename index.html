@@ -1152,7 +1152,7 @@ async function staffHome(){
   <button class="btn secondary" style="width:100%" onclick="logout()">Keluar</button>`;
   layout(title,content,false);
 }
-async async function catatPenerimaanTunaiGang(){
+async function catatPenerimaanTunaiGang(){
   try{
     const warga=await api("/api/ketua-gang/warga");
     const pilihan=Array.isArray(warga)?warga:[];
@@ -1226,7 +1226,7 @@ async function kirimSetoranGang(){
   try{
     const result=await api("/api/ketua-gang/setor-qris",{method:"POST",body:JSON.stringify({penerimaan_id:penerimaanId})});
     const box=document.getElementById("gangQrisResult");
-    if(box)box.innerHTML=`<div class="card"><h3>QRIS Setoran Berhasil Dibuat</h3><b>${esc(result.nama_warga)}</b><div>Bulan: ${esc(result.bulan)}</div><div>Total: ${rupiah(result.total)}</div><div>Disetorkan oleh: ${esc(result.disetorkan_oleh)}</div><div>Status: Menunggu pembayaran</div>${result.qr_url?`<div style="text-align:center;margin:16px 0"><img src="${esc(result.qr_url)}" alt="QRIS pembayaran" style="max-width:260px;width:100%;height:auto"></div><a class="btn" href="${esc(result.qr_url)}" target="_blank" rel="noopener">Buka QRIS</a>`:"<p>QRIS image belum tersedia dari Midtrans. Periksa detail transaksi.</p>"}<small class="muted">Jangan tandai lunas secara manual. Status akan berubah setelah Midtrans mengonfirmasi pembayaran.</small><button class="btn secondary" onclick="riwayatSetoranGang()">Lihat riwayat setoran</button></div>`;
+    if(box)box.innerHTML=`<div class="card"><h3>QRIS Setoran Berhasil Dibuat</h3><b>${esc(result.nama_warga)}</b><div>Bulan: ${esc(result.bulan)}</div><div>Total: ${rupiah(result.total)}</div><div>Disetorkan oleh: ${esc(result.disetorkan_oleh)}</div><div>Status: Menunggu setoran</div>${result.qr_url?`<div style="text-align:center;margin:16px 0"><img src="${esc(result.qr_url)}" alt="QRIS pembayaran" style="max-width:260px;width:100%;height:auto"></div><a class="btn" href="${esc(result.qr_url)}" target="_blank" rel="noopener">Buka QRIS</a>`:"<p>QRIS image belum tersedia dari Midtrans. Periksa detail transaksi.</p>"}<small class="muted">Jangan tandai lunas secara manual. Status akan berubah setelah Midtrans mengonfirmasi pembayaran.</small><button class="btn secondary" onclick="riwayatSetoranGang()">Lihat riwayat setoran</button></div>`;
   }catch(e){alert(e.message||"Gagal membuat QRIS.");}
   finally{if(button){button.disabled=false;button.textContent="Buat QRIS";}}
 }
@@ -1234,7 +1234,7 @@ async function riwayatSetoranGang(){
   try{
     const rows=await api("/api/ketua-gang/riwayat-setoran");
     const items=(Array.isArray(rows)?rows:[]).map(row=>`<div class="card"><b>${esc(row.nama_warga||"Warga")}</b><div>Bulan iuran: ${esc(row.bulan||"-")}</div><div>Nominal: ${rupiah(row.total_amount||0)}</div><div>Status: <span class="badge">${row.status==="lunas"?"Lunas":"Menunggu pembayaran"}</span></div><div>Petugas penyetor: ${esc(row.disetorkan_oleh_nama||"-")}</div><div class="muted">Order: ${esc(String(row.bukti_transfer||"").replace("MIDTRANS:",""))}</div>${row.midtrans_settlement_at?`<div class="muted">Dibayar: ${esc(new Date(row.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}</div>`).join("");
-    layout("Riwayat Setoran QRIS Saya",(items||"<div class='card'>Belum ada riwayat setoran QRIS.</div>")+'<button class="btn secondary" onclick="staffHome()">Kembali</button>');
+    layout("Riwayat Setoran QRIS Saya",(items||"<div class='card'>Belum ada riwayat setoran QRIS.</div>")+'<button class="btn secondary" onclick="wargaHome()">Kembali</button>');
   }catch(e){alert(e.message||"Gagal memuat riwayat setoran.");}
 }
 
