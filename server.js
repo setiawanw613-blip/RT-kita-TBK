@@ -1360,7 +1360,7 @@ app.get("/api/ketua-gang/warga", requireGangLead, async(req,res)=>{
     const gang=String(req.session.gang||"").trim();
     if(!gang)return res.status(403).json({ok:false,message:"Wilayah gang belum ditetapkan"});
     const rows=await supabaseRequest("warga",{query:"select=id,nama_lengkap,alamat,status_warga,gang&gang=eq."+encodeURIComponent(gang)+"&order=nama_lengkap.asc"});
-    res.json(Array.isArray(rows)?rows:[]);
+    res.json(Array.isArray(rows)?rows.filter(w=>String(w.status_warga||"Aktif").toLowerCase()==="aktif"):[]);
   }catch(error){console.error("KETUA GANG WARGA ERROR:",error);res.status(500).json({ok:false,message:"Gagal memuat data warga gang"});}
 });
 app.post("/api/ketua-gang/penerimaan-tunai", requireGangLead, async (req, res) => {
@@ -4779,7 +4779,7 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     if (!warga || String(warga.gang || "").trim().toLowerCase() !== gangPetugas.toLowerCase()) {
       return res.status(403).json({ ok: false, message: "Warga tersebut bukan bagian dari gang tugas Anda." });
     }
-    if (warga.status_warga !== "aktif" || !warga.keluarga_id) {
+    if (String(warga.status_warga || "").toLowerCase() !== "aktif" || !warga.keluarga_id) {
       return res.status(400).json({ ok: false, message: "Warga belum aktif atau data keluarganya belum lengkap." });
     }
 
