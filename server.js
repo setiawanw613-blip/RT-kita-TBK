@@ -1391,9 +1391,18 @@ app.post("/api/ketua-gang/penerimaan-tunai", requireGangLead, async (req, res) =
     if (Array.isArray(existingIuran) && existingIuran.length) {
       return res.status(409).json({ok:false,message:existingIuran[0].status==="lunas"?"Iuran periode ini sudah lunas.":"Sudah ada transaksi iuran untuk periode ini. Minta Bendahara memeriksa sebelum mencatat penerimaan tunai."});
     }
+    const receiptScope = keluargaId
+      ? "&keluarga_id=eq." + encodeURIComponent(keluargaId)
+      : "&warga_id=eq." + encodeURIComponent(wargaId);
+    const existingReceipt = await supabaseRequest("penerimaan_tunai_ketua_gang", {
+      query:"select=id,status" + receiptScope + "&bulan=eq." + encodeURIComponent(bulan) + "&limit=1"
+    });
+    if (Array.isArray(existingReceipt) && existingReceipt.length) {
+      return res.status(409).json({ok:false,message:"Penerimaan untuk keluarga dan bulan tersebut sudah tercatat. Periksa riwayat sebelum mencoba lagi."});
+    }
     const saved = await supabaseRequest("penerimaan_tunai_ketua_gang",{
       method:"POST",
-      body:{warga_id:Number(warga.id),nama_warga:warga.nama_lengkap,gang:warga.gang,alamat:warga.alamat||"",bulan,total_amount:35000,status:"diterima",petugas_id:petugasId,petugas_nama:petugasNama},
+      body:{warga_id:Number(warga.id),keluarga_id:keluargaId,nama_warga:warga.nama_lengkap,gang:warga.gang,alamat:warga.alamat||"",bulan,total_amount:35000,status:"diterima",petugas_id:petugasId,petugas_nama:petugasNama},
       prefer:"return=representation"
     });
     const row = Array.isArray(saved) ? saved[0] : saved;
