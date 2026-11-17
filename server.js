@@ -1491,8 +1491,8 @@ app.get("/api/notifikasi", requireLogin, async (req, res) => {
     let query =
       "select=id,penerima_peran,penerima_warga_id,judul,pesan,jenis,tautan,referensi_id,sudah_dibaca,dibuat_pada&order=dibuat_pada.desc&limit=100";
 
-    if (session.role === "admin") {
-      query += "&penerima_peran=eq.admin";
+    if (session.role === "admin" || session.role === "bendahara") {
+      query += "&penerima_peran=eq." + encodeURIComponent(session.role);
     } else if (session.role === "warga") {
       if (!session.wargaId) {
         return res.status(403).json({
