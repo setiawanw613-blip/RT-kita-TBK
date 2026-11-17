@@ -4275,6 +4275,7 @@ function wargaHome(){
       <div class="menu">
         <button onclick="myData()">👤 Data Saya</button>
         <button onclick="keluargaWarga()">👨‍👩‍👧‍👦 Data Keluarga</button>
+        <button onclick="wargaAktif()">👥 Warga Aktif</button>
         <button onclick="newLetter()">📄 Ajukan Surat</button>
         <button data-menu-notif="surat" onclick="myLetters()">📋 Surat Saya</button>
         <button onclick="newComplaint()">📢 Pengaduan</button>
@@ -5159,6 +5160,40 @@ async function keluargaWarga(){
   }catch(e){
     const box=document.getElementById("keluargaWargaBox");
     if(box)box.innerHTML=`<div class="error">${esc(e.message||"Gagal memuat data keluarga.")}</div>`;
+  }
+}
+
+async function wargaAktif(){
+  layout("Warga Aktif", `
+    <div class="card" id="wargaAktifBox">
+      <div style="text-align:center;padding:20px">Memuat daftar warga aktif...</div>
+    </div>
+    <button class="btn secondary" style="width:100%;margin-top:12px" onclick="wargaHome()">← Kembali</button>
+  `);
+  try{
+    const rows=await api("/api/warga-aktif");
+    const box=document.getElementById("wargaAktifBox");
+    if(!box)return;
+    const daftar=Array.isArray(rows)?rows:[];
+    box.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px">
+        <div><h3 style="margin:0">👥 Daftar Warga Aktif</h3><div class="muted" style="font-size:12px">Warga terdaftar di RT TBK</div></div>
+        <span class="badge">${daftar.length} orang</span>
+      </div>
+      ${daftar.length?daftar.map((w,i)=>`
+        <div style="display:flex;gap:11px;align-items:flex-start;padding:12px 0;border-top:1px solid #e2e8f0">
+          <div style="width:36px;height:36px;flex:0 0 36px;border-radius:50%;background:#eaf2ff;color:#1d4ed8;display:flex;align-items:center;justify-content:center;font-weight:800">${i+1}</div>
+          <div style="min-width:0;flex:1">
+            <div style="font-weight:750;overflow-wrap:anywhere">${esc(w.nama_lengkap||"Nama belum tersedia")}</div>
+            <div class="muted" style="font-size:12px;margin-top:3px">${esc(w.alamat||"Alamat belum diisi")}${w.gang?" · "+esc(w.gang):""}</div>
+            <div style="font-size:11px;color:#15803d;margin-top:4px">● Aktif</div>
+          </div>
+        </div>`).join(""):`<div class="muted" style="padding:16px 0">Belum ada warga dengan status aktif.</div>`}
+      <p class="muted" style="font-size:11px;margin:14px 0 0">Informasi kontak pribadi dan nomor identitas tidak ditampilkan.</p>
+    `;
+  }catch(e){
+    const box=document.getElementById("wargaAktifBox");
+    if(box)box.innerHTML=`<div class="error">${esc(e.message||"Gagal memuat daftar warga aktif.")}</div>`;
   }
 }
 
