@@ -1632,6 +1632,44 @@ app.get("/api/residents", requireAdmin, async (req, res) => {
   }
 });
 
+/* RESET PASSWORD WARGA - KHUSUS KETUA RT */
+app.patch("/api/residents/:id/password", requireAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id || "");
+    const password = req.body?.password;
+    if (!/^\\d+$/.test(id) || typeof password !== "string" || password.length < 8 || password.length > 128) {
+      return res.status(400).json({ ok: false, message: "Password baru harus 8–128 karakter." });
+    }
+
+    const rows = await supabaseRequest("warga", {
+      query: "select=id,nama_lengkap,no_hp,status_warga&id=eq." + encodeURIComponent(id) + "&limit=1"
+    });
+    const warga = Array.isArray(rows) ? rows[0] : null;
+    if (!warga) return res.status(404).json({ ok: false, message: "Data warga tidak ditemukan." });
+    if (warga.status_warga !== "aktif") {
+      return res.status(409).json({ ok: false, message: "Password hanya dapat direset untuk akun warga yang berstatus aktif." });
+    }
+
+    const updated = await supabaseRequest("warga", {
+      method: "PATCH",
+      query: "id=eq." + encodeURIComponent(id),
+      headers: { Prefer: "return=representation" },
+      body: { password: hashPassword(password) }
+    });
+    const saved = Array.isArray(updated) ? updated[0] : updated;
+    if (!saved) return res.status(500).json({ ok: false, message: "Perubahan password belum dapat dikonfirmasi." });
+
+    res.json({
+      ok: true,
+      message: "Password warga berhasil direset.",
+      warga: { id: warga.id, nama_lengkap: warga.nama_lengkap, no_hp: warga.no_hp }
+    });
+  } catch (error) {
+    console.error("RESET PASSWORD WARGA ERROR:", error?.message || error);
+    res.status(500).json({ ok: false, message: "Gagal mereset password warga. Silakan coba kembali." });
+  }
+});
+
 /* VERIFIKASI WARGA - KETUA RT */
 app.patch("/api/residents/:id/verify", requireAdmin, async (req, res) => {
   try {
