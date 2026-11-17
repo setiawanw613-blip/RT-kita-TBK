@@ -1233,7 +1233,7 @@ async function kirimSetoranGang(){
 async function riwayatSetoranGang(){
   try{
     const rows=await api("/api/ketua-gang/riwayat-setoran");
-    const items=(Array.isArray(rows)?rows:[]).map(row=>`<div class="card"><b>${esc(row.nama_warga||"Warga")}</b><div>Bulan iuran: ${esc(row.bulan||"-")}</div><div>Nominal: ${rupiah(row.total_amount||0)}</div><div>Status: <span class="badge">${row.status==="lunas"?"Lunas":"Menunggu pembayaran"}</span></div><div>Petugas penyetor: ${esc(row.disetorkan_oleh_nama||"-")}</div><div class="muted">Order: ${esc(String(row.bukti_transfer||"").replace("MIDTRANS:",""))}</div>${row.midtrans_settlement_at?`<div class="muted">Dibayar: ${esc(new Date(row.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}</div>`).join("");
+    const items=(Array.isArray(rows)?rows:[]).map(row=>`<div class="card"><b>${esc(row.nama_warga||"Warga")}</b><div>Bulan iuran: ${esc(row.bulan||"-")}</div><div>Nominal: ${rupiah(row.total_amount||0)}</div><div>Status: <span class="badge">${row.status==="lunas"?"Disetorkan":"Menunggu setoran"}</span></div><div>Petugas penyetor: ${esc(row.disetorkan_oleh_nama||"-")}</div><div class="muted">Order: ${esc(String(row.bukti_transfer||"").replace("MIDTRANS:",""))}</div>${row.midtrans_settlement_at?`<div class="muted">Dibayar: ${esc(new Date(row.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}</div>`).join("");
     layout("Riwayat Setoran QRIS Saya",(items||"<div class='card'>Belum ada riwayat setoran QRIS.</div>")+'<button class="btn secondary" onclick="wargaHome()">Kembali</button>');
   }catch(e){alert(e.message||"Gagal memuat riwayat setoran.");}
 }
