@@ -1550,8 +1550,8 @@ app.patch("/api/notifikasi/:id/baca", requireLogin, async (req, res) => {
       "id=eq." + id +
       "&select=id,penerima_peran,penerima_warga_id";
 
-    if (session.role === "admin") {
-      query += "&penerima_peran=eq.admin";
+    if (session.role === "admin" || session.role === "bendahara") {
+      query += "&penerima_peran=eq." + encodeURIComponent(session.role);
     } else if (session.role === "warga" && session.wargaId) {
       query +=
         "&penerima_peran=eq.warga" +
