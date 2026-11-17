@@ -328,6 +328,20 @@ for (const iuran of rows) {
     body: dataBukti
   });
 
+  // Rekonsiliasi penerimaan tunai Ketua Gang sebelum melewati callback duplikat.
+  if (iuran.jalur_pembayaran === "ketua_gang_qris") {
+    try {
+      await supabaseRequest("penerimaan_tunai_ketua_gang", {
+        method:"PATCH",
+        query:"qris_order_id=eq."+encodeURIComponent(order_id)+"&status=eq.menunggu_setoran",
+        body:{status:"disetorkan",disetorkan_at:new Date().toISOString(),iuran_id:Number(iuran.id)}
+      });
+    } catch (receiptError) {
+      console.error("GAGAL MEMPERBARUI STATUS SETORAN KETUA GANG:",receiptError?.message||receiptError);
+      throw receiptError;
+    }
+  }
+
   // Jika sudah lunas, jangan membuat kas atau notifikasi kedua kali.
   if (sudahLunas) continue;
 
@@ -1349,6 +1363,73 @@ app.get("/api/ketua-gang/warga", requireGangLead, async(req,res)=>{
     res.json(Array.isArray(rows)?rows:[]);
   }catch(error){console.error("KETUA GANG WARGA ERROR:",error);res.status(500).json({ok:false,message:"Gagal memuat data warga gang"});}
 });
+app.post("/api/ketua-gang/penerimaan-tunai", requireGangLead, async (req, res) => {
+  try {
+    const wargaId = String(req.body?.warga_id || "").trim();
+    const bulanInput = String(req.body?.bulan || "").trim();
+    if (!/^\d+$/.test(wargaId) || !isValidIuranMonth(bulanInput)) {
+      return res.status(400).json({ok:false,message:"Pilih warga dan bulan iuran yang valid."});
+    }
+    const petugasId = Number(req.session.id);
+    const petugasNama = String(req.session.nama || req.session.username || "Ketua Gang").trim().slice(0,120);
+    const gang = String(req.session.gang || "").trim();
+    if (!Number.isSafeInteger(petugasId) || petugasId <= 0 || !gang) {
+      return res.status(403).json({ok:false,message:"Identitas atau wilayah tugas Ketua Gang belum lengkap."});
+    }
+    const wargaRows = await supabaseRequest("warga",{query:"select=id,nama_lengkap,keluarga_id,gang,alamat,status_warga&id=eq."+encodeURIComponent(wargaId)+"&limit=1"});
+    const warga = Array.isArray(wargaRows) ? wargaRows[0] : null;
+    if (!warga || String(warga.gang||"").trim().toLowerCase() !== gang.toLowerCase()) {
+      return res.status(403).json({ok:false,message:"Warga bukan bagian dari gang tugas Anda."});
+    }
+    if (String(warga.status_warga||"").toLowerCase() !== "aktif") {
+      return res.status(400).json({ok:false,message:"Hanya warga aktif yang dapat dicatat."});
+    }
+    const bulan = bulanInput + "-01";
+    const keluargaId = warga.keluarga_id ? String(warga.keluarga_id) : null;
+    const scope = keluargaId ? "&keluarga_id=eq."+encodeURIComponent(keluargaId) : "&warga_id=eq."+encodeURIComponent(wargaId);
+    const existingIuran = await supabaseRequest("iuran_warga",{query:"select=id,status,bukti_transfer,bulan"+scope+"&bulan=eq."+encodeURIComponent(bulan)+"&limit=1"});
+    if (Array.isArray(existingIuran) && existingIuran.length) {
+      return res.status(409).json({ok:false,message:existingIuran[0].status==="lunas"?"Iuran periode ini sudah lunas.":"Sudah ada transaksi iuran untuk periode ini. Minta Bendahara memeriksa sebelum mencatat penerimaan tunai."});
+    }
+    const receiptScope = keluargaId
+      ? "&keluarga_id=eq." + encodeURIComponent(keluargaId)
+      : "&warga_id=eq." + encodeURIComponent(wargaId);
+    const existingReceipt = await supabaseRequest("penerimaan_tunai_ketua_gang", {
+      query:"select=id,status" + receiptScope + "&bulan=eq." + encodeURIComponent(bulan) + "&limit=1"
+    });
+    if (Array.isArray(existingReceipt) && existingReceipt.length) {
+      return res.status(409).json({ok:false,message:"Penerimaan untuk keluarga dan bulan tersebut sudah tercatat. Periksa riwayat sebelum mencoba lagi."});
+    }
+    const saved = await supabaseRequest("penerimaan_tunai_ketua_gang",{
+      method:"POST",
+      body:{warga_id:Number(warga.id),keluarga_id:keluargaId,nama_warga:warga.nama_lengkap,gang:warga.gang,alamat:warga.alamat||"",bulan,total_amount:35000,status:"diterima",petugas_id:petugasId,petugas_nama:petugasNama},
+      prefer:"return=representation"
+    });
+    const row = Array.isArray(saved) ? saved[0] : saved;
+    if (!row?.id) throw new Error("Catatan penerimaan tunai tidak berhasil disimpan.");
+    return res.json({ok:true,data:row,message:"Penerimaan tunai tercatat. Belum masuk Kas RT; lanjutkan dengan QRIS setoran ke Bendahara."});
+  } catch(error) {
+    if (getSupabaseErrorCode(error)==="23505") return res.status(409).json({ok:false,message:"Penerimaan warga untuk bulan tersebut sudah pernah dicatat."});
+    console.error("PENERIMAAN TUNAI KETUA GANG ERROR:",error?.message||error);
+    return res.status(500).json({ok:false,message:"Gagal mencatat penerimaan tunai. Periksa riwayat sebelum mencoba lagi."});
+  }
+});
+
+app.get("/api/ketua-gang/penerimaan-tunai", requireGangLead, async (req,res)=>{
+  try {
+    const petugasId=Number(req.session.id);
+    if(!Number.isSafeInteger(petugasId)||petugasId<=0) return res.status(403).json({ok:false,message:"Identitas petugas tidak valid."});
+    const rows=await supabaseRequest("penerimaan_tunai_ketua_gang",{
+      query:"select=id,warga_id,nama_warga,gang,alamat,bulan,total_amount,status,petugas_nama,qris_order_id,iuran_id,diterima_at,disetorkan_at&petugas_id=eq."+encodeURIComponent(petugasId)+"&order=created_at.desc&limit=300"
+    });
+    return res.json(Array.isArray(rows)?rows:[]);
+  } catch(error) {
+    console.error("RIWAYAT PENERIMAAN TUNAI KETUA GANG ERROR:",error?.message||error);
+    return res.status(500).json({ok:false,message:"Gagal memuat riwayat penerimaan tunai."});
+  }
+});
+
+
 
 /* DASHBOARD KETUA RT */
 app.get("/api/dashboard", requireAdmin, async (req, res) => {
@@ -4662,13 +4743,30 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
   let orderId = null;
   let rowsTersimpan = [];
   try {
-    const wargaId = String(req.body?.warga_id || "").trim();
-    const bulan = String(req.body?.bulan || "").trim();
-    if (!/^\d+$/.test(wargaId) || !isValidIuranMonth(bulan)) {
-      return res.status(400).json({ ok: false, message: "Pilih warga dan bulan iuran yang valid." });
+    const penerimaanId = String(req.body?.penerimaan_id || "").trim();
+    if (!/^\d+$/.test(penerimaanId)) {
+      return res.status(400).json({ok:false,message:"Pilih catatan penerimaan tunai yang akan disetorkan."});
     }
-
     const gangPetugas = String(req.session.gang || "").trim();
+    const penyetorId = Number(req.session.id);
+    if (!Number.isSafeInteger(penyetorId) || penyetorId <= 0 || !gangPetugas) {
+      return res.status(403).json({ok:false,message:"Identitas atau wilayah tugas Ketua Gang belum lengkap."});
+    }
+    const penerimaanRows = await supabaseRequest("penerimaan_tunai_ketua_gang", {
+      query:"select=id,warga_id,nama_warga,gang,bulan,status,petugas_id&id=eq." + encodeURIComponent(penerimaanId) + "&petugas_id=eq." + encodeURIComponent(penyetorId) + "&limit=1"
+    });
+    const penerimaan = Array.isArray(penerimaanRows) ? penerimaanRows[0] : null;
+    if (!penerimaan || String(penerimaan.gang||"").trim().toLowerCase() !== gangPetugas.toLowerCase()) {
+      return res.status(404).json({ok:false,message:"Catatan penerimaan tidak ditemukan pada wilayah tugas Anda."});
+    }
+    if (penerimaan.status !== "diterima") {
+      return res.status(409).json({ok:false,message:"Penerimaan ini sudah diproses atau sedang menunggu setoran."});
+    }
+    const wargaId = String(penerimaan.warga_id);
+    const bulan = String(penerimaan.bulan || "").slice(0,7);
+    if (!/^\d+$/.test(wargaId) || !isValidIuranMonth(bulan)) {
+      return res.status(400).json({ok:false,message:"Data warga atau bulan pada penerimaan tidak valid."});
+    }
     if (!gangPetugas) {
       return res.status(403).json({ ok: false, message: "Wilayah gang akun Ketua Gang belum ditetapkan." });
     }
@@ -4715,7 +4813,6 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     const penyetorNama = String(req.session.nama || req.session.username || "Ketua Gang");
     const transaksi = await buatTransaksiQRIS({ orderId, total, namaWarga: warga.nama_lengkap, namaPembayar: penyetorNama });
 
-    const penyetorId = Number(req.session.id);
     const hasilReserva = await supabaseRequest("rpc/reserve_qris_iuran_batch_with_attribution", {
       method: "POST",
       body: {
@@ -4734,6 +4831,12 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
         Number(rowsTersimpan[0].disetorkan_oleh_id) !== penyetorId) {
       throw new Error("Reservasi iuran QRIS dan atribusi penyetor tidak lengkap atau tidak cocok dengan order.");
     }
+
+    await supabaseRequest("penerimaan_tunai_ketua_gang", {
+      method:"PATCH",
+      query:"id=eq."+encodeURIComponent(penerimaan.id)+"&petugas_id=eq."+encodeURIComponent(penyetorId)+"&status=eq.diterima",
+      body:{status:"menunggu_setoran",qris_order_id:orderId,iuran_id:Number(rowsTersimpan[0].id)}
+    });
 
     try {
       await supabaseRequest("notifikasi", {
