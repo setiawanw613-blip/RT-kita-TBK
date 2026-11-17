@@ -1315,6 +1315,17 @@ app.post("/api/petugas", requireAdmin, async (req, res) => {
     res.status(201).json({ok:true,user:Array.isArray(created)?created[0]:created});
   } catch(error){console.error("PETUGAS CREATE ERROR:",error);res.status(500).json({ok:false,message:"Gagal membuat akun. Pastikan username belum digunakan."});}
 });
+app.patch("/api/petugas/:id/password", requireAdmin, async (req,res)=>{
+  try{
+    const id=String(req.params.id||""), password=req.body?.password;
+    if(!/^\d+$/.test(id)||typeof password!=="string"||password.length<10||password.length>128) return res.status(400).json({ok:false,message:"Password harus 10–128 karakter."});
+    const rows=await supabaseRequest("petugas_rt",{query:"select=id,username,nama_lengkap,role,status,warga_id&id=eq."+encodeURIComponent(id)+"&limit=1"});
+    const staff=Array.isArray(rows)?rows[0]:null;
+    if(!staff||staff.username!=="edi.kusnaedi"||staff.role!=="sekretaris"||staff.status!=="aktif"||!staff.warga_id) return res.status(404).json({ok:false,message:"Akun Sekretaris Edi tidak ditemukan atau tidak memenuhi syarat."});
+    await supabaseRequest("petugas_rt",{method:"PATCH",query:"id=eq."+encodeURIComponent(id),body:{password:hashPassword(password),updated_at:new Date().toISOString()}});
+    res.json({ok:true,message:"Password akun Sekretaris berhasil diperbarui."});
+  }catch(error){console.error("PETUGAS PASSWORD RESET ERROR:",error);res.status(500).json({ok:false,message:"Gagal memperbarui password akun."});}
+});
 app.patch("/api/petugas/:id/status", requireAdmin, async (req,res)=>{
   try{
     const id=String(req.params.id||""),status=String(req.body?.status||"");
