@@ -4596,6 +4596,78 @@ app.post("/api/iuran/terima-tunai", requireIuranStaff, async (req, res) => {
 
 
 
+/* IURAN TUNAI MANUAL UNTUK WARGA YANG TIDAK MENGGUNAKAN APLIKASI */
+app.post("/api/iuran/terima-tunai-manual", requireIuranStaff, async (req, res) => {
+  try {
+    const nama = String(req.body?.nama_warga || "").trim();
+    const gang = String(req.body?.gang || "").trim();
+    const alamat = String(req.body?.alamat || "").trim();
+    const inputBulan = String(req.body?.bulan || "").trim();
+    if (nama.length < 2 || nama.length > 120) {
+      return res.status(400).json({ ok:false, message:"Nama warga harus 2–120 karakter." });
+    }
+    if (gang.length > 80 || alamat.length > 180) {
+      return res.status(400).json({ ok:false, message:"Gang atau alamat terlalu panjang." });
+    }
+    if (!isValidIuranMonth(inputBulan)) {
+      return res.status(400).json({ ok:false, message:"Pilih bulan iuran yang valid." });
+    }
+    const namaPetugas = String(
+      (typeof req.session.adminUser === "string" ? req.session.adminUser : "") ||
+      req.session.nama || req.session.username || "Pengurus RT"
+    ).trim().slice(0,120);
+    const idPetugas = String(req.session.id || "").trim();
+    const saved = await supabaseRequest("rpc/catat_iuran_manual_atomic", {
+      method:"POST",
+      body:{
+        p_nama_warga:nama,
+        p_gang:gang,
+        p_alamat:alamat,
+        p_bulan:inputBulan + "-01",
+        p_petugas_id:idPetugas,
+        p_petugas_nama:namaPetugas
+      }
+    });
+    const row = Array.isArray(saved) ? saved[0] : saved;
+    if (!row?.id) throw new Error("Catatan pembayaran manual tidak berhasil disimpan.");
+    return res.json({
+      ok:true,
+      message:"Pembayaran manual tercatat dan pemasukan sudah ditambahkan ke kas RT.",
+      data:{
+        id:row.id,
+        nama_warga:row.nama_warga,
+        gang:row.gang || "",
+        alamat:row.alamat || "",
+        bulan:inputBulan,
+        total_amount:35000,
+        status:"DITERIMA — MANUAL",
+        petugas_nama:row.petugas_nama,
+        dibayar_at:row.created_at
+      }
+    });
+  } catch (error) {
+    console.error("PENERIMAAN IURAN MANUAL ERROR:", error?.message || error);
+    if (getSupabaseErrorCode(error)==="23505") {
+      return res.status(409).json({ok:false,message:"Pembayaran untuk nama, gang, alamat, dan bulan tersebut sudah tercatat. Periksa riwayat sebelum mencoba lagi."});
+    }
+    return res.status(500).json({ok:false,message:"Gagal menyimpan pembayaran manual. Periksa riwayat kas sebelum mencoba ulang."});
+  }
+});
+
+app.get("/api/iuran/riwayat-manual", requireIuranStaff, async (req, res) => {
+  try {
+    const rows = await supabaseRequest("iuran_warga_manual", {
+      query:"select=id,nama_warga,gang,alamat,bulan,total_amount,status,petugas_nama,kas_rt_id,created_at&order=created_at.desc&limit=300"
+    });
+    return res.json(Array.isArray(rows) ? rows : []);
+  } catch (error) {
+    console.error("RIWAYAT IURAN MANUAL ERROR:", error?.message || error);
+    return res.status(500).json({ok:false,message:"Gagal memuat riwayat pembayaran manual."});
+  }
+});
+
+
+
 /* SETORAN QRIS KETUA GANG ATAS NAMA WARGA */
 app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
   let orderId = null;
