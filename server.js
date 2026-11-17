@@ -4791,7 +4791,7 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     const catatan = Array.isArray(dataIuran) ? dataIuran : [];
     const peta = new Map(catatan.map(row => [String(row.bulan || "").slice(0, 7), row]));
     const akhir = new Date(Number(bulan.slice(0, 4)), Number(bulan.slice(5, 7)) - 1, 1);
-    for (let d = new Date(2026, 9, 1); d < akhir; d.setMonth(d.getMonth() + 1)) {
+    for (let d = new Date(2026, 11, 1); d < akhir; d.setMonth(d.getMonth() + 1)) {
       const periode = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
       if (peta.get(periode)?.status !== "lunas") {
         return res.status(409).json({ ok: false, message: "Iuran " + periode + " harus diselesaikan lebih dahulu." });
@@ -4969,10 +4969,10 @@ app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
 
     const dipilih = [...bulans].sort();
 
-    if (dipilih[0] < "2026-10") {
+    if (dipilih[0] < "2026-12") {
       return res.status(400).json({
         ok: false,
-        message: "Pencatatan iuran dimulai Oktober 2026."
+        message: "Pencatatan iuran RT TBK dimulai Desember 2026."
       });
     }
 
@@ -5057,7 +5057,7 @@ for (const bulan of dipilih) {
     );
 
     for (
-      let d = new Date(2026, 9, 1);
+      let d = new Date(2026, 11, 1);
       d <= akhir;
       d.setMonth(d.getMonth() + 1)
     ) {
@@ -5465,7 +5465,7 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
     if (!isValidIuranMonth(inputBulan)) {
       return res.status(400).json({
         ok: false,
-        message: "Bulan iuran tidak valid. Pembayaran dimulai Oktober 2026."
+        message: "Bulan iuran tidak valid. Pembayaran iuran RT TBK dimulai Desember 2026."
       });
     }
 
