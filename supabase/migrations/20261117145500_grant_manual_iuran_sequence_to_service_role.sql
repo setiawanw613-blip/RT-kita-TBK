@@ -1,0 +1,1 @@
+GRANT USAGE, SELECT ON SEQUENCE public.iuran_warga_manual_id_seq TO service_role;
