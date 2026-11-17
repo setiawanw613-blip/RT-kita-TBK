@@ -4358,7 +4358,7 @@ async function iuranAdmin(filter = "all"){
     let html=`
       <div class="card">
         <h2>💳 Riwayat Iuran Warga</h2>
-        <p class="muted">Catat pembayaran tunai saat penagihan rumah ke rumah. Nama pengurus penerima akan tersimpan.</p>
+        <p class="muted">Ketua RT dan Bendahara dapat memeriksa transaksi QRIS di GoPay Merchant, mencatat penerimaan tunai, serta memverifikasi iuran. Cocokkan nominal dan transaksi masuk terlebih dahulu sebelum menekan tombol verifikasi. Jangan verifikasi hanya berdasarkan tangkapan layar warga.</p>
         <button class="btn" style="width:100%;margin:8px 0" onclick="terimaIuranDoorToDoor()">+ Catat Iuran Door to Door</button>
         <p class="muted">Pilih sumber pembayaran untuk memisahkan pembayaran langsung warga dan setoran QRIS Ketua Gang.</p>
         <div style="display:flex;gap:7px;flex-wrap:wrap">
@@ -4376,11 +4376,11 @@ async function iuranAdmin(filter = "all"){
           <b>${esc(item.nama_warga||("Warga ID: "+(item.warga_id||"-")))}</b>
           <div>Bulan: ${item.bulan?esc(new Date(String(item.bulan).slice(0,10)+"T00:00:00").toLocaleDateString("id-ID",{month:"long",year:"numeric"})):"-"}</div>
           <div>Total: ${rupiah(item.total_amount||0)}</div>
-          <div>Jalur: <b>${jalur==="ketua_gang_qris"?"QRIS melalui Ketua Gang":jalur==="tunai_door_to_door"?"Tunai door to door":"Pembayaran langsung oleh warga"}</b></div>
+          <div>Jalur: <b>${jalur==="ketua_gang_qris"?"QRIS melalui Ketua Gang":jalur==="tunai_door_to_door"?"Tunai door to door":jalur==="gopay_qris_manual"?"QRIS GoPay Merchant (cek manual)":"Pembayaran langsung oleh warga"}</b></div>
           ${(jalur==="ketua_gang_qris"||jalur==="tunai_door_to_door")?`<div>Pengurus penerima/penyetor: <b>${esc(item.disetorkan_oleh_nama||"-")}</b></div>`:""}
           <div>Status: <span class="badge">${esc(item.status==="lunas"?"Lunas":item.status==="menunggu_verifikasi"?(String(item.bukti_transfer||"").startsWith("MIDTRANS:")?"Menunggu pembayaran":"Menunggu verifikasi"):item.status||"Belum lunas")}</span></div>
           ${item.midtrans_settlement_at?`<div class="muted">Konfirmasi Midtrans: ${esc(new Date(item.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}
-          ${item.status==="menunggu_verifikasi"&&!String(item.bukti_transfer||"").startsWith("MIDTRANS:")?`<button class="btn" onclick="verifikasiIuran('${item.id}')">Verifikasi pembayaran manual</button>`:""}
+          ${item.status==="menunggu_verifikasi"&&!String(item.bukti_transfer||"").startsWith("MIDTRANS:")?`<button class="btn" onclick="verifikasiIuran('${item.id}')">${jalur==="gopay_qris_manual"?"✓ Verifikasi setelah cek GoPay Merchant":"Verifikasi pembayaran manual"}</button>`:""}
         </div>`;
       });
     }
@@ -4675,6 +4675,13 @@ transaksi_kedaluwarsa: record?.transaksi_kedaluwarsa === true
         </div>
       </div>
 
+      <div class="card" style="text-align:center">
+        <h3>📱 QRIS GoPay Merchant — KAS RT</h3>
+        <p class="muted">Pindai QRIS ini menggunakan aplikasi bank atau dompet digital. Pilih bulan di bawah, jumlahkan Rp35.000 per bulan, lalu bayar dengan nominal yang tepat.</p>
+        <img src="https://i.ibb.co.com/Z18cQD4z/Whats-App-Image-2026-11-17-at-15-53-54.jpg" alt="QRIS KAS RT" loading="lazy" style="display:block;width:100%;max-width:300px;height:auto;margin:12px auto;border:1px solid #e2e8f0;border-radius:12px;padding:8px;background:#fff">
+        <p class="muted" style="font-size:12px">Pastikan nama merchant sesuai sebelum memasukkan PIN. Pembayaran diperiksa manual oleh Ketua RT atau Bendahara; belum otomatis terhubung ke RT TBK.</p>
+      </div>
+
       <div class="card">
         <h3>Status dan Pilihan Bulan</h3>
         <div style="display:grid;gap:8px">
@@ -4745,12 +4752,12 @@ const tidakBisaDipilih =
 
  
 
-const hasil = await api("/api/iuran/bayar-banyak", {
+const hasil = await api("/api/iuran/qris-gopay-manual", {
   method: "POST",
   body: JSON.stringify({ bulans: dipilih })
 });
 
-if (hasil.qr_url || hasil.qr_string) {
+if (hasil && hasil.ok) {
   layout("Pembayaran QRIS", `
     <div class="card" style="text-align:center">
       <h2>📱 Pembayaran QRIS</h2>
