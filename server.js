@@ -4804,7 +4804,6 @@ app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
     const penyetorNama = String(req.session.nama || req.session.username || "Ketua Gang");
     const transaksi = await buatTransaksiQRIS({ orderId, total, namaWarga: warga.nama_lengkap, namaPembayar: penyetorNama });
 
-    const penyetorId = Number(req.session.id);
     const hasilReserva = await supabaseRequest("rpc/reserve_qris_iuran_batch_with_attribution", {
       method: "POST",
       body: {
