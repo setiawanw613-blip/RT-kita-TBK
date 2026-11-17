@@ -1687,7 +1687,7 @@ app.patch("/api/account/change-password", requireLogin, async (req, res) => {
     }
 
     const wargaId = String(req.session.wargaId);
-    if (!/^\\d+$/.test(wargaId)) {
+    if (!/^\d+$/.test(wargaId)) {
       return res.status(403).json({ ok: false, message: "Identitas akun warga tidak valid." });
     }
 
