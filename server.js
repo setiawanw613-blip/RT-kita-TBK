@@ -801,8 +801,8 @@ function requireStaff(roles = []) {
         if (!staff || staff.status !== "aktif" || staff.role !== session.role) {
           return res.status(403).json({ ok: false, message: "Akun petugas sudah dinonaktifkan atau hak aksesnya berubah. Silakan login kembali." });
         }
-        if (session.role === "sekretaris" && !staff.warga_id) {
-          return res.status(403).json({ ok: false, message: "Akun Sekretaris belum terhubung ke data warga yang sah." });
+        if (["sekretaris", "ketua_gang"].includes(session.role) && !staff.warga_id) {
+          return res.status(403).json({ ok: false, message: "Akun petugas belum terhubung ke data warga yang sah." });
         }
         session.gang = staff.gang || "";
         session.wargaId = staff.warga_id || null;
@@ -825,50 +825,39 @@ const requireGangLead = requireStaff(["admin", "ketua_gang"]);
 
 async function requireWarga(req, res, next) {
   const session = getSession(req);
+  if (!session) return res.status(401).json({ok:false,message:"Belum login"});
 
-  if (!session || session.role !== "warga") {
-    return res.status(403).json({
-      ok: false,
-      message: "Akses khusus warga"
+  // Ketua Gang juga merupakan warga. Identitasnya wajib ditautkan ke
+  // data warga dan diverifikasi ulang melalui data petugas di database.
+  if (session.role === "ketua_gang") {
+    return requireStaff(["ketua_gang"])(req, res, async () => {
+      if (!req.session?.wargaId) {
+        return res.status(403).json({ok:false,message:"Akun Ketua Gang belum terhubung ke data warga. Hubungi Ketua RT."});
+      }
+      return cekWargaAktif(req, res, next);
     });
   }
+  if (session.role !== "warga") return res.status(403).json({ok:false,message:"Akses khusus warga"});
+  req.session = session;
+  return cekWargaAktif(req, res, next);
+}
 
+async function cekWargaAktif(req, res, next) {
   try {
+    const wargaId = String(req.session?.wargaId || "");
+    if (!/^\d+$/.test(wargaId)) return res.status(403).json({ok:false,message:"Identitas data warga tidak ditemukan"});
     const data = await supabaseRequest("warga", {
-      query:
-        `select=id,status_warga` +
-        `&id=eq.${encodeURIComponent(session.wargaId)}` +
-        `&limit=1`
+      query:"select=id,status_warga&id=eq." + encodeURIComponent(wargaId) + "&limit=1"
     });
-
-    if (!Array.isArray(data) || !data.length) {
-      return res.status(403).json({
-        ok: false,
-        message: "Akun warga tidak ditemukan"
-      });
+    if (!Array.isArray(data) || !data.length) return res.status(403).json({ok:false,message:"Akun warga tidak ditemukan"});
+    if (String(data[0].status_warga || "").toLowerCase() !== "aktif") {
+      res.setHeader("Set-Cookie","rt_token=; Path=/; HttpOnly; Secure; Max-Age=0; SameSite=Lax");
+      return res.status(403).json({ok:false,message:"Akun warga sudah tidak aktif. Silakan hubungi Ketua RT."});
     }
-
-    if (data[0].status_warga !== "aktif") {
-      res.setHeader(
-        "Set-Cookie",
-        "rt_token=; Path=/; HttpOnly; Secure; Max-Age=0; SameSite=Lax"
-      );
-
-      return res.status(403).json({
-        ok: false,
-        message: "Akun Anda sudah tidak aktif. Silakan hubungi Ketua RT."
-      });
-    }
-
-    req.session = session;
-    next();
-  } catch (error) {
-    console.error("CEK STATUS WARGA ERROR:", error);
-
-    return res.status(503).json({
-      ok: false,
-      message: "Status akun belum dapat diperiksa. Silakan coba lagi."
-    });
+    return next();
+  } catch(error) {
+    console.error("CEK STATUS WARGA ERROR:",error?.message || error);
+    return res.status(503).json({ok:false,message:"Status akun belum dapat diperiksa. Silakan coba lagi."});
   }
 }
 
@@ -1234,7 +1223,7 @@ const token = createSessionToken({
         return res.status(401).json({ ok: false, message: "Username atau password salah" });
       }
       await supabaseRequest("login_rate_limits", { method: "DELETE", query: "key_hash=eq." + encodeURIComponent(rateLimitKey) });
-      const token = createSessionToken({ id: staff.id, username: staff.username, nama: staff.nama_lengkap, role: staff.role, gang: staff.gang || "" });
+      const token = createSessionToken({ id: staff.id, wargaId: staff.warga_id || null, username: staff.username, nama: staff.nama_lengkap, role: staff.role, gang: staff.gang || "" });
       res.setHeader("Set-Cookie", `rt_token=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; Max-Age=28800; SameSite=Lax`);
       return res.json({ ok: true, user: { id: staff.id, username: staff.username, nama: staff.nama_lengkap, role: staff.role, gang: staff.gang || "" } });
     }
