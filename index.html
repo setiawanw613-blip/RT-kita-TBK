@@ -1135,9 +1135,9 @@ async function logout(){
 }
 
 function renderHomeByRole(){
-  if(currentUser?.role==="warga")return wargaHome();
+  if(currentUser?.role==="warga" || currentUser?.role==="ketua_gang")return wargaHome();
   if(currentUser?.role==="admin")return adminHome();
-  if(["bendahara","sekretaris","ketua_gang"].includes(currentUser?.role))return staffHome();
+  if(["bendahara","sekretaris"].includes(currentUser?.role))return staffHome();
   loginPage("Jenis akun tidak dikenali");
 }
 async function staffHome(){
@@ -4259,7 +4259,7 @@ async function saveAnnouncement(){
 }
 
 function wargaHome(){
-  layout("Portal Warga",`
+  layout(currentUser?.role==="ketua_gang" ? "Portal Warga & Ketua Gang" : "Portal Warga",`
     <div class="card">
       <h2>Halo, ${esc(currentUser?.nama||"Warga")} 👋</h2>
 
@@ -4270,6 +4270,15 @@ function wargaHome(){
       <p class="muted">Selamat datang di aplikasi RT TBK.</p>
     </div>
 
+    ${currentUser?.role==="ketua_gang" ? `<div class="card">
+      <h3>🧭 Tugas Khusus Ketua Gang</h3>
+      <p class="muted">Wilayah tugas: <b>${esc(currentUser?.gang||"Belum ditetapkan")}</b>. Menu ini melengkapi layanan warga dan hanya menampilkan data gang tugas Anda.</p>
+      <div class="menu">
+        <button onclick="lihatWargaGang()">👥 Data Warga Gang</button>
+        <button onclick="buatSetoranGang()">📲 Buat QRIS Setoran Iuran</button>
+        <button onclick="riwayatSetoranGang()">🧾 Riwayat Setoran Saya</button>
+      </div>
+    </div>` : ""}
     <div class="card">
       <h3>Layanan Warga</h3>
       <div class="menu">
