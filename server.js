@@ -1208,11 +1208,28 @@ const token = createSessionToken({
 }
    if (["bendahara", "sekretaris", "ketua_gang"].includes(role)) {
       const staffRows = await supabaseRequest("petugas_rt", {
-        query: "select=id,username,nama_lengkap,password,role,gang,status&username=eq." +
+        query: "select=id,username,nama_lengkap,password,role,gang,status,warga_id&username=eq." +
           encodeURIComponent(username.trim()) + "&role=eq." + encodeURIComponent(role) + "&limit=1"
       });
       const staff = Array.isArray(staffRows) ? staffRows[0] : null;
-      if (!staff || staff.status !== "aktif" || !staff.password || !verifyPassword(password, staff.password)) {
+      if (!staff || staff.status !== "aktif") {
+        return res.status(401).json({ ok: false, message: "Username atau password salah" });
+      }
+      let staffPasswordValid = false;
+      if (staff.warga_id) {
+        const linkedRows = await supabaseRequest("warga", {
+          query: "select=id,password,status_warga& id=eq.".replace("& ", "&") +
+            encodeURIComponent(staff.warga_id) + "&limit=1"
+        });
+        const linkedWarga = Array.isArray(linkedRows) ? linkedRows[0] : null;
+        staffPasswordValid = !!linkedWarga &&
+          linkedWarga.status_warga === "aktif" &&
+          typeof linkedWarga.password === "string" &&
+          verifyPassword(password, linkedWarga.password);
+      } else {
+        staffPasswordValid = !!staff.password && verifyPassword(password, staff.password);
+      }
+      if (!staffPasswordValid) {
         return res.status(401).json({ ok: false, message: "Username atau password salah" });
       }
       await supabaseRequest("login_rate_limits", { method: "DELETE", query: "key_hash=eq." + encodeURIComponent(rateLimitKey) });
