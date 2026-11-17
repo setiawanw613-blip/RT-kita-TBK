@@ -1145,8 +1145,8 @@ async function staffHome(){
   const title=role==="bendahara"?"Dashboard Bendahara":role==="sekretaris"?"Dashboard Sekretaris":"Dashboard Ketua Gang";
   const content=`<div class="card"><h2>Selamat datang, ${esc(currentUser?.nama||title)}</h2>
   <p class="muted">Akses dibatasi sesuai jabatan.</p>
-  ${role==="bendahara"?"<p>Pengelolaan iuran, kas, bukti transaksi, dan laporan keuangan.</p><button class='btn' onclick='cash()'>Buka Kas RT</button><button class='btn secondary' onclick='iuranAdmin()'>Riwayat Iuran</button><button class='btn secondary' onclick='transparansiQRIS()'>Transparansi QRIS</button>":""}
-  ${role==="sekretaris"?"<p>Administrasi surat, pengumuman, dan pengajuan warga. Akses administrasi tetap dibatasi oleh server.</p>":""}
+  ${role==="bendahara"?"<p>Pengelolaan iuran, kas, bukti transaksi, dan laporan keuangan.</p><button class='btn' onclick='cash()'>Buka Kas RT</button><button class='btn secondary' onclick='iuranAdmin()'>Riwayat Iuran</button><button class='btn secondary' onclick='terimaIuranDoorToDoor()'>Catat Iuran Door to Door</button><button class='btn secondary' onclick='transparansiQRIS()'>Transparansi QRIS</button>":""}
+  ${role==="sekretaris"?"<p>Administrasi surat, pengumuman, dan bantuan penagihan iuran warga.</p><button class='btn' onclick='iuranAdmin()'>Riwayat Iuran</button><button class='btn secondary' onclick='terimaIuranDoorToDoor()'>Catat Iuran Door to Door</button>":""}
   ${role==="ketua_gang"?"<p>Wilayah tugas: <b>"+esc(currentUser?.gang||"Belum ditetapkan")+"</b></p><button class='btn' onclick='lihatWargaGang()'>Lihat warga gang</button><button class='btn' onclick='buatSetoranGang()'>Buat QRIS Setoran Iuran Warga</button><button class='btn secondary' onclick='riwayatSetoranGang()'>Riwayat Setoran Saya</button>":""}
   ${role==="sekretaris"?"<button class='btn' onclick='letters()'>Pengajuan Surat Warga</button><button class='btn secondary' onclick='announcements()'>Kelola Pengumuman</button>":""}</div>
   <button class="btn secondary" style="width:100%" onclick="logout()">Keluar</button>`;
@@ -4310,6 +4310,8 @@ async function iuranAdmin(filter = "all"){
     let html=`
       <div class="card">
         <h2>💳 Riwayat Iuran Warga</h2>
+        <p class="muted">Catat pembayaran tunai saat penagihan rumah ke rumah. Nama pengurus penerima akan tersimpan.</p>
+        <button class="btn" style="width:100%;margin:8px 0" onclick="terimaIuranDoorToDoor()">+ Catat Iuran Door to Door</button>
         <p class="muted">Pilih sumber pembayaran untuk memisahkan pembayaran langsung warga dan setoran QRIS Ketua Gang.</p>
         <div style="display:flex;gap:7px;flex-wrap:wrap">
           <button class="btn ${filter==="all"?"":"secondary"}" onclick="iuranAdmin('all')">Semua</button>
@@ -4326,8 +4328,8 @@ async function iuranAdmin(filter = "all"){
           <b>${esc(item.nama_warga||("Warga ID: "+(item.warga_id||"-")))}</b>
           <div>Bulan: ${item.bulan?esc(new Date(String(item.bulan).slice(0,10)+"T00:00:00").toLocaleDateString("id-ID",{month:"long",year:"numeric"})):"-"}</div>
           <div>Total: ${rupiah(item.total_amount||0)}</div>
-          <div>Jalur: <b>${jalur==="ketua_gang_qris"?"QRIS melalui Ketua Gang":"Pembayaran langsung oleh warga"}</b></div>
-          ${jalur==="ketua_gang_qris"?`<div>Ketua Gang penyetor: <b>${esc(item.disetorkan_oleh_nama||"-")}</b></div>`:""}
+          <div>Jalur: <b>${jalur==="ketua_gang_qris"?"QRIS melalui Ketua Gang":jalur==="tunai_door_to_door"?"Tunai door to door":"Pembayaran langsung oleh warga"}</b></div>
+          ${(jalur==="ketua_gang_qris"||jalur==="tunai_door_to_door")?`<div>Pengurus penerima/penyetor: <b>${esc(item.disetorkan_oleh_nama||"-")}</b></div>`:""}
           <div>Status: <span class="badge">${esc(item.status==="lunas"?"Lunas":item.status==="menunggu_verifikasi"?(String(item.bukti_transfer||"").startsWith("MIDTRANS:")?"Menunggu pembayaran":"Menunggu verifikasi"):item.status||"Belum lunas")}</span></div>
           ${item.midtrans_settlement_at?`<div class="muted">Konfirmasi Midtrans: ${esc(new Date(item.midtrans_settlement_at).toLocaleString("id-ID"))}</div>`:""}
           ${item.status==="menunggu_verifikasi"&&!String(item.bukti_transfer||"").startsWith("MIDTRANS:")?`<button class="btn" onclick="verifikasiIuran('${item.id}')">Verifikasi pembayaran manual</button>`:""}
@@ -4337,6 +4339,37 @@ async function iuranAdmin(filter = "all"){
     layout("Iuran Warga",html);
   }catch(e){alert(e.message||"Gagal mengambil data iuran");}
 }
+async function terimaIuranDoorToDoor(){
+  try {
+    const warga = await api("/api/iuran/daftar-warga");
+    const pilihan = Array.isArray(warga) ? warga : [];
+    if (!pilihan.length) { alert("Belum ada data warga aktif."); return; }
+    const options = pilihan.map(w => '<option value="' + Number(w.id) + '">' + esc(w.nama_lengkap) + ' · ' + esc(w.gang || "Gang belum diisi") + ' · ' + esc(w.alamat || "") + '</option>').join("");
+    const now = new Date();
+    const month = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
+    const html = '<div class="card"><h2>🏠 Penerimaan Iuran Tunai</h2><p class="muted">Gunakan setelah uang tunai benar-benar diterima dari warga di rumahnya.</p><label>Nama warga</label><select id="tunaiWarga" required>' + options + '</select><label>Bulan pembayaran</label><input id="tunaiBulan" type="month" min="2026-10" value="' + month + '" required><div class="card" style="background:#f4f8ff"><b>Rincian iuran per bulan</b><div>Keamanan: Rp15.000</div><div>Sampah: Rp15.000</div><div>Kas RT: Rp5.000</div><hr><b style="font-size:22px">Total: Rp35.000</b></div><p class="muted">Penerima: <b>' + esc(currentUser?.nama || currentUser?.username || "Pengurus RT") + '</b>. Pembayaran akan langsung tercatat lunas dan masuk ke pembukuan kas.</p><button class="btn" id="simpanTunaiBtn" onclick="simpanIuranDoorToDoor()">✓ Uang Diterima & Simpan</button><button class="btn secondary" onclick="iuranAdmin()">Kembali</button></div>';
+    layout("Catat Iuran Door to Door", html);
+  } catch(e) { alert(e.message || "Gagal memuat daftar warga."); }
+}
+async function simpanIuranDoorToDoor(){
+  const button = document.getElementById("simpanTunaiBtn");
+  const warga = document.getElementById("tunaiWarga");
+  const wargaId = warga?.value;
+  const bulan = document.getElementById("tunaiBulan")?.value;
+  if (!wargaId || !bulan) { alert("Pilih warga dan bulan pembayaran."); return; }
+  const nama = warga.selectedOptions[0]?.text || "warga";
+  if (!confirm("Pastikan uang tunai Rp35.000 sudah diterima dari " + nama + " untuk bulan " + bulan + "? Catatan akan langsung menjadi LUNAS.")) return;
+  if (button) { button.disabled = true; button.textContent = "Menyimpan pembayaran..."; }
+  try {
+    const result = await api("/api/iuran/terima-tunai", {method:"POST", body:JSON.stringify({warga_id:wargaId,bulan})});
+    if (!result?.ok || !result?.data) throw new Error(result?.message || "Pembayaran belum berhasil dicatat.");
+    const d = result.data;
+    const html = '<div class="card" style="max-width:560px;margin:0 auto;border:1px solid #667085"><div style="text-align:center"><h2 style="margin-bottom:4px">BUKTI PEMBAYARAN IURAN</h2><b>RT 004 / RW 01 – TAMAN BALI KAHURIPAN</b></div><hr><div>No. Bukti: <b>RTTBK-' + String(d.id).padStart(5,"0") + '</b></div><div>Nama warga: <b>' + esc(d.nama_warga) + '</b></div><div>Gang: <b>' + esc(d.gang || "-") + '</b></div><div>Alamat: ' + esc(d.alamat || "-") + '</div><div>Bulan: <b>' + esc(d.bulan) + '</b></div><div>Jumlah diterima: <b>Rp35.000</b></div><div>Rincian: Keamanan Rp15.000 · Sampah Rp15.000 · Kas RT Rp5.000</div><div>Status: <b style="color:#16803c">LUNAS — TUNAI</b></div><div>Petugas penerima: <b>' + esc(d.disetorkan_oleh_nama) + '</b></div><div>Tanggal: ' + esc(new Date(d.dibayar_at).toLocaleString("id-ID")) + '</div><hr><div style="display:flex;justify-content:space-between;gap:20px;text-align:center;margin-top:22px"><div style="flex:1">Petugas penerima<br><br><br>(________________)</div><div style="flex:1">Warga<br><br><br>(________________)</div></div><p style="text-align:center;font-size:12px">Terima kasih atas pembayaran iuran warga.</p></div><button class="btn" onclick="window.print()">Cetak Tanda Terima</button><button class="btn secondary" onclick="iuranAdmin()">Kembali ke Riwayat Iuran</button>';
+    layout("Bukti Penerimaan Iuran", html);
+  } catch(e) { alert(e.message || "Gagal mencatat pembayaran."); }
+  finally { if (button) { button.disabled = false; button.textContent = "✓ Uang Diterima & Simpan"; } }
+}
+
   async function verifikasiIuran(id){
   if(!id) return;
 
