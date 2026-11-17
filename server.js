@@ -5479,8 +5479,10 @@ app.post("/api/iuran/qris-gopay-manual", requireWarga, async (req, res) => {
       query:"select=id,nama_lengkap,keluarga_id,status_warga&id=eq." + encodeURIComponent(req.session.wargaId) + "&limit=1"
     });
     const warga = Array.isArray(wargaData) ? wargaData[0] : null;
-    if (!warga || !warga.keluarga_id || String(warga.status_warga || "").toLowerCase() !== "aktif") {
-      return res.status(403).json({ok:false,message:"Data warga aktif atau hubungan keluarga belum valid. Hubungi Ketua RT."});
+    // requireWarga sudah memvalidasi bahwa akun terhubung ke data warga aktif.
+    // keluarga_id boleh kosong: pembayaran tetap dicatat atas warga perorangan.
+    if (!warga || String(warga.status_warga || "").toLowerCase() !== "aktif") {
+      return res.status(403).json({ok:false,message:"Data warga aktif belum valid. Hubungi Ketua RT."});
     }
 
     const orderId = "RTTBK-GOPAY-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
@@ -5488,7 +5490,7 @@ app.post("/api/iuran/qris-gopay-manual", requireWarga, async (req, res) => {
       method:"POST",
       body:{
         p_warga_id:String(warga.id),
-        p_keluarga_id:String(warga.keluarga_id),
+        p_keluarga_id:warga.keluarga_id ? String(warga.keluarga_id) : null,
         p_bulans:bulans.map(bulan => bulan + "-01"),
         p_order_id:orderId
       }
