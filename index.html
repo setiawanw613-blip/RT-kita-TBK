@@ -2559,6 +2559,34 @@ async function saveResident(event,id){
 
 
 
+async function resetPasswordWarga(id, nama){
+  if (!Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
+    alert("ID warga tidak valid.");
+    return;
+  }
+  if (!confirm("Buat password sementara baru untuk " + nama + "? Password lama tidak akan berlaku setelah reset.")) return;
+
+  try {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+    const random = new Uint8Array(16);
+    if (!window.crypto?.getRandomValues) throw new Error("Perangkat tidak mendukung pembuatan password aman.");
+    window.crypto.getRandomValues(random);
+    const password = Array.from(random, byte => alphabet[byte % alphabet.length]).join("");
+
+    const result = await api("/api/residents/" + encodeURIComponent(id) + "/password", {
+      method: "PATCH",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({password})
+    });
+    if (!result?.ok) throw new Error(result?.message || "Reset password gagal.");
+
+    alert("Password sementara untuk " + nama + " berhasil dibuat.\n\nNomor HP login: " + (result.warga?.no_hp || "-") + "\nPassword sementara: " + password + "\n\nSampaikan secara pribadi kepada warga. Minta warga mengganti password setelah berhasil login. Password ini hanya ditampilkan sekarang.");
+  } catch (error) {
+    console.error("RESET PASSWORD WARGA:", error);
+    alert(error.message || "Gagal mereset password warga.");
+  }
+}
+
 function showResidentDetail(w){
   layout("Detail Data Warga",`
     <div class="card">
@@ -2579,6 +2607,10 @@ function showResidentDetail(w){
     </div>
 
     <button class="btn" onclick='editResident(${JSON.stringify(w).replace(/'/g,"&#39;")})'>✏️ Edit Data Warga</button>
+
+    ${String(w.status_warga).toLowerCase() === "aktif"
+      ? `<button class="btn secondary" onclick="resetPasswordWarga(${Number(w.id)}, '${esc(w.nama_lengkap||w.nama||"Warga")}')">🔐 Reset Password Login</button>`
+      : ""}
 
     ${String(w.status_warga).toLowerCase() === "nonaktif"
       ? `<button class="btn" onclick="activateResident('${String(w.id).replace(/'/g,"&#39;")}')">✅ Aktifkan Kembali</button>`
