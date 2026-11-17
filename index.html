@@ -4464,7 +4464,7 @@ async function riwayatIuranManual(){
   async function verifikasiIuran(id){
   if(!id) return;
 
-  if(!confirm("Verifikasi pembayaran iuran ini?")){
+  if(!confirm("Pastikan transaksi QRIS GoPay benar-benar terlihat di aplikasi GoPay Merchant dan nominalnya cocok. Jika transaksi belum masuk, jangan verifikasi. Lanjutkan verifikasi iuran ini?")){
     return;
   }
 
