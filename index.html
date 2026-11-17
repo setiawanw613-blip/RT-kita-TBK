@@ -4424,7 +4424,7 @@ async function formIuranManualNonAplikasi(){
   const now = new Date();
   const currentMonth = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
     const month = currentMonth < "2026-12" ? "2026-12" : currentMonth;
-  const html = '<div class="card"><h2>📝 Catat Iuran Warga Non-Aplikasi</h2><p class="muted">Untuk warga yang belum memiliki akun RT TBK. Tidak perlu NIK, nomor KK, nomor HP, atau kata sandi.</p><label>Nama warga</label><input id="manualNamaWarga" maxlength="120" placeholder="Nama sesuai catatan RT" required><label>Gang</label><input id="manualGang" maxlength="80" placeholder="Contoh: Gang Melati"><label>Alamat / nomor rumah</label><input id="manualAlamat" maxlength="180" placeholder="Contoh: Blok A nomor 12"><label>Bulan pembayaran</label><input id="manualBulan" type="month" min="2026-12" value="' + month + '" required><label>Metode pembayaran</label><select id="manualMetodePembayaran"><option value="tunai">Tunai</option><option value="qris">QRIS KAS RT</option></select><label>Nomor / referensi transaksi GoPay Merchant (khusus QRIS)</label><input id="manualReferensiMerchant" maxlength="120" placeholder="Masukkan nomor transaksi dari GoPay Merchant"><label style="display:flex;gap:8px;align-items:flex-start;margin-top:10px"><input id="manualSudahCekMerchant" type="checkbox" style="width:auto"> Saya sudah mencocokkan transaksi QRIS di GoPay Merchant dan memastikan dana Rp35.000 benar-benar masuk.</label><div class="card" style="background:#f4f8ff"><b>Rincian iuran per bulan</b><div>Keamanan: Rp15.000</div><div>Sampah: Rp15.000</div><div>Kas RT: Rp5.000</div><hr><b style="font-size:22px">Total: Rp35.000</b></div><p class="muted">QRIS statis tidak otomatis mengidentifikasi pembayar. Pilih QRIS hanya setelah nama, nominal, dan waktu transaksi dicocokkan di GoPay Merchant. Setelah disimpan, transaksi masuk ke riwayat non-aplikasi dan pemasukan kas RT.</p><button class="btn" id="simpanManualIuranBtn" onclick="simpanIuranManualNonAplikasi()">✓ Konfirmasi & Simpan Pembayaran</button><button class="btn secondary" onclick="terimaIuranDoorToDoor()">Kembali</button></div>';
+  const html = '<div class="card"><h2>📝 Catat Iuran Warga Non-Aplikasi</h2><p class="muted">Untuk warga yang belum memiliki akun RT TBK. Tidak perlu NIK, nomor KK, nomor HP, atau kata sandi.</p><label>Nama warga</label><input id="manualNamaWarga" maxlength="120" placeholder="Nama sesuai catatan RT" required><label>Gang</label><input id="manualGang" maxlength="80" placeholder="Contoh: Gang Melati"><label>Alamat / nomor rumah</label><input id="manualAlamat" maxlength="180" placeholder="Contoh: Blok A nomor 12"><label>Bulan pembayaran</label><input id="manualBulan" type="month" min="2026-12" value="' + month + '" required><label>Metode pembayaran</label><select id="manualMetodePembayaran"><option value="tunai">Tunai</option></select><label><div class="card" style="background:#f4f8ff"><b>Rincian iuran per bulan</b><div>Keamanan: Rp15.000</div><div>Sampah: Rp15.000</div><div>Kas RT: Rp5.000</div><hr><b style="font-size:22px">Total: Rp35.000</b></div><p class="muted">QRIS statis tidak otomatis mengidentifikasi pembayar. Pembayaran tunai dicatat setelah uang benar-benar diterima petugas. Pembayaran QRIS iuran sedang dikunci sementara.</p><button class="btn" id="simpanManualIuranBtn" onclick="simpanIuranManualNonAplikasi()">✓ Konfirmasi & Simpan Pembayaran</button><button class="btn secondary" onclick="terimaIuranDoorToDoor()">Kembali</button></div>';
   layout("Iuran Warga Non-Aplikasi", html);
 }
 
@@ -4614,6 +4614,26 @@ async function iuranWarga(){
   try {
     const data = await api("/api/my-iuran");
     const rows = Array.isArray(data) ? data : [];
+
+    const riwayat = rows.map(row => {
+      const bulan = row.bulan ? new Date(String(row.bulan).slice(0,10)+"T00:00:00").toLocaleDateString("id-ID",{month:"long",year:"numeric"}) : "-";
+      const status = row.status === "lunas" ? "Lunas" : row.status === "menunggu_verifikasi" ? "Menunggu verifikasi" : "Belum lunas";
+      return `<div class="card"><b>${esc(bulan)}</b><div>Nominal: ${rupiah(row.total_amount || 35000)}</div><div>Status: <b>${esc(status)}</b></div></div>`;
+    }).join("");
+
+    layout("Iuran Warga", `
+      <div class="card">
+        <h2>💳 Iuran Warga</h2>
+        <div style="padding:12px;border:1px solid #d97706;background:#fffbeb;border-radius:12px">
+          <b>🔒 Pembayaran iuran dikunci sementara</b>
+          <p style="margin:8px 0 0">Pembayaran bulanan melalui QRIS maupun pengajuan pembayaran aplikasi sedang dinonaktifkan sementara. Kami menunggu kesiapan rekening RT dan aktivasi Midtrans agar pencatatan pembayaran warga tidak rancu.</p>
+        </div>
+        <p class="muted">Iuran per bulan tetap Rp35.000: Keamanan Rp15.000, Sampah Rp15.000, dan Kas RT Rp5.000.</p>
+        <p class="muted">Untuk pembayaran tunai, silakan hubungi petugas RT. Riwayat pembayaran yang sudah tercatat tetap tersimpan.</p>
+      </div>
+      <div class="card"><h3>Riwayat Iuran Anda</h3>${riwayat || "<p>Belum ada riwayat pembayaran.</p>"}</div>
+    `);
+    return;
 
     const sekarang = new Date();
     const bulanIni = new Date(
