@@ -817,6 +817,7 @@ function requireStaff(roles = []) {
   };
 }
 const requireFinance = requireStaff(["admin", "bendahara"]);
+const requireIuranStaff = requireStaff(["admin", "bendahara", "sekretaris"]);
 const requireSecretary = requireStaff(["admin", "sekretaris"]);
 const requireGangLead = requireStaff(["admin", "ketua_gang"]);
 
@@ -4502,7 +4503,7 @@ app.get("/api/my-iuran", requireWarga, async (req, res) => {
 });
 
 
-app.get("/api/iuran", requireFinance, async (req, res) => {
+app.get("/api/iuran", requireIuranStaff, async (req, res) => {
   try {
     const data = await supabaseRequest("iuran_warga", {
       query: "select=*&order=bulan.desc"
@@ -4545,6 +4546,51 @@ app.get("/api/iuran", requireFinance, async (req, res) => {
       ok: false,
       message: "Gagal mengambil data iuran"
     });
+  }
+});
+
+/* PENAGIHAN IURAN TUNAI DOOR TO DOOR — KETUA RT, BENDAHARA, SEKRETARIS */
+app.get("/api/iuran/daftar-warga", requireIuranStaff, async (req, res) => {
+  try {
+    const rows = await supabaseRequest("warga", { query: "select=id,nama_lengkap,alamat,gang,keluarga_id,status_warga&order=nama_lengkap.asc&limit=1000" });
+    return res.json((Array.isArray(rows) ? rows : []).filter(w => String(w.status_warga || "Aktif").toLowerCase() === "aktif").map(w => ({ id:w.id, nama_lengkap:w.nama_lengkap||"", alamat:w.alamat||"", gang:w.gang||"", keluarga_id:w.keluarga_id||null })));
+  } catch (error) { console.error("DAFTAR WARGA PENAGIHAN ERROR:", error?.message || error); return res.status(500).json({ok:false,message:"Gagal memuat daftar warga untuk penagihan."}); }
+});
+
+app.post("/api/iuran/terima-tunai", requireIuranStaff, async (req, res) => {
+  try {
+    const wargaId = String(req.body?.warga_id || "").trim();
+    const inputBulan = String(req.body?.bulan || "").trim();
+    if (!/^\d+$/.test(wargaId) || !isValidIuranMonth(inputBulan)) return res.status(400).json({ok:false,message:"Pilih warga dan bulan iuran yang valid."});
+    const wargaRows = await supabaseRequest("warga", { query:"select=id,nama_lengkap,alamat,gang,keluarga_id,status_warga&id=eq." + encodeURIComponent(wargaId) + "&limit=1" });
+    const warga = Array.isArray(wargaRows) ? wargaRows[0] : null;
+    if (!warga || String(warga.status_warga || "Aktif").toLowerCase() !== "aktif") return res.status(404).json({ok:false,message:"Warga aktif tidak ditemukan."});
+    const bulan = inputBulan + "-01";
+    const keluargaId = warga.keluarga_id ? String(warga.keluarga_id) : null;
+    const scope = keluargaId ? "&keluarga_id=eq." + encodeURIComponent(keluargaId) : "&warga_id=eq." + encodeURIComponent(wargaId);
+    const existingRows = await supabaseRequest("iuran_warga", { query:"select=id,warga_id,keluarga_id,bulan,status,total_amount,bukti_transfer,jalur_pembayaran" + scope + "&bulan=eq." + encodeURIComponent(bulan) + "&limit=1" });
+    let pembayaran = Array.isArray(existingRows) ? existingRows[0] : null;
+    if (pembayaran?.status === "lunas") return res.status(409).json({ok:false,message:"Iuran bulan ini sudah lunas. Tidak ada pembayaran kedua."});
+    if (pembayaran && String(pembayaran.bukti_transfer || "").startsWith("MIDTRANS:")) return res.status(409).json({ok:false,message:"Iuran ini sedang diproses melalui QRIS. Jangan catat sebagai tunai agar tidak terjadi pembayaran ganda."});
+    if (pembayaran && pembayaran.status !== "menunggu_verifikasi") return res.status(409).json({ok:false,message:"Status iuran tidak memungkinkan untuk dicatat sebagai pembayaran tunai."});
+    const namaPetugas = String(req.session.adminUser || req.session.nama || req.session.username || "Pengurus RT").trim().slice(0,120);
+    const idPetugas = /^\d+$/.test(String(req.session.id || "")) ? Number(req.session.id) : null;
+    if (!pembayaran) {
+      const created = await supabaseRequest("iuran_warga", { method:"POST", body:{warga_id:wargaId,keluarga_id:keluargaId,bulan,status:"menunggu_verifikasi",total_amount:35000,jalur_pembayaran:"tunai_door_to_door",disetorkan_oleh_id:idPetugas,disetorkan_oleh_nama:namaPetugas} });
+      pembayaran = Array.isArray(created) ? created[0] : created;
+    } else {
+      await supabaseRequest("iuran_warga", { method:"PATCH", query:"id=eq." + encodeURIComponent(pembayaran.id), body:{jalur_pembayaran:"tunai_door_to_door",disetorkan_oleh_id:idPetugas,disetorkan_oleh_nama:namaPetugas} });
+    }
+    if (!pembayaran?.id) throw new Error("Catatan iuran tidak berhasil dibuat.");
+    const hasil = await supabaseRequest("rpc/verifikasi_iuran_atomic", {method:"POST",body:{p_iuran_id:Number(pembayaran.id),p_diverifikasi_oleh:namaPetugas}});
+    const lunas = Array.isArray(hasil) ? hasil[0] : hasil;
+    if (!lunas || lunas.status !== "lunas") return res.status(409).json({ok:false,message:"Pembayaran belum dapat dipastikan lunas. Periksa riwayat iuran sebelum mencoba lagi."});
+    try { await supabaseRequest("notifikasi", {method:"POST",body:{penerima_peran:"warga",penerima_warga_id:Number(warga.id),judul:"Iuran Diterima Tunai",pesan:"Iuran " + inputBulan + " sebesar Rp35.000 telah diterima langsung oleh " + namaPetugas + " dan dicatat lunas.",jenis:"iuran",tautan:"/",referensi_id:Number(lunas.id),sudah_dibaca:false}}); } catch (e) { console.error("NOTIFIKASI IURAN TUNAI ERROR:",e?.message||e); }
+    return res.json({ok:true,message:"Pembayaran tunai berhasil dicatat dan masuk ke kas RT.",data:{id:lunas.id,nama_warga:warga.nama_lengkap||"",alamat:warga.alamat||"",gang:warga.gang||"",bulan:inputBulan,total_amount:35000,disetorkan_oleh_nama:namaPetugas,dibayar_at:new Date().toISOString()}});
+  } catch (error) {
+    console.error("PENERIMAAN IURAN TUNAI ERROR:",error?.message||error);
+    if (getSupabaseErrorCode(error)==="23505") return res.status(409).json({ok:false,message:"Iuran keluarga untuk bulan tersebut sudah tercatat. Muat ulang riwayat sebelum mencoba lagi."});
+    return res.status(500).json({ok:false,message:"Gagal mencatat pembayaran tunai. Periksa riwayat iuran; jangan masukkan pembayaran kedua kali."});
   }
 });
 
@@ -5535,7 +5581,7 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
 });
 
 /* VERIFIKASI IURAN - KETUA RT */
-app.post("/api/iuran/verifikasi", requireFinance, async (req, res) => {
+app.post("/api/iuran/verifikasi", requireIuranStaff, async (req, res) => {
   try {
     const id = String(req.body?.id || "").trim();
     if (!/^\d+$/.test(id)) {
