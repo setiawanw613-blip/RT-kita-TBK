@@ -1146,7 +1146,7 @@ async function staffHome(){
   const content=`<div class="card"><h2>Selamat datang, ${esc(currentUser?.nama||title)}</h2>
   <p class="muted">Akses dibatasi sesuai jabatan.</p>
   ${role==="bendahara"?"<p>Pengelolaan iuran, kas, bukti transaksi, dan laporan keuangan.</p><button class='btn' onclick='cash()'>Buka Kas RT</button><button class='btn secondary' onclick='iuranAdmin()'>Riwayat Iuran</button><button class='btn secondary' onclick='terimaIuranDoorToDoor()'>Catat Iuran Door to Door</button><button class='btn secondary' onclick='transparansiQRIS()'>Transparansi QRIS</button>":""}
-  ${role==="sekretaris"?"<p>Administrasi surat, pengumuman, dan bantuan penagihan iuran warga.</p><button class='btn' onclick='iuranAdmin()'>Riwayat Iuran</button><button class='btn secondary' onclick='terimaIuranDoorToDoor()'>Catat Iuran Door to Door</button>":""}
+  ${role==="sekretaris"?"<p>Administrasi surat, pengumuman, dan bantuan penagihan iuran warga.</p><button class='btn secondary' onclick='terimaIuranDoorToDoor()'>Catat Iuran Door to Door</button>":""}
   ${role==="ketua_gang"?"<p>Wilayah tugas: <b>"+esc(currentUser?.gang||"Belum ditetapkan")+"</b></p><button class='btn' onclick='lihatWargaGang()'>Lihat warga gang</button><button class='btn' onclick='buatSetoranGang()'>Buat QRIS Setoran Iuran Warga</button><button class='btn secondary' onclick='riwayatSetoranGang()'>Riwayat Setoran Saya</button>":""}
   ${role==="sekretaris"?"<button class='btn' onclick='letters()'>Pengajuan Surat Warga</button><button class='btn secondary' onclick='announcements()'>Kelola Pengumuman</button>":""}</div>
   <button class="btn secondary" style="width:100%" onclick="logout()">Keluar</button>`;
@@ -4742,8 +4742,7 @@ const tidakBisaDipilih =
 
       if (!dipilih.length) return;
 
-      // Untuk saat ini server lama menerima satu bulan per pengajuan.
-      // Kirim bulan satu per satu; jika ada tunggakan, hentikan.
+      // Pengajuan QRIS statis dibuat atomik untuk seluruh bulan yang dipilih.
       tombol.disabled = true;
       tombol.textContent = "Memproses...";
       pesan.textContent = "";
@@ -4761,10 +4760,12 @@ if (hasil && hasil.ok) {
   layout("Pembayaran QRIS", `
     <div class="card" style="text-align:center">
       <h2>📱 Pembayaran QRIS</h2>
-      <p>Nomor transaksi:</p>
+      <p>Nomor referensi pengajuan:</p>
       <b style="overflow-wrap:anywhere">${esc(hasil.order_id || "-")}</b>
       <p>Total pembayaran:</p>
       <h2 style="color:#1267c9">${rupiah(hasil.total)}</h2>
+      <span class="badge">Menunggu verifikasi Ketua RT atau Bendahara</span>
+      <p class="muted">Petugas akan mencocokkan nominal dan transaksi masuk di GoPay Merchant. Status belum lunas sampai diverifikasi.</p>
       ${hasil.qr_url ? `
         <img src="${esc(hasil.qr_url)}" alt="QRIS"
           style="display:block;width:100%;max-width:320px;margin:16px auto">
@@ -4783,7 +4784,7 @@ if (hasil && hasil.ok) {
     </button>
   `, false);
 } else {
-  alert("Transaksi dibuat, tetapi data QRIS belum diterima. Jangan lakukan pembayaran dulu.");
+  alert("Pengajuan QRIS belum berhasil diproses. Periksa status iuran sebelum mencoba kembali.");
 }
 
       } catch (e) {
@@ -4795,7 +4796,7 @@ if (hasil && hasil.ok) {
         `;
       } finally {
         tombol.disabled = false;
-        tombol.textContent = "💳 Ajukan Pembayaran";
+        tombol.textContent = "✓ Saya sudah membayar — Ajukan Verifikasi";
       }
     });
 
