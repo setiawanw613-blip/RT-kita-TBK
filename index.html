@@ -1152,43 +1152,79 @@ async function staffHome(){
   <button class="btn secondary" style="width:100%" onclick="logout()">Keluar</button>`;
   layout(title,content,false);
 }
-async function buatSetoranGang(){
+async async function catatPenerimaanTunaiGang(){
   try{
     const warga=await api("/api/ketua-gang/warga");
     const pilihan=Array.isArray(warga)?warga:[];
-    const options=pilihan.map(w=>`<option value="${Number(w.id)}">${esc(w.nama_lengkap)} · ${esc(w.alamat||"")}</option>`).join("");
+    const options=pilihan.map(w=>"<option value='"+Number(w.id)+"'>"+esc(w.nama_lengkap)+" · "+esc(w.alamat||"")+"</option>").join("");
     const now=new Date();
     const month=now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0");
-    layout("Setoran QRIS Iuran Warga",`
-      <div class="card">
-        <p>Ketua Gang menerima uang dari warga, lalu membuat QRIS untuk menyetorkan iuran ke kas RT. Pilih nama warga dan bulan iurannya.</p>
-        <label>Nama warga</label>
-        <select id="gangWarga" required>${options||"<option value=''>Belum ada warga aktif di gang ini</option>"}</select>
-        <label>Bulan iuran</label>
-        <input id="gangBulan" type="month" min="2026-10" value="${month}">
-        <div class="card" style="background:#f4f8ff">
-          <b>Total setoran QRIS</b>
-          <div style="font-size:26px;font-weight:800;color:#1267c9">Rp35.000</div>
-          <small class="muted">Sampah Rp15.000 · Keamanan Rp15.000 · Kas RT Rp5.000</small>
-        </div>
-        <button class="btn" id="gangCreateQris" onclick="kirimSetoranGang()">Buat QRIS</button>
-        <button class="btn secondary" onclick="staffHome()">Kembali</button>
-      </div>
-      <div id="gangQrisResult"></div>
-    `);
-    const select=document.getElementById("gangWarga");
-    if(select&&!pilihan.length)select.disabled=true;
+    layout("Catat Penerimaan Iuran Tunai",
+      "<div class='card'><p>Catat hanya setelah uang tunai benar-benar diterima. Catatan ini belum menambah Kas RT dan belum melunasi iuran.</p>"+
+      "<label>Nama warga di gang "+esc(currentUser?.gang||"")+"</label><select id='gangTunaiWarga' required>"+(options||"<option value=''>Belum ada warga aktif di gang ini</option>")+"</select>"+
+      "<label>Bulan iuran</label><input id='gangTunaiBulan' type='month' min='2026-10' value='"+month+"'>"+
+      "<div class='card' style='background:#f4f8ff'><b>Uang diterima</b><div style='font-size:26px;font-weight:800;color:#1267c9'>Rp35.000</div><small class='muted'>Keamanan Rp15.000 · Sampah Rp15.000 · Kas RT Rp5.000</small></div>"+
+      "<label><input id='gangTunaiConfirm' type='checkbox' style='width:auto'> Saya memastikan uang Rp35.000 sudah diterima tunai.</label>"+
+      "<button class='btn' id='gangTunaiSave' onclick='simpanPenerimaanTunaiGang()' "+(pilihan.length?"":"disabled")+">Simpan Penerimaan</button>"+
+      "<button class='btn secondary' onclick='wargaHome()'>Kembali</button></div><div id='gangTunaiReceipt'></div>");
   }catch(e){alert(e.message||"Gagal memuat warga gang.");}
+}
+async function simpanPenerimaanTunaiGang(){
+  const button=document.getElementById("gangTunaiSave");
+  const warga=document.getElementById("gangTunaiWarga");
+  const wargaId=warga?.value, bulan=document.getElementById("gangTunaiBulan")?.value;
+  if(!wargaId||!bulan){alert("Pilih warga dan bulan iuran.");return;}
+  if(!document.getElementById("gangTunaiConfirm")?.checked){alert("Konfirmasi bahwa uang tunai benar-benar sudah diterima.");return;}
+  if(!confirm("Catat penerimaan tunai Rp35.000 dari "+warga.selectedOptions[0].text+" untuk "+bulan+"?"))return;
+  if(button){button.disabled=true;button.textContent="Menyimpan...";}
+  try{
+    const result=await api("/api/ketua-gang/penerimaan-tunai",{method:"POST",body:JSON.stringify({warga_id:wargaId,bulan})});
+    const row=result.data||{}, box=document.getElementById("gangTunaiReceipt");
+    if(box)box.innerHTML="<div class='card'><h3 style='text-align:center'>TANDA TERIMA IURAN TUNAI</h3><p style='text-align:center'>RT 004 / RW 01 · Taman Bali Kahuripan</p><hr>"+
+      "<div>Nomor: <b>RTTBK-GANG-"+Number(row.id||0)+"</b></div><div>Nama warga: <b>"+esc(row.nama_warga||"")+"</b></div>"+
+      "<div>Gang: "+esc(row.gang||"")+"</div><div>Alamat: "+esc(row.alamat||"-")+"</div><div>Bulan: "+esc(String(row.bulan||"").slice(0,7))+"</div>"+
+      "<div>Jumlah diterima: <b>Rp35.000</b></div><div>Petugas: "+esc(row.petugas_nama||currentUser?.nama||"")+"</div>"+
+      "<div>Status: <b>Diterima — menunggu setoran ke Bendahara</b></div><hr>"+
+      "<div style='display:flex;justify-content:space-between;gap:24px;text-align:center;margin-top:28px'><div>Warga,<br><br><br>(...................)</div><div>Ketua Gang,<br><br><br>("+esc(row.petugas_nama||"")+")</div></div></div>"+
+      "<button class='btn' onclick='window.print()'>Cetak Tanda Terima</button><button class='btn secondary' onclick='riwayatPenerimaanTunaiGang()'>Buka Riwayat</button>";
+  }catch(e){alert(e.message||"Gagal menyimpan penerimaan tunai.");}
+  finally{if(button){button.disabled=false;button.textContent="Simpan Penerimaan";}}
+}
+async function riwayatPenerimaanTunaiGang(){
+  try{
+    const rows=await api("/api/ketua-gang/penerimaan-tunai");
+    const items=(Array.isArray(rows)?rows:[]).map(row=>{
+      const status=row.status==="disetorkan"?"Disetorkan":row.status==="menunggu_setoran"?"Menunggu setoran":"Diterima";
+      const color=row.status==="disetorkan"?"#16803c":row.status==="menunggu_setoran"?"#b7791f":"#1267c9";
+      return "<div class='card'><b>"+esc(row.nama_warga||"Warga")+"</b><div>Gang "+esc(row.gang||"-")+" · "+esc(row.alamat||"-")+"</div>"+
+        "<div>Bulan: "+esc(String(row.bulan||"").slice(0,7))+"</div><div>Nominal: <b>"+rupiah(row.total_amount||35000)+"</b></div>"+
+        "<div>Status: <b style='color:"+color+"'>"+status+"</b></div><div class='muted'>Diterima: "+(row.diterima_at?new Date(row.diterima_at).toLocaleString("id-ID"):"-")+"</div>"+
+        (row.disetorkan_at?"<div class='muted'>Disetorkan: "+new Date(row.disetorkan_at).toLocaleString("id-ID")+"</div>":"")+"</div>";
+    }).join("");
+    layout("Riwayat Penerimaan Tunai",(items||"<div class='card'>Belum ada penerimaan tunai.</div>")+"<button class='btn secondary' onclick='wargaHome()'>Kembali</button>");
+  }catch(e){alert(e.message||"Gagal memuat riwayat penerimaan.");}
+}
+async function buatSetoranGang(){
+  try{
+    const rows=await api("/api/ketua-gang/penerimaan-tunai");
+    const pilihan=(Array.isArray(rows)?rows:[]).filter(row=>row.status==="diterima");
+    const options=pilihan.map(row=>"<option value='"+Number(row.id)+"'>"+esc(row.nama_warga)+" · "+esc(String(row.bulan||"").slice(0,7))+" · Rp35.000</option>").join("");
+    layout("Setoran QRIS ke Bendahara",
+      "<div class='card'><p>Pilih penerimaan tunai yang sudah dicatat. Status berubah menjadi Disetorkan setelah Midtrans mengonfirmasi pembayaran.</p>"+
+      "<label>Penerimaan tunai</label><select id='gangPenerimaan' required>"+(options||"<option value=''>Tidak ada penerimaan menunggu setoran</option>")+"</select>"+
+      "<div class='card' style='background:#f4f8ff'><b>Total setoran</b><div style='font-size:26px;font-weight:800;color:#1267c9'>Rp35.000</div><small class='muted'>Keamanan Rp15.000 · Sampah Rp15.000 · Kas RT Rp5.000</small></div>"+
+      "<button class='btn' id='gangCreateQris' onclick='kirimSetoranGang()' "+(pilihan.length?"":"disabled")+">Buat QRIS Setoran</button>"+
+      "<button class='btn secondary' onclick='wargaHome()'>Kembali</button></div><div id='gangQrisResult'></div>");
+  }catch(e){alert(e.message||"Gagal memuat penerimaan tunai.");}
 }
 async function kirimSetoranGang(){
   const button=document.getElementById("gangCreateQris");
-  const wargaId=document.getElementById("gangWarga")?.value;
-  const bulan=document.getElementById("gangBulan")?.value;
-  if(!wargaId||!bulan){alert("Pilih nama warga dan bulan iuran.");return;}
-  if(!confirm("Buat QRIS Rp35.000 untuk "+document.getElementById("gangWarga").selectedOptions[0].text+" periode "+bulan+"?"))return;
+  const penerimaanId=document.getElementById("gangPenerimaan")?.value;
+  if(!penerimaanId){alert("Pilih penerimaan tunai yang akan disetorkan.");return;}
+  if(!confirm("Buat QRIS setoran Rp35.000 untuk catatan penerimaan ini?"))return;
   if(button){button.disabled=true;button.textContent="Membuat QRIS...";}
   try{
-    const result=await api("/api/ketua-gang/setor-qris",{method:"POST",body:JSON.stringify({warga_id:wargaId,bulan})});
+    const result=await api("/api/ketua-gang/setor-qris",{method:"POST",body:JSON.stringify({penerimaan_id:penerimaanId})});
     const box=document.getElementById("gangQrisResult");
     if(box)box.innerHTML=`<div class="card"><h3>QRIS Setoran Berhasil Dibuat</h3><b>${esc(result.nama_warga)}</b><div>Bulan: ${esc(result.bulan)}</div><div>Total: ${rupiah(result.total)}</div><div>Disetorkan oleh: ${esc(result.disetorkan_oleh)}</div><div>Status: Menunggu pembayaran</div>${result.qr_url?`<div style="text-align:center;margin:16px 0"><img src="${esc(result.qr_url)}" alt="QRIS pembayaran" style="max-width:260px;width:100%;height:auto"></div><a class="btn" href="${esc(result.qr_url)}" target="_blank" rel="noopener">Buka QRIS</a>`:"<p>QRIS image belum tersedia dari Midtrans. Periksa detail transaksi.</p>"}<small class="muted">Jangan tandai lunas secara manual. Status akan berubah setelah Midtrans mengonfirmasi pembayaran.</small><button class="btn secondary" onclick="riwayatSetoranGang()">Lihat riwayat setoran</button></div>`;
   }catch(e){alert(e.message||"Gagal membuat QRIS.");}
@@ -4275,7 +4311,9 @@ function wargaHome(){
       <p class="muted">Wilayah tugas: <b>${esc(currentUser?.gang||"Belum ditetapkan")}</b>. Menu ini melengkapi layanan warga dan hanya menampilkan data gang tugas Anda.</p>
       <div class="menu">
         <button onclick="lihatWargaGang()">👥 Data Warga Gang</button>
-        <button onclick="buatSetoranGang()">📲 Buat QRIS Setoran Iuran</button>
+        <button onclick="catatPenerimaanTunaiGang()">💵 Catat Penerimaan Tunai</button>
+        <button onclick="riwayatPenerimaanTunaiGang()">📒 Riwayat Penerimaan Tunai</button>
+        <button onclick="buatSetoranGang()">📲 QRIS Setoran ke Bendahara</button>
         <button onclick="riwayatSetoranGang()">🧾 Riwayat Setoran Saya</button>
       </div>
     </div>` : ""}
