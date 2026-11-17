@@ -4347,7 +4347,7 @@ async function terimaIuranDoorToDoor(){
     const options = pilihan.map(w => '<option value="' + Number(w.id) + '">' + esc(w.nama_lengkap) + ' · ' + esc(w.gang || "Gang belum diisi") + ' · ' + esc(w.alamat || "") + '</option>').join("");
     const now = new Date();
     const month = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
-    const html = '<div class="card"><h2>🏠 Penerimaan Iuran Tunai</h2><p class="muted">Gunakan setelah uang tunai benar-benar diterima dari warga di rumahnya.</p><label>Nama warga</label><select id="tunaiWarga" required>' + options + '</select><label>Bulan pembayaran</label><input id="tunaiBulan" type="month" min="2026-10" value="' + month + '" required><div class="card" style="background:#f4f8ff"><b>Rincian iuran per bulan</b><div>Keamanan: Rp15.000</div><div>Sampah: Rp15.000</div><div>Kas RT: Rp5.000</div><hr><b style="font-size:22px">Total: Rp35.000</b></div><p class="muted">Penerima: <b>' + esc(currentUser?.nama || currentUser?.username || "Pengurus RT") + '</b>. Pembayaran akan langsung tercatat lunas dan masuk ke pembukuan kas.</p><button class="btn" id="simpanTunaiBtn" onclick="simpanIuranDoorToDoor()">✓ Uang Diterima & Simpan</button><button class="btn secondary" onclick="iuranAdmin()">Kembali</button></div>';
+    const html = '<div class="card"><h2>🏠 Penerimaan Iuran Tunai</h2><p class="muted">Gunakan setelah uang tunai benar-benar diterima dari warga di rumahnya.</p><label>Nama warga</label><select id="tunaiWarga" required>' + options + '</select><label>Bulan pembayaran</label><input id="tunaiBulan" type="month" min="2026-10" value="' + month + '" required><div class="card" style="background:#f4f8ff"><b>Rincian iuran per bulan</b><div>Keamanan: Rp15.000</div><div>Sampah: Rp15.000</div><div>Kas RT: Rp5.000</div><hr><b style="font-size:22px">Total: Rp35.000</b></div><p class="muted">Penerima: <b>' + esc(currentUser?.nama || currentUser?.username || "Pengurus RT") + '</b>. Pembayaran akan langsung tercatat lunas dan masuk ke pembukuan kas.</p><button class="btn" id="simpanTunaiBtn" onclick="simpanIuranDoorToDoor()">✓ Uang Diterima & Simpan</button><hr><p><b>Warga tidak menggunakan aplikasi?</b><br><span class="muted">Tetap terima pembayaran secara manual tanpa membuat akun aplikasi.</span></p><button class="btn secondary" onclick="formIuranManualNonAplikasi()">Catat Warga Non-Aplikasi</button><button class="btn secondary" onclick="riwayatIuranManual()">Riwayat Pembayaran Manual</button><button class="btn secondary" onclick="iuranAdmin()">Kembali</button></div>';
     layout("Catat Iuran Door to Door", html);
   } catch(e) { alert(e.message || "Gagal memuat daftar warga."); }
 }
@@ -4368,6 +4368,48 @@ async function simpanIuranDoorToDoor(){
     layout("Bukti Penerimaan Iuran", html);
   } catch(e) { alert(e.message || "Gagal mencatat pembayaran."); }
   finally { if (button) { button.disabled = false; button.textContent = "✓ Uang Diterima & Simpan"; } }
+}
+
+
+
+async function formIuranManualNonAplikasi(){
+  const now = new Date();
+  const month = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
+  const html = '<div class="card"><h2>📝 Catat Iuran Warga Non-Aplikasi</h2><p class="muted">Untuk warga yang tidak ingin memiliki akun RT TBK. Tidak perlu NIK, nomor KK, nomor HP, atau kata sandi.</p><label>Nama warga</label><input id="manualNamaWarga" maxlength="120" placeholder="Nama sesuai catatan RT" required><label>Gang</label><input id="manualGang" maxlength="80" placeholder="Contoh: Gang Melati"><label>Alamat / nomor rumah</label><input id="manualAlamat" maxlength="180" placeholder="Contoh: Blok A nomor 12"><label>Bulan pembayaran</label><input id="manualBulan" type="month" min="2026-10" value="' + month + '" required><div class="card" style="background:#f4f8ff"><b>Rincian iuran per bulan</b><div>Keamanan: Rp15.000</div><div>Sampah: Rp15.000</div><div>Kas RT: Rp5.000</div><hr><b style="font-size:22px">Total: Rp35.000</b></div><p class="muted">Setelah disimpan, pembayaran masuk ke rekap kas RT sebagai pemasukan iuran manual dan bukti dapat dicetak.</p><button class="btn" id="simpanManualIuranBtn" onclick="simpanIuranManualNonAplikasi()">✓ Uang Diterima & Simpan</button><button class="btn secondary" onclick="terimaIuranDoorToDoor()">Kembali</button></div>';
+  layout("Iuran Warga Non-Aplikasi", html);
+}
+
+async function simpanIuranManualNonAplikasi(){
+  const button = document.getElementById("simpanManualIuranBtn");
+  const nama = document.getElementById("manualNamaWarga")?.value?.trim() || "";
+  const gang = document.getElementById("manualGang")?.value?.trim() || "";
+  const alamat = document.getElementById("manualAlamat")?.value?.trim() || "";
+  const bulan = document.getElementById("manualBulan")?.value || "";
+  if(nama.length < 2 || !bulan){ alert("Isi nama warga dan bulan pembayaran."); return; }
+  if(!confirm("Pastikan uang tunai Rp35.000 benar-benar sudah diterima dari " + nama + "? Pemasukan akan dicatat ke kas RT.")) return;
+  if(button){button.disabled=true;button.textContent="Menyimpan...";}
+  try{
+    const result=await api("/api/iuran/terima-tunai-manual",{method:"POST",body:JSON.stringify({nama_warga:nama,gang,alamat,bulan})});
+    if(!result?.ok || !result?.data) throw new Error(result?.message || "Pembayaran manual belum berhasil disimpan.");
+    const d=result.data;
+    const html='<div class="card" style="max-width:560px;margin:0 auto;border:1px solid #667085"><div style="text-align:center"><h2 style="margin-bottom:4px">BUKTI PEMBAYARAN IURAN</h2><b>RT 004 / RW 01 – TAMAN BALI KAHURIPAN</b><p>WARGA NON-APLIKASI</p></div><hr><div>No. Bukti: <b>RTTBK-M' + String(d.id).padStart(5,"0") + '</b></div><div>Nama warga: <b>' + esc(d.nama_warga) + '</b></div><div>Gang: <b>' + esc(d.gang || "-") + '</b></div><div>Alamat: ' + esc(d.alamat || "-") + '</div><div>Bulan: <b>' + esc(d.bulan) + '</b></div><div>Jumlah diterima: <b>Rp35.000</b></div><div>Rincian: Keamanan Rp15.000 · Sampah Rp15.000 · Kas RT Rp5.000</div><div>Status: <b style="color:#16803c">DITERIMA — TUNAI MANUAL</b></div><div>Petugas penerima: <b>' + esc(d.petugas_nama) + '</b></div><div>Tanggal: ' + esc(new Date(d.dibayar_at).toLocaleString("id-ID")) + '</div><hr><div style="display:flex;justify-content:space-between;gap:20px;text-align:center;margin-top:22px"><div style="flex:1">Petugas penerima<br><br><br>(________________)</div><div style="flex:1">Warga<br><br><br>(________________)</div></div><p style="text-align:center;font-size:12px">Terima kasih atas pembayaran iuran warga.</p></div><button class="btn" onclick="window.print()">Cetak Tanda Terima</button><button class="btn secondary" onclick="riwayatIuranManual()">Lihat Riwayat Manual</button>';
+    layout("Bukti Iuran Manual",html);
+  }catch(e){alert(e.message || "Gagal menyimpan pembayaran manual.");}
+  finally{if(button){button.disabled=false;button.textContent="✓ Uang Diterima & Simpan";}}
+}
+
+async function riwayatIuranManual(){
+  try{
+    const rows=await api("/api/iuran/riwayat-manual");
+    const data=Array.isArray(rows)?rows:[];
+    let html='<div class="card"><h2>Riwayat Iuran Warga Non-Aplikasi</h2><p class="muted">Catatan ini terpisah dari akun warga aplikasi, tetapi pemasukan tunainya sudah masuk ke kas RT.</p>';
+    if(!data.length) html+='<p>Belum ada pembayaran manual.</p>';
+    data.forEach(row=>{
+      html+='<div class="card"><b>'+esc(row.nama_warga)+'</b><div>'+esc(row.gang||"-")+' · '+esc(row.alamat||"-")+'</div><div>Bulan: '+esc(String(row.bulan||"").slice(0,7))+'</div><div>Jumlah: Rp'+Number(row.total_amount||35000).toLocaleString("id-ID")+'</div><div>Status: '+esc(row.status||"diterima_manual")+'</div><div>Petugas: '+esc(row.petugas_nama||"-")+'</div><div>Tanggal: '+esc(new Date(row.created_at).toLocaleString("id-ID"))+'</div></div>';
+    });
+    html+='<button class="btn secondary" onclick="terimaIuranDoorToDoor()">Kembali</button></div>';
+    layout("Riwayat Iuran Manual",html);
+  }catch(e){alert(e.message||"Gagal memuat riwayat manual.");}
 }
 
   async function verifikasiIuran(id){
