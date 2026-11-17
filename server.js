@@ -4676,7 +4676,8 @@ app.post("/api/iuran/terima-tunai-manual", requireIuranStaff, async (req, res) =
     const metode = String(req.body?.metode_pembayaran || "tunai").trim().toLowerCase();
     const referensiMerchant = String(req.body?.referensi_merchant || "").trim().slice(0,120);
     const konfirmasiMerchant = req.body?.sudah_cek_merchant === true;
-    if (!["tunai","qris"].includes(metode)) return res.status(400).json({ok:false,message:"Pilih metode pembayaran tunai atau QRIS."});
+    if (!["tunai","qris"].includes(metode)) return res.status(400).json({ok:false,message:"Pilih metode pembayaran tunai."});
+    if (metode === "qris") return res.status(503).json({ok:false,message:"Pembayaran QRIS iuran warga non-aplikasi sedang dikunci sementara menunggu rekening RT dan aktivasi Midtrans."});
     if (metode === "qris" && (!konfirmasiMerchant || referensiMerchant.length < 3)) return res.status(400).json({ok:false,message:"Cocokkan transaksi di GoPay Merchant dan isi nomor/referensi transaksi terlebih dahulu."});
     if (nama.length < 2 || nama.length > 120) {
       return res.status(400).json({ ok:false, message:"Nama warga harus 2–120 karakter." });
@@ -4749,6 +4750,7 @@ app.get("/api/iuran/riwayat-manual", requireIuranStaff, async (req, res) => {
 
 /* SETORAN QRIS KETUA GANG ATAS NAMA WARGA */
 app.post("/api/ketua-gang/setor-qris", requireGangLead, async (req, res) => {
+  return res.status(503).json({ok:false,message:"Setoran QRIS iuran sedang dikunci sementara menunggu rekening RT dan aktivasi Midtrans."});
   let orderId = null;
   let rowsTersimpan = [];
   try {
@@ -4947,6 +4949,7 @@ app.get("/api/ketua-gang/riwayat-setoran", requireGangLead, async (req, res) => 
 
 /* BAYAR IURAN BEBERAPA BULAN SEKALIGUS - QRIS */
 app.post("/api/iuran/bayar-banyak", requireWarga, async (req, res) => {
+  return res.status(503).json({ok:false,message:"Pembayaran iuran bulanan sedang dikunci sementara menunggu rekening RT dan aktivasi Midtrans."});
   let orderId = null;
   let rowsTersimpan = [];
 
@@ -5468,6 +5471,7 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
 
 /* AJUKAN PEMBAYARAN MELALUI QRIS STATIS GOPAY MERCHANT — VERIFIKASI MANUAL */
 app.post("/api/iuran/qris-gopay-manual", requireWarga, async (req, res) => {
+  return res.status(503).json({ok:false,message:"QRIS iuran sedang dikunci sementara menunggu rekening RT dan aktivasi Midtrans."});
   try {
     const inputBulans = Array.isArray(req.body?.bulans) ? req.body.bulans : [];
     const bulans = [...new Set(inputBulans.map(value => String(value || "").trim()))].sort();
@@ -5543,6 +5547,7 @@ app.post("/api/iuran/qris-gopay-manual", requireWarga, async (req, res) => {
 
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
+  return res.status(503).json({ok:false,message:"Pengajuan iuran melalui aplikasi sedang dikunci sementara menunggu rekening RT dan aktivasi Midtrans."});
   try {
     const inputBulan = req.body?.bulan;
 
