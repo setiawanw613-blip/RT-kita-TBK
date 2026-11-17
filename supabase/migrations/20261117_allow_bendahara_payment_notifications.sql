@@ -1,0 +1,2 @@
+ALTER TABLE public.notifikasi DROP CONSTRAINT IF EXISTS notifikasi_penerima_peran_check;
+ALTER TABLE public.notifikasi ADD CONSTRAINT notifikasi_penerima_peran_check CHECK (penerima_peran = ANY (ARRAY['admin'::text, 'bendahara'::text, 'warga'::text]));

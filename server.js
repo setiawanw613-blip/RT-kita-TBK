@@ -1491,8 +1491,8 @@ app.get("/api/notifikasi", requireLogin, async (req, res) => {
     let query =
       "select=id,penerima_peran,penerima_warga_id,judul,pesan,jenis,tautan,referensi_id,sudah_dibaca,dibuat_pada&order=dibuat_pada.desc&limit=100";
 
-    if (session.role === "admin") {
-      query += "&penerima_peran=eq.admin";
+    if (session.role === "admin" || session.role === "bendahara") {
+      query += "&penerima_peran=eq." + encodeURIComponent(session.role);
     } else if (session.role === "warga") {
       if (!session.wargaId) {
         return res.status(403).json({
@@ -1550,8 +1550,8 @@ app.patch("/api/notifikasi/:id/baca", requireLogin, async (req, res) => {
       "id=eq." + id +
       "&select=id,penerima_peran,penerima_warga_id";
 
-    if (session.role === "admin") {
-      query += "&penerima_peran=eq.admin";
+    if (session.role === "admin" || session.role === "bendahara") {
+      query += "&penerima_peran=eq." + encodeURIComponent(session.role);
     } else if (session.role === "warga" && session.wargaId) {
       query +=
         "&penerima_peran=eq.warga" +
@@ -4573,7 +4573,7 @@ app.get("/api/my-iuran", requireWarga, async (req, res) => {
 });
 
 
-app.get("/api/iuran", requireIuranStaff, async (req, res) => {
+app.get("/api/iuran", requireFinance, async (req, res) => {
   try {
     const data = await supabaseRequest("iuran_warga", {
       query: "select=*&order=bulan.desc"
@@ -5457,6 +5457,79 @@ app.get("/api/qris/my-history", requireWarga, async (req, res) => {
   }
 });
 
+/* AJUKAN PEMBAYARAN MELALUI QRIS STATIS GOPAY MERCHANT — VERIFIKASI MANUAL */
+app.post("/api/iuran/qris-gopay-manual", requireWarga, async (req, res) => {
+  try {
+    const inputBulans = Array.isArray(req.body?.bulans) ? req.body.bulans : [];
+    const bulans = [...new Set(inputBulans.map(value => String(value || "").trim()))].sort();
+    if (!bulans.length || bulans.length > 12 || bulans.length !== inputBulans.length || bulans.some(bulan => !isValidIuranMonth(bulan))) {
+      return res.status(400).json({ok:false,message:"Pilih 1 sampai 12 bulan yang valid. Periode iuran dimulai Desember 2026."});
+    }
+
+    const wargaData = await supabaseRequest("warga", {
+      query:"select=id,nama_lengkap,keluarga_id,status_warga&id=eq." + encodeURIComponent(req.session.wargaId) + "&limit=1"
+    });
+    const warga = Array.isArray(wargaData) ? wargaData[0] : null;
+    if (!warga || !warga.keluarga_id || String(warga.status_warga || "").toLowerCase() !== "aktif") {
+      return res.status(403).json({ok:false,message:"Data warga aktif atau hubungan keluarga belum valid. Hubungi Ketua RT."});
+    }
+
+    const orderId = "RTTBK-GOPAY-" + Date.now() + "-" + crypto.randomBytes(4).toString("hex");
+    const saved = await supabaseRequest("rpc/reserve_gopay_static_iuran_batch", {
+      method:"POST",
+      body:{
+        p_warga_id:String(warga.id),
+        p_keluarga_id:String(warga.keluarga_id),
+        p_bulans:bulans.map(bulan => bulan + "-01"),
+        p_order_id:orderId
+      }
+    });
+    const rows = Array.isArray(saved) ? saved : [];
+    if (rows.length !== bulans.length) {
+      return res.status(409).json({ok:false,message:"Pengajuan belum lengkap. Periksa status iuran sebelum mencoba kembali."});
+    }
+
+    for (const row of rows) {
+      for (const penerimaPeran of ["admin","bendahara"]) {
+        try {
+          await supabaseRequest("notifikasi", {
+            method:"POST",
+            body:{
+              penerima_peran:penerimaPeran,
+              judul:"Pembayaran QRIS GoPay Menunggu Verifikasi",
+              pesan:(warga.nama_lengkap || "Warga") + " mengajukan pembayaran QRIS GoPay untuk bulan " + String(row.bulan).slice(0,7) + ". Periksa transaksi masuk di GoPay Merchant sebelum memverifikasi.",
+              jenis:"iuran",
+              tautan:"/admin",
+              referensi_id:Number(row.id),
+              sudah_dibaca:false
+            }
+          });
+        } catch (notificationError) {
+          console.error("NOTIFIKASI QRIS GOPAY ERROR:", notificationError?.message || notificationError);
+        }
+      }
+    }
+
+    return res.json({
+      ok:true,
+      message:"Pengajuan QRIS tersimpan dan menunggu pengecekan transaksi oleh Ketua RT atau Bendahara.",
+      order_id:orderId,
+      total:rows.length * 35000,
+      bulans,
+      data:rows
+    });
+  } catch (error) {
+    const code = getSupabaseErrorCode(error);
+    console.error("PENGAJUAN QRIS GOPAY MANUAL ERROR:", error?.message || error);
+    return res.status(code === "P0001" || code === "23505" ? 409 : 500).json({
+      ok:false,
+      message:code === "P0001" || code === "23505"
+        ? "Salah satu bulan sudah pernah diajukan atau dibayar oleh anggota KK. Muat ulang status iuran dan jangan lakukan pembayaran ulang."
+        : "Pengajuan QRIS belum berhasil disimpan. Periksa status iuran sebelum mencoba kembali."
+    });
+  }
+});
+
 /* BAYAR IURAN - WARGA: SATU KK SATU PEMBAYARAN PER BULAN */
 app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
   try {
@@ -5745,7 +5818,7 @@ app.post("/api/iuran/bayar", requireWarga, async (req, res) => {
 });
 
 /* VERIFIKASI IURAN - KETUA RT */
-app.post("/api/iuran/verifikasi", requireIuranStaff, async (req, res) => {
+app.post("/api/iuran/verifikasi", requireFinance, async (req, res) => {
   try {
     const id = String(req.body?.id || "").trim();
     if (!/^\d+$/.test(id)) {
