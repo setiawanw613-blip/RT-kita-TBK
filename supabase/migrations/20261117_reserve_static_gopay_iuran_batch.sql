@@ -89,11 +89,11 @@ BEGIN
 
   INSERT INTO public.iuran_warga (
     warga_id, keluarga_id, bulan, status, total_amount,
-    bukti_transfer, jalur_pembayaran, gobiz_status
+    bukti_transfer, jalur_pembayaran
   )
   SELECT
     p_warga_id, p_keluarga_id, u.bulan, 'menunggu_verifikasi', 35000,
-    'GOPAY_STATIC:' || p_order_id, 'gopay_qris_manual', 'menunggu_verifikasi'
+    'GOPAY_STATIC:' || p_order_id, 'gopay_qris_manual'
   FROM unnest(p_bulans) AS u(bulan)
   ORDER BY u.bulan;
 
