@@ -1637,7 +1637,7 @@ app.patch("/api/residents/:id/password", requireAdmin, async (req, res) => {
   try {
     const id = String(req.params.id || "");
     const password = req.body?.password;
-    if (!/^\\d+$/.test(id) || typeof password !== "string" || password.length < 8 || password.length > 128) {
+    if (!/^\d+$/.test(id) || typeof password !== "string" || password.length < 8 || password.length > 128) {
       return res.status(400).json({ ok: false, message: "Password baru harus 8–128 karakter." });
     }
 
