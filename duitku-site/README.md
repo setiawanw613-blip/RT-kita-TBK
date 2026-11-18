@@ -14,7 +14,7 @@ Paket website PHP mandiri untuk kebutuhan verifikasi awal Duitku. Paket ini **ha
 
 ## Persyaratan hosting
 - PHP 8.1 atau lebih baru.
-- Ekstensi PHP: cURL, PDO, PDO MySQL, OpenSSL, JSON.
+- Ekstensi PHP: cURL, PDO, PDO MySQL, OpenSSL, JSON, mbstring.
 - MySQL/MariaDB.
 - Domain/subdomain publik dengan HTTPS aktif.
 - Outbound HTTPS ke `api-sandbox.duitku.com` dan inbound HTTPS callback Duitku.
