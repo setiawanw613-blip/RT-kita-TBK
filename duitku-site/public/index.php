@@ -70,5 +70,5 @@ Email: <?= h((string)($site['email'] ?? 'Belum diatur')) ?>
 </form>
 </section>
 </main>
-<footer>RT TBK · RT 004 / RW 01 – Taman Bali Kahuripan<br>Halaman uji Sandbox. Bukan kanal pembayaran produksi.</footer>
+<footer>RT TBK · RT 004 / RW 01 – Taman Bali Kahuripan<br>Halaman uji Sandbox. Bukan kanal pembayaran produksi.<br><a href="ketentuan.php">Ketentuan Layanan</a> · <a href="kebijakan-privasi.php">Kebijakan Privasi</a></footer>
 </div></body></html>
