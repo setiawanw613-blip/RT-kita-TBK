@@ -1319,6 +1319,10 @@ async function adminHome(){
   <span style="font-size:26px">👨‍👩‍👧</span>
   <span>Data Keluarga</span>
 </button>
+<button onclick="statistikKependudukan()">
+  <span style="font-size:26px">📊</span>
+  <span>Statistik Kependudukan</span>
+</button>
 <button onclick="arsipIdentitasAdmin()">
   <span style="font-size:26px">🪪</span>
   <span>Arsip KK & KTP</span>
@@ -1400,6 +1404,51 @@ async function adminHome(){
       `<div class="error">Gagal memuat dashboard</div>`;
   }
 }
+async function statistikKependudukan(){
+  layout("Statistik Kependudukan",`
+    <div class="card">
+      <h3 style="margin-top:0">RT 004 / RW 01 — Taman Bali Kahuripan</h3>
+      <p class="muted" style="font-size:12px;margin:0">Ringkasan warga aktif berdasarkan Data Warga. Angka diperbarui saat halaman dibuka.</p>
+    </div>
+    <div id="populationStats" class="grid">
+      <div class="stat"><span>Memuat statistik...</span><b>...</b></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Pendataan rumah</h3>
+      <div style="font-size:28px;font-weight:800;color:#64748b">Belum tersedia</div>
+      <p class="muted" style="font-size:12px;margin-bottom:0">Jumlah rumah belum dihitung karena Data Warga dan Data Keluarga tidak mencatat setiap bangunan secara terpisah. Agar rumah kosong ikut terhitung dan satu rumah dengan beberapa KK tidak dihitung ganda, diperlukan pendataan rumah tersendiri.</p>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">Perlu dilengkapi</h3>
+      <div id="populationNotes" class="muted" style="font-size:13px">Memeriksa kelengkapan data...</div>
+    </div>
+    <button class="btn secondary" style="width:100%" onclick="statistikKependudukan()">↻ Perbarui Statistik</button>
+  `,false);
+  try{
+    const d=await api("/api/statistik-kependudukan");
+    const cards=[
+      ["👥 Total warga aktif",d.totalWarga],
+      ["🏡 Warga menetap",d.wargaMenetap],
+      ["🔑 Warga mengontrak",d.wargaKontrak],
+      ["📝 Status hunian belum diisi",d.statusHunianBelumDiisi],
+      ["🪪 Belum ada NIK tercatat",d.belumAdaNik]
+    ];
+    const target=document.getElementById("populationStats");
+    if(target) target.innerHTML=cards.map(([label,value])=>`<div class="stat"><span>${label}</span><b>${Number(value)||0}</b></div>`).join("");
+    const notes=[];
+    if(Number(d.statusHunianBelumDiisi)>0) notes.push(`${Number(d.statusHunianBelumDiisi)} warga belum memiliki status hunian. Lengkapi melalui menu Data Warga.`);
+    if(Number(d.belumAdaNik)>0) notes.push(`${Number(d.belumAdaNik)} warga belum memiliki NIK tercatat. Periksa dokumen identitasnya.`);
+    if(!notes.length) notes.push("Status hunian dan NIK seluruh warga aktif sudah terisi pada data yang tercatat.");
+    const noteTarget=document.getElementById("populationNotes");
+    if(noteTarget) noteTarget.innerHTML=notes.map(item=>`<p style="margin:5px 0">${esc(item)}</p>`).join("");
+  }catch(e){
+    const target=document.getElementById("populationStats");
+    if(target) target.innerHTML=`<div class="error">Gagal memuat statistik kependudukan. ${esc(e.message||"")}</div>`;
+    const notes=document.getElementById("populationNotes");
+    if(notes) notes.textContent="Silakan coba perbarui statistik.";
+  }
+}
+
 async function residents(){
   layout("Data Warga",`
     <div class="card">
