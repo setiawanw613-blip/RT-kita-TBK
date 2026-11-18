@@ -88,6 +88,14 @@ if (!is_array($response) || (string)($response['statusCode'] ?? '') !== '00' || 
     exit('Respons invoice dari Duitku tidak sesuai. Silakan periksa dashboard Sandbox.');
 }
 
+$paymentUrl = (string)$response['paymentUrl'];
+$paymentUrlParts = parse_url($paymentUrl);
+if (($paymentUrlParts['scheme'] ?? '') !== 'https' || strtolower((string)($paymentUrlParts['host'] ?? '')) !== 'app-sandbox.duitku.com') {
+    error_log('Duitku Sandbox returned an unexpected payment URL host.');
+    http_response_code(502);
+    exit('URL pembayaran Sandbox dari Duitku tidak valid.');
+}
+
 $stmt = db()->prepare('INSERT INTO duitku_sandbox_orders
     (merchant_order_id, duitku_reference, payment_amount, product_details, customer_name, customer_email, customer_phone, payment_method, payment_status)
     VALUES (:order_id, :reference, :amount, :details, :name, :email, :phone, :method, "pending")');
@@ -102,5 +110,5 @@ $stmt->execute([
     ':method' => $method !== '' ? $method : null,
 ]);
 $_SESSION['last_checkout_at'] = time();
-header('Location: ' . (string)$response['paymentUrl'], true, 303);
+header('Location: ' . $paymentUrl, true, 303);
 exit;
