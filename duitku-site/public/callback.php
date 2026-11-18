@@ -33,10 +33,10 @@ if (!hash_equals($expectedSignature, $signature)) {
 $pdo = db();
 $pdo->beginTransaction();
 try {
-    $select = $pdo->prepare('SELECT id, payment_amount, payment_status FROM duitku_sandbox_orders WHERE merchant_order_id = :order_id FOR UPDATE');
+    $select = $pdo->prepare('SELECT id, payment_amount, payment_status, duitku_reference FROM duitku_sandbox_orders WHERE merchant_order_id = :order_id FOR UPDATE');
     $select->execute([':order_id' => $orderId]);
     $order = $select->fetch();
-    if (!$order || (int)$order['payment_amount'] !== (int)$amount) {
+    if (!$order || (int)$order['payment_amount'] !== (int)$amount || $reference === '' || !hash_equals((string)$order['duitku_reference'], $reference)) {
         $pdo->rollBack();
         http_response_code(404);
         exit('Order not found or amount mismatch');
