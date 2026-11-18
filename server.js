@@ -1330,12 +1330,12 @@ app.get("/api/petugas", requireAdmin, async (req, res) => {
 app.get("/api/petugas/calon", requireAdmin, async (req,res) => {
   try {
     const [wargaRows, staffRows] = await Promise.all([
-      supabaseRequest("warga",{query:"select=id,nama_lengkap,no_hp,status_warga,gang,jabatan_rt&status_warga=eq.Aktif&order=nama_lengkap.asc"}),
+      supabaseRequest("warga",{query:"select=id,nama_lengkap,no_hp,status_warga,gang,jabatan_rt&order=nama_lengkap.asc"}),
       supabaseRequest("petugas_rt",{query:"select=warga_id"})
     ]);
     const linked = new Set((Array.isArray(staffRows)?staffRows:[]).map(x=>String(x.warga_id||"")).filter(Boolean));
     const candidates = (Array.isArray(wargaRows)?wargaRows:[])
-      .filter(w=>w.no_hp && !w.jabatan_rt && !linked.has(String(w.id)))
+      .filter(w=>w.no_hp && String(w.status_warga||"").toLowerCase()==="aktif" && !w.jabatan_rt && !linked.has(String(w.id)))
       .map(w=>({id:w.id,nama_lengkap:w.nama_lengkap,gang:w.gang||""}));
     res.json(candidates);
   } catch(error) {
