@@ -1349,7 +1349,7 @@ app.post("/api/petugas", requireAdmin, async (req, res) => {
   try {
     wargaId=String(req.body?.warga_id||"").trim();
     const role=String(req.body?.role||"");
-    if(!/^\\d+$/.test(wargaId)||!["bendahara","sekretaris","ketua_gang"].includes(role))
+    if(!/^\d+$/.test(wargaId)||!["bendahara","sekretaris","ketua_gang"].includes(role))
       return res.status(400).json({ok:false,message:"Pilih warga terdaftar dan jabatan yang valid."});
     const wargaRows=await supabaseRequest("warga",{query:"select=id,nama_lengkap,no_hp,password,status_warga,gang,jabatan_rt&id=eq."+encodeURIComponent(wargaId)+"&limit=1"});
     const warga=Array.isArray(wargaRows)?wargaRows[0]:null;
