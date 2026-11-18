@@ -1330,12 +1330,12 @@ app.get("/api/petugas", requireAdmin, async (req, res) => {
 app.get("/api/petugas/calon", requireAdmin, async (req,res) => {
   try {
     const [wargaRows, staffRows] = await Promise.all([
-      supabaseRequest("warga",{query:"select=id,nama_lengkap,no_hp,status_warga,gang,jabatan_rt&order=nama_lengkap.asc"}),
+      supabaseRequest("warga",{query:"select=id,nama_lengkap,no_hp,password,status_warga,gang,jabatan_rt&order=nama_lengkap.asc"}),
       supabaseRequest("petugas_rt",{query:"select=warga_id"})
     ]);
     const linked = new Set((Array.isArray(staffRows)?staffRows:[]).map(x=>String(x.warga_id||"")).filter(Boolean));
     const candidates = (Array.isArray(wargaRows)?wargaRows:[])
-      .filter(w=>w.no_hp && String(w.status_warga||"").toLowerCase()==="aktif" && !w.jabatan_rt && !linked.has(String(w.id)))
+      .filter(w=>w.no_hp && typeof w.password==="string" && w.password.length>0 && String(w.status_warga||"").toLowerCase()==="aktif" && !w.jabatan_rt && !linked.has(String(w.id)))
       .map(w=>({id:w.id,nama_lengkap:w.nama_lengkap,gang:w.gang||""}));
     res.json(candidates);
   } catch(error) {
@@ -1351,9 +1351,9 @@ app.post("/api/petugas", requireAdmin, async (req, res) => {
     const role=String(req.body?.role||"");
     if(!/^\\d+$/.test(wargaId)||!["bendahara","sekretaris","ketua_gang"].includes(role))
       return res.status(400).json({ok:false,message:"Pilih warga terdaftar dan jabatan yang valid."});
-    const wargaRows=await supabaseRequest("warga",{query:"select=id,nama_lengkap,no_hp,status_warga,gang,jabatan_rt&id=eq."+encodeURIComponent(wargaId)+"&limit=1"});
+    const wargaRows=await supabaseRequest("warga",{query:"select=id,nama_lengkap,no_hp,password,status_warga,gang,jabatan_rt&id=eq."+encodeURIComponent(wargaId)+"&limit=1"});
     const warga=Array.isArray(wargaRows)?wargaRows[0]:null;
-    if(!warga||String(warga.status_warga||"").toLowerCase()!=="aktif"||!warga.no_hp)
+    if(!warga||String(warga.status_warga||"").toLowerCase()!=="aktif"||!warga.no_hp||typeof warga.password!=="string"||!warga.password)
       return res.status(400).json({ok:false,message:"Warga tidak aktif atau belum memiliki username akun warga yang valid."});
     if(warga.jabatan_rt)
       return res.status(409).json({ok:false,message:"Warga ini sudah memiliki jabatan. Tidak ada perubahan yang dilakukan."});
