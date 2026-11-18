@@ -1327,15 +1327,65 @@ app.get("/api/petugas", requireAdmin, async (req, res) => {
     res.json(Array.isArray(rows) ? rows : []);
   } catch (error) { console.error("PETUGAS LIST ERROR:", error); res.status(500).json({ ok:false, message:"Gagal memuat akun petugas" }); }
 });
-app.post("/api/petugas", requireAdmin, async (req, res) => {
+app.get("/api/petugas/calon", requireAdmin, async (req,res) => {
   try {
-    const username=String(req.body?.username||"").trim().toLowerCase(), nama=String(req.body?.nama_lengkap||"").trim();
-    const password=req.body?.password, role=String(req.body?.role||""), gang=String(req.body?.gang||"").trim();
-    if(!/^[a-z0-9._-]{4,40}$/.test(username)||nama.length<3||nama.length>120||typeof password!=="string"||password.length<10||password.length>128||!["bendahara","sekretaris","ketua_gang"].includes(role)||(role==="ketua_gang"&&(!gang||gang.length>80)))
-      return res.status(400).json({ok:false,message:"Data tidak valid. Password minimal 10 karakter; Ketua Gang wajib memiliki nama gang."});
-    const created=await supabaseRequest("petugas_rt",{method:"POST",query:"select=id,username,nama_lengkap,role,gang,status,created_at",headers:{Prefer:"return=representation"},body:{username,nama_lengkap:nama,password:hashPassword(password),role,gang:role==="ketua_gang"?gang:null,status:"aktif"}});
-    res.status(201).json({ok:true,user:Array.isArray(created)?created[0]:created});
-  } catch(error){console.error("PETUGAS CREATE ERROR:",error);res.status(500).json({ok:false,message:"Gagal membuat akun. Pastikan username belum digunakan."});}
+    const [wargaRows, staffRows] = await Promise.all([
+      supabaseRequest("warga",{query:"select=id,nama_lengkap,no_hp,status_warga,gang,jabatan_rt&status_warga=eq.Aktif&order=nama_lengkap.asc"}),
+      supabaseRequest("petugas_rt",{query:"select=warga_id"})
+    ]);
+    const linked = new Set((Array.isArray(staffRows)?staffRows:[]).map(x=>String(x.warga_id||"")).filter(Boolean));
+    const candidates = (Array.isArray(wargaRows)?wargaRows:[])
+      .filter(w=>w.no_hp && !w.jabatan_rt && !linked.has(String(w.id)))
+      .map(w=>({id:w.id,nama_lengkap:w.nama_lengkap,gang:w.gang||""}));
+    res.json(candidates);
+  } catch(error) {
+    console.error("PETUGAS CANDIDATES ERROR:",error?.message||error);
+    res.status(500).json({ok:false,message:"Gagal memuat daftar warga yang dapat dipilih."});
+  }
+});
+app.post("/api/petugas", requireAdmin, async (req, res) => {
+  let createdId = null;
+  let wargaId = "";
+  try {
+    wargaId=String(req.body?.warga_id||"").trim();
+    const role=String(req.body?.role||"");
+    if(!/^\\d+$/.test(wargaId)||!["bendahara","sekretaris","ketua_gang"].includes(role))
+      return res.status(400).json({ok:false,message:"Pilih warga terdaftar dan jabatan yang valid."});
+    const wargaRows=await supabaseRequest("warga",{query:"select=id,nama_lengkap,no_hp,status_warga,gang,jabatan_rt&id=eq."+encodeURIComponent(wargaId)+"&limit=1"});
+    const warga=Array.isArray(wargaRows)?wargaRows[0]:null;
+    if(!warga||String(warga.status_warga||"").toLowerCase()!=="aktif"||!warga.no_hp)
+      return res.status(400).json({ok:false,message:"Warga tidak aktif atau belum memiliki username akun warga yang valid."});
+    if(warga.jabatan_rt)
+      return res.status(409).json({ok:false,message:"Warga ini sudah memiliki jabatan. Tidak ada perubahan yang dilakukan."});
+    const [linkedRows,usernameRows]=await Promise.all([
+      supabaseRequest("petugas_rt",{query:"select=id&warga_id=eq."+encodeURIComponent(wargaId)+"&limit=1"}),
+      supabaseRequest("petugas_rt",{query:"select=id&username=eq."+encodeURIComponent(String(warga.no_hp))+"&limit=1"})
+    ]);
+    if((Array.isArray(linkedRows)&&linkedRows.length)||(Array.isArray(usernameRows)&&usernameRows.length))
+      return res.status(409).json({ok:false,message:"Akun warga sudah terhubung ke petugas atau username telah digunakan. Tidak ada akun duplikat yang dibuat."});
+    const gang=role==="ketua_gang"?String(warga.gang||"").trim():"";
+    if(role==="ketua_gang"&&!gang)
+      return res.status(400).json({ok:false,message:"Data gang pada profil warga belum diisi. Lengkapi data gang terlebih dahulu."});
+    const created=await supabaseRequest("petugas_rt",{
+      method:"POST",
+      query:"select=id,username,nama_lengkap,role,gang,status,created_at,warga_id",
+      headers:{Prefer:"return=representation"},
+      body:{username:String(warga.no_hp),nama_lengkap:warga.nama_lengkap,password:"",role,gang:role==="ketua_gang"?gang:null,status:"aktif",warga_id:Number(warga.id)}
+    });
+    const row=Array.isArray(created)?created[0]:created;
+    if(!row?.id)throw new Error("Catatan petugas tidak berhasil dibuat.");
+    createdId=row.id;
+    await supabaseRequest("warga",{method:"PATCH",query:"id=eq."+encodeURIComponent(wargaId),body:{jabatan_rt:({bendahara:"Bendahara",sekretaris:"Sekretaris",ketua_gang:"Ketua Gang"})[role]}});
+    return res.status(201).json({ok:true,user:{id:row.id,nama_lengkap:row.nama_lengkap,role:row.role,gang:row.gang,warga_id:row.warga_id,status:row.status}});
+  } catch(error) {
+    if(createdId) {
+      try { await supabaseRequest("petugas_rt",{method:"DELETE",query:"id=eq."+encodeURIComponent(String(createdId))}); }
+      catch(rollbackError) { console.error("PETUGAS LINK ROLLBACK ERROR:",rollbackError?.message||rollbackError); }
+    }
+    if(getSupabaseErrorCode(error)==="23505")return res.status(409).json({ok:false,message:"Akun warga sudah terhubung atau username sudah digunakan."});
+    console.error("PETUGAS LINK ERROR:",error?.message||error);
+    return res.status(500).json({ok:false,message:"Gagal menghubungkan akun warga. Data warga dan akun lama tetap dipertahankan."});
+  }
 });
 app.patch("/api/petugas/:id/password", requireAdmin, async (req,res)=>{
   try{
