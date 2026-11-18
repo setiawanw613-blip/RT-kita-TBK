@@ -14,6 +14,7 @@ const { isValidIuranMonth } = require("./iuran-validation");
 const { isValidMidtransSignature, isSuccessfulMidtransStatus } = require("./midtrans-webhook-security");
 const { findConflictingSettledRows } = require("./midtrans-order-reconciliation");
 const { canAccessOwnedRecord } = require("./access-control");
+const { buildPopulationStats } = require("./population-stats");
 const { cancelPendingMidtransTransaction } = require("./midtrans-cancel");
 
 const { buatTemplateRab, buatRencanaKerja, normalisasiRabAspirasi, infoKategoriAspirasi } = require("./aspirasi-rab");
@@ -1430,6 +1431,20 @@ app.get("/api/ketua-gang/penerimaan-tunai", requireGangLead, async (req,res)=>{
 });
 
 
+
+/* STATISTIK KEPENDUDUKAN — KHUSUS KETUA RT */
+app.get("/api/statistik-kependudukan", requireAdmin, async (req, res) => {
+  try {
+    const rows = await supabaseRequest("warga", {
+      query: "select=id,nik,status_hunian,status_warga&status_warga=eq.aktif&limit=5000"
+    });
+    res.setHeader("Cache-Control", "no-store");
+    res.json(buildPopulationStats(Array.isArray(rows) ? rows : []));
+  } catch (error) {
+    console.error("STATISTIK KEPENDUDUKAN ERROR:", error);
+    res.status(500).json({ ok: false, message: "Gagal memuat statistik kependudukan." });
+  }
+});
 
 /* DASHBOARD KETUA RT */
 app.get("/api/dashboard", requireAdmin, async (req, res) => {
