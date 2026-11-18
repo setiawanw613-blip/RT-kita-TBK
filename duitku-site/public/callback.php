@@ -45,7 +45,7 @@ try {
     $newStatus = $status;
     if ($resultCode === '00') {
         $newStatus = 'paid';
-    } elseif ($resultCode === '02' && $status !== 'paid') {
+    } elseif ($resultCode === '01' && $status !== 'paid') {
         $newStatus = 'failed';
     }
     $update = $pdo->prepare('UPDATE duitku_sandbox_orders SET
