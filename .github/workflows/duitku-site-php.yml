@@ -1,0 +1,22 @@
+name: Duitku site PHP checks
+on:
+  pull_request:
+    paths:
+      - "duitku-site/**"
+      - ".github/workflows/duitku-site-php.yml"
+  push:
+    branches: [main]
+    paths:
+      - "duitku-site/**"
+      - ".github/workflows/duitku-site-php.yml"
+jobs:
+  php-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.3"
+          extensions: curl, mbstring, pdo_mysql
+      - name: Check PHP syntax
+        run: find duitku-site -name "*.php" -print0 | xargs -0 -n1 php -l

@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS duitku_sandbox_orders (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  merchant_order_id VARCHAR(50) NOT NULL,
+  duitku_reference VARCHAR(100) DEFAULT NULL,
+  payment_amount INT UNSIGNED NOT NULL,
+  product_details VARCHAR(255) NOT NULL,
+  customer_name VARCHAR(100) NOT NULL,
+  customer_email VARCHAR(255) NOT NULL,
+  customer_phone VARCHAR(50) DEFAULT NULL,
+  payment_method VARCHAR(10) DEFAULT NULL,
+  result_code VARCHAR(10) DEFAULT NULL,
+  payment_status ENUM('pending','paid','failed') NOT NULL DEFAULT 'pending',
+  publisher_order_id VARCHAR(100) DEFAULT NULL,
+  settlement_date DATE DEFAULT NULL,
+  callback_received_at DATETIME DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_duitku_sandbox_order (merchant_order_id),
+  UNIQUE KEY uq_duitku_sandbox_reference (duitku_reference),
+  KEY idx_duitku_sandbox_status_created (payment_status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
