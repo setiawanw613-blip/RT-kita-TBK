@@ -1,7 +1,9 @@
 "use strict";
 
+const OWNER_ROLES = new Set(["warga", "ketua_gang"]);
+
 function canAccessOwnedRecord(session, ownerId) {
-  if (!session || (session.role !== "admin" && session.role !== "warga")) {
+  if (!session || (session.role !== "admin" && !OWNER_ROLES.has(session.role))) {
     return false;
   }
   if (session.role === "admin") return true;
