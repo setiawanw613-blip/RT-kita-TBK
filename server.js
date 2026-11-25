@@ -6103,6 +6103,30 @@ app.post("/api/aspirasi", requireWarga, async (req, res) => {
     if (!judul || !kategori || !lokasi || !uraian) {
       return res.status(400).json({ ok:false, message:"Judul, kategori, lokasi, dan uraian wajib diisi." });
     }
+
+    // Persistent per-resident throttling prevents rapid repeated submissions
+    // across multiple serverless instances (the browser lock is not sufficient).
+    const sessionSecret = process.env.SESSION_SECRET;
+    if (typeof sessionSecret !== "string" || Buffer.byteLength(sessionSecret, "utf8") < 32) {
+      console.error("ASPIRASI RATE LIMIT CONFIG ERROR: SESSION_SECRET is missing or too short");
+      return res.status(503).json({ ok:false, message:"Layanan aspirasi sedang tidak siap. Silakan coba kembali nanti." });
+    }
+    const aspirasiRateLimitKey = createRateLimitKey(sessionSecret, "aspirasi", String(req.session.wargaId));
+    const aspirasiRateLimitRows = await supabaseRequest("rpc/consume_login_rate_limit", {
+      method: "POST",
+      body: { p_key_hash: aspirasiRateLimitKey, p_window_seconds: 60, p_max_attempts: 3 }
+    });
+    const aspirasiRateLimit = Array.isArray(aspirasiRateLimitRows) ? aspirasiRateLimitRows[0] : aspirasiRateLimitRows;
+    if (!aspirasiRateLimit || typeof aspirasiRateLimit.allowed !== "boolean") {
+      console.error("ASPIRASI RATE LIMIT ERROR: invalid limiter response");
+      return res.status(503).json({ ok:false, message:"Layanan aspirasi sedang tidak siap. Silakan coba kembali nanti." });
+    }
+    if (!aspirasiRateLimit.allowed) {
+      const retryAfter = Math.max(1, Number(aspirasiRateLimit.retry_after_seconds) || 60);
+      res.setHeader("Retry-After", String(retryAfter));
+      return res.status(429).json({ ok:false, message:"Terlalu banyak pengiriman aspirasi dalam waktu singkat. Silakan tunggu sebentar sebelum mencoba lagi." });
+    }
+
     const dimensi = {
       kondisi_panjang: b.kondisi_panjang || null,
       kondisi_lebar: b.kondisi_lebar || null,
