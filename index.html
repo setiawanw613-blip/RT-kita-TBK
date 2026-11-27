@@ -1147,7 +1147,7 @@ async function staffHome(){
   <p class="muted">Akses dibatasi sesuai jabatan.</p>
   ${role==="bendahara"?"<p>Pengelolaan iuran, kas, bukti transaksi, dan laporan keuangan.</p><button class='btn' onclick='cash()'>Buka Kas RT</button><button class='btn secondary' onclick='iuranAdmin()'>Riwayat Iuran</button><button class='btn secondary' onclick='terimaIuranDoorToDoor()'>Catat Iuran Door to Door</button><button class='btn secondary' onclick='transparansiQRIS()'>Transparansi QRIS</button>":""}
   ${role==="sekretaris"?"<p>Administrasi surat, pengumuman, dan bantuan penagihan iuran warga.</p><button class='btn secondary' onclick='terimaIuranDoorToDoor()'>Catat Iuran Door to Door</button>":""}
-  ${role==="ketua_gang"?"<p>Wilayah tugas: <b>"+esc(currentUser?.gang||"Belum ditetapkan")+"</b></p><button class='btn' onclick='lihatWargaGang()'>Lihat warga gang</button><button class='btn' onclick='buatSetoranGang()'>Buat QRIS Setoran Iuran Warga</button><button class='btn secondary' onclick='riwayatSetoranGang()'>Riwayat Setoran Saya</button>":""}
+  ${role==="ketua_gang"?"<p>Wilayah tugas: <b>"+esc(currentUser?.gang||"Belum ditetapkan")+"</b></p><button class='btn' onclick='lihatWargaGang()'>Lihat warga gang</button><button class='btn' type='button' disabled aria-disabled='true' title='Setoran QRIS akan dibuka setelah rekening RT dan aktivasi Midtrans siap' style='opacity:.6;cursor:not-allowed'>QRIS Setoran (sementara dikunci)</button><button class='btn secondary' onclick='riwayatSetoranGang()'>Riwayat Setoran Saya</button>":""}
   ${role==="sekretaris"?"<button class='btn' onclick='letters()'>Pengajuan Surat Warga</button><button class='btn secondary' onclick='announcements()'>Kelola Pengumuman</button>":""}</div>
   <button class="btn secondary" style="width:100%" onclick="logout()">Keluar</button>`;
   layout(title,content,false);
@@ -4395,12 +4395,12 @@ function wargaHome(){
 
     ${currentUser?.role==="ketua_gang" ? `<div class="card">
       <h3>🧭 Tugas Khusus Ketua Gang</h3>
-      <p class="muted">Wilayah tugas: <b>${esc(currentUser?.gang||"Belum ditetapkan")}</b>. Menu ini melengkapi layanan warga dan hanya menampilkan data gang tugas Anda.</p>
+      <p class="muted">Wilayah tugas: <b>${esc(currentUser?.gang||"Belum ditetapkan")}</b>. Menu ini melengkapi layanan warga dan hanya menampilkan data gang tugas Anda. Penerimaan tunai tetap dapat dicatat; setoran QRIS sementara dikunci sampai rekening RT dan aktivasi Midtrans siap.</p>
       <div class="menu">
         <button onclick="lihatWargaGang()">👥 Data Warga Gang</button>
         <button onclick="catatPenerimaanTunaiGang()">💵 Catat Penerimaan Tunai</button>
         <button onclick="riwayatPenerimaanTunaiGang()">📒 Riwayat Penerimaan Tunai</button>
-        <button onclick="buatSetoranGang()">📲 QRIS Setoran ke Bendahara</button>
+        <button type="button" disabled aria-disabled="true" title="Setoran QRIS akan dibuka setelah rekening RT dan aktivasi Midtrans siap">📲 QRIS Setoran ke Bendahara (sementara dikunci)</button>
         <button onclick="riwayatSetoranGang()">🧾 Riwayat Setoran Saya</button>
       </div>
     </div>` : ""}
