@@ -6,7 +6,8 @@ const path = require("node:path");
 
 test("menu QRIS setoran Ketua Gang tetap nonaktif selama pembayaran dikunci", () => {
   const html = fs.readFileSync(path.join(__dirname, "..", "index.html"), "utf8");
-  const buttons = [...html.matchAll(/<button[^>]*disabled[^>]*>[^<]*QRIS Setoran[^<]*<\\/button>/g)];
+  const matcher = new RegExp("<button[^>]*disabled[^>]*>[^<]*QRIS Setoran[^<]*</button>", "g");
+  const buttons = [...html.matchAll(matcher)];
   assert.equal(buttons.length, 2);
   for (const [markup] of buttons) {
     assert.match(markup, /aria-disabled="true"/);
