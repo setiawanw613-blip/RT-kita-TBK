@@ -1458,7 +1458,7 @@ app.post("/api/ketua-gang/penerimaan-tunai", requireGangLead, async (req, res) =
     });
     const row = Array.isArray(saved) ? saved[0] : saved;
     if (!row?.id) throw new Error("Catatan penerimaan tunai tidak berhasil disimpan.");
-    return res.json({ok:true,data:row,message:"Penerimaan tunai tercatat. Belum masuk Kas RT; lanjutkan dengan QRIS setoran ke Bendahara."});
+    return res.json({ok:true,data:row,message:"Penerimaan tunai tercatat. Belum masuk Kas RT; setoran QRIS sementara dikunci sampai rekening RT dan aktivasi Midtrans siap."});
   } catch(error) {
     if (getSupabaseErrorCode(error)==="23505") return res.status(409).json({ok:false,message:"Penerimaan warga untuk bulan tersebut sudah pernah dicatat."});
     console.error("PENERIMAAN TUNAI KETUA GANG ERROR:",error?.message||error);
