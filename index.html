@@ -1211,10 +1211,10 @@ async function buatSetoranGang(){
     const pilihan=(Array.isArray(rows)?rows:[]).filter(row=>row.status==="diterima");
     const options=pilihan.map(row=>"<option value='"+Number(row.id)+"'>"+esc(row.nama_warga)+" · "+esc(String(row.bulan||"").slice(0,7))+" · Rp35.000</option>").join("");
     layout("Setoran QRIS ke Bendahara",
-      "<div class='card'><p>Pilih penerimaan tunai yang sudah dicatat. Status berubah menjadi Disetorkan setelah Midtrans mengonfirmasi pembayaran.</p>"+
+      "<div class='card'><p>Catatan penerimaan tunai tetap tersimpan. Setoran QRIS ke Bendahara sementara dikunci sampai rekening RT dan aktivasi Midtrans siap.</p>"+
       "<label>Penerimaan tunai</label><select id='gangPenerimaan' required>"+(options||"<option value=''>Tidak ada penerimaan menunggu setoran</option>")+"</select>"+
       "<div class='card' style='background:#f4f8ff'><b>Total setoran</b><div style='font-size:26px;font-weight:800;color:#1267c9'>Rp35.000</div><small class='muted'>Keamanan Rp15.000 · Sampah Rp15.000 · Kas RT Rp5.000</small></div>"+
-      "<button class='btn' id='gangCreateQris' onclick='kirimSetoranGang()' "+(pilihan.length?"":"disabled")+">Buat QRIS Setoran</button>"+
+      "<button class='btn' id='gangCreateQris' type='button' disabled aria-disabled='true' title='Setoran QRIS akan dibuka setelah rekening RT dan aktivasi Midtrans siap' style='opacity:.6;cursor:not-allowed'>QRIS Setoran (sementara dikunci)</button>"+
       "<button class='btn secondary' onclick='wargaHome()'>Kembali</button></div><div id='gangQrisResult'></div>");
   }catch(e){alert(e.message||"Gagal memuat penerimaan tunai.");}
 }
