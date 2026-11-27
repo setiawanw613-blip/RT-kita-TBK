@@ -10,7 +10,8 @@ test("menu QRIS setoran Ketua Gang tetap nonaktif selama pembayaran dikunci", ()
   const buttons = [...html.matchAll(matcher)];
   assert.equal(buttons.length, 3);
   for (const [markup] of buttons) {
-    assert.match(markup, /aria-disabled="true"/);
+    assert.match(markup, /aria-disabled=['"]true['"]/);
     assert.match(markup, /rekening RT dan aktivasi Midtrans siap/);
+    assert.doesNotMatch(markup, /onclick=/);
   }
 });
